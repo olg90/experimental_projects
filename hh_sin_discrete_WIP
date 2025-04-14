@@ -90,10 +90,10 @@ def tauc(V): #                     66    17
     return (90 * (1 + np.exp(-(V + 66) / 17))**(-1) + 10)*1e-3
 
 # KLVT, original ----------------------- Make these slower
-def tauw(V): #100  6                     60        6    16                        60    45
-    return (1000 * (6 * np.exp((V-Vshift + 60) / 1000) + 2 * np.exp(-(V-Vshift + 60) / 1000))**(-1) + 1.5)*1e-3
-def tauz(V):# 1000                     60    20                           60    8             50
-    return (1000 * (np.exp((V-Vshift + 60) / 1000) + np.exp(-(V-Vshift + 60) / 1000))**(-1) + 50)*1e-3
+def tauw(V): #100  6                     60        6    16 (16*0.2)               60    45
+    return (100 * (6 * np.exp((V-Vshift + 60) / 6) + 16*0.2 * np.exp(-(V-Vshift + 60) / 45))**(-1) + 1.5)*1e-3
+def tauz(V):# 1000                     60    20     (1*0.2)                60    8           50
+    return (1000 * (np.exp((V-Vshift + 60) / 20) + 0.2*np.exp(-(V-Vshift + 60) / 8))**(-1) + 50)*1e-3
 
 def taun(V): #                             60    24    21                       60    23
     return (100 * (11 * np.exp((V-Vshift + 60) / 24) + 21 * np.exp(-(V-Vshift + 60) / 23))**(-1) + 0.7)*1e-3
@@ -164,7 +164,7 @@ Vdata=Vdata[imin:imax]
 # gh = 10e-9  # Hyperpolarization-conductance
 # glk = 2e-9  # Leakage conductance
 # =============================================================================
- 
+
 # =============================================================================
 # # (2.) Low threshold potassium conductance matches AP's better+constant current
 # gA = 0e-9 # fast activating K+ conductance
