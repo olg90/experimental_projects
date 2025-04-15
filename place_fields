@@ -42,8 +42,10 @@ for foldername in dir2:
 # =============================================================================
 
 # Create the histogram
-plt.hist(n, bins=10, color='skyblue', edgecolor='black', alpha=0.7)
+plt.hist(n, bins=27, color='skyblue', edgecolor='black', alpha=0.7)
 
 # Set the labels
 plt.ylabel('Counts of number of place fields', fontsize=12)
 plt.xlabel('Number of place fields', fontsize=12)
+
+plt.show()
