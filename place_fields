@@ -1,0 +1,49 @@
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+
+# =============================================================================
+# dir1=r'C:\Users\olgud\OneDrive\Desktop\DataforDrSingh\BigroomData'
+# os.chdir(dir1)
+# dir2=os.listdir(dir1)
+# foldername=0
+# dir3 = dir1+'{}'.format('\\'+dir2[foldername])
+# os.chdir(dir3)
+# dirs3=os.listdir()
+# dirs4=[x for x in dirs3 if x[-7]=='m']
+# matname=0
+# dir5 = dir3+'{}'.format('\\'+dirs4[matname])
+# mat=loadmat(dir5)
+# n=mat['numFields'][0][0]
+# p=mat['pfields']
+# 
+# =============================================================================
+
+# Get all the datasets
+n=[]
+p=[]
+dir1=r'C:\Users\olgud\OneDrive\Desktop\DataforDrSingh\BigroomData'
+os.chdir(dir1)
+dir2=os.listdir(dir1)
+for foldername in dir2:
+    dir3 = dir1+'{}'.format('\\'+foldername)
+    os.chdir(dir3)
+    dirs3=os.listdir()
+    dirs4=[x for x in dirs3 if x[-7]=='m']
+    for matname in dirs4:
+        dir5 = dir3+'{}'.format('\\'+matname)
+        mat=loadmat(dir5)
+        n.append(mat['numFields'][0][0])
+        p.append(mat['pfields'])
+
+# =============================================================================
+# np.histogram(n)
+# =============================================================================
+
+# Create the histogram
+plt.hist(n, bins=10, color='skyblue', edgecolor='black', alpha=0.7)
+
+# Set the labels
+plt.ylabel('Counts of number of place fields', fontsize=12)
+plt.xlabel('Number of place fields', fontsize=12)
