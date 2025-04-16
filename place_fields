@@ -2,50 +2,110 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
+from scipy.stats import nbinom
+from scipy.optimize import minimize
 
-# =============================================================================
-# dir1=r'C:\Users\olgud\OneDrive\Desktop\DataforDrSingh\BigroomData'
-# os.chdir(dir1)
-# dir2=os.listdir(dir1)
-# foldername=0
-# dir3 = dir1+'{}'.format('\\'+dir2[foldername])
-# os.chdir(dir3)
-# dirs3=os.listdir()
-# dirs4=[x for x in dirs3 if x[-7]=='m']
-# matname=0
-# dir5 = dir3+'{}'.format('\\'+dirs4[matname])
-# mat=loadmat(dir5)
-# n=mat['numFields'][0][0]
-# p=mat['pfields']
-# 
-# =============================================================================
+# ========================= Load data from .mat files =========================
+n = []
+p = []
 
-# Get all the datasets
-n=[]
-p=[]
-dir1=r'C:\Users\olgud\OneDrive\Desktop\DataforDrSingh\BigroomData'
+dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
 os.chdir(dir1)
-dir2=os.listdir(dir1)
+dir2 = os.listdir(dir1)
+
 for foldername in dir2:
-    dir3 = dir1+'{}'.format('\\'+foldername)
+    dir3 = os.path.join(dir1, foldername)
     os.chdir(dir3)
-    dirs3=os.listdir()
-    dirs4=[x for x in dirs3 if x[-7]=='m']
+    dirs3 = os.listdir()
+    dirs4 = [x for x in dirs3 if x[-7] == 'm']
     for matname in dirs4:
-        dir5 = dir3+'{}'.format('\\'+matname)
-        mat=loadmat(dir5)
+        dir5 = os.path.join(dir3, matname)
+        mat = loadmat(dir5)
         n.append(mat['numFields'][0][0])
         p.append(mat['pfields'])
 
+# =================== Fit NB with integer r using grid search ===================
+
+possible_r = np.arange(1, 50)  # Try integer r from 1 to 49
+best_ll = -np.inf
+best_r = None
+best_p = None
+
+for r in possible_r:
+    mean = np.mean(n)
+    var = np.var(n)
+    if var > mean:  # NB only defined for overdispersed data
+        p_hat = r / (r + mean)
+        ll = np.sum(nbinom.logpmf(n, r, p_hat))
+        if ll > best_ll:
+            best_ll = ll
+            best_r = r
+            best_p = p_hat
+
+rhat, phat = best_r, best_p
+
 # =============================================================================
-# np.histogram(n)
+# # Original MLE estimation using continuous parameters
+# def neg_log_likelihood(params, data):
+#     r, p = params
+#     if r <= 0 or not (0 < p < 1):
+#         return np.inf
+#     return -np.sum(nbinom.logpmf(data, r, p))
+# 
+# initial_guess = [2.0, 0.1]
+# result = minimize(neg_log_likelihood, initial_guess, args=(n,), bounds=[(1e-3, None), (1e-5, 1 - 1e-5)])
+# rhat, phat = result.x
 # =============================================================================
 
-# Create the histogram
-plt.hist(n, bins=27, color='skyblue', edgecolor='black', alpha=0.7)
+# ========================= Plot histogram + fitted distribution =========================
+binarr = np.arange(np.min(n) - 0.5, np.max(n) + 1.5)
+binplot = np.arange(np.min(n), np.max(n) + 1)
 
-# Set the labels
-plt.ylabel('Counts of number of place fields', fontsize=12)
-plt.xlabel('Number of place fields', fontsize=12)
-
+plt.figure(figsize=(8, 3))
+plt.hist(n, bins=binarr, color='skyblue', edgecolor='black', alpha=0.7, density=True)
+pmf = nbinom.pmf(binplot, rhat, phat)
+plt.plot(binplot, pmf, 'ro-', label=f'Negative Binomial(r={rhat}, p={phat:.2f})')
+plt.ylabel('Number of neurons', fontsize=12)
+plt.xlabel('Number of place fields', fontsize=10)
+plt.xticks(binplot)
+plt.tick_params(axis='x', labelsize=8)
+plt.legend()
+plt.tight_layout()
 plt.show()
+
+# =============================================================================
+# # Plot out all the place fields
+# for i in range(len(p)):
+#     plt.figure()
+#     plt.imshow(p[i])
+#     plt.colorbar()
+# =============================================================================
+
+p1 = [np.where(pi[:, :-1] != 0, 1, 0) if pi.shape[1] == 117 else np.where(pi != 0, 1, 0) for pi in p]
+
+from collections import Counter
+
+shape_counts = Counter([pi.shape for pi in p1])
+print(shape_counts)
+
+p2 = np.sum(p1, axis=0)
+plt.figure()
+plt.imshow(p2, cmap='hot')
+plt.title('Counts')
+plt.colorbar()
+
+
+# Trim and collect matrices
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+
+# Convert to NumPy array stack only if all shapes are now equal
+shapes = [pi.shape for pi in p_trimmed]
+common_shape = shapes[0]
+assert all(shape == common_shape for shape in shapes), "Not all matrices have the same shape after trimming."
+# Sum them together
+total_matrix = np.sum(p_trimmed, axis=0)
+plt.figure()
+plt.title('Rate sum')
+plt.imshow(total_matrix, cmap='hot')
+plt.colorbar()
+
