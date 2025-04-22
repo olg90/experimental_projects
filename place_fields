@@ -9,7 +9,7 @@ from scipy.optimize import minimize
 n = []
 p = []
 
-location=0
+location=1
 if location==0:
     dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
 if location==1:
@@ -35,7 +35,7 @@ for foldername in dir2:
 # best_ll = -np.inf
 # best_r = None
 # best_p = None
-# 
+#
 # for r in possible_r:
 #     mean = np.mean(n)
 #     var = np.var(n)
@@ -68,7 +68,7 @@ binplot = np.arange(np.min(n), np.max(n) + 1)
 plt.figure(figsize=(8, 3))
 plt.hist(n, bins=binarr, color='skyblue', edgecolor='black', alpha=0.7, density=True)
 pmf = nbinom.pmf(binplot, rhat, phat)
-plt.plot(binplot, pmf, 'ro-', label=f'Negative Binomial(r={rhat}, p={phat:.2f})')
+plt.plot(binplot, pmf, 'ro-', label=f'Negative Binomial(r={rhat:.2f}, p={phat:.2f})')
 plt.ylabel('Number of neurons', fontsize=12)
 plt.xlabel('Number of place fields', fontsize=10)
 plt.xticks(binplot)
@@ -95,7 +95,7 @@ print(shape_counts)
 pcountsum = np.sum(pcount, axis=0)
 plt.figure()
 plt.imshow(pcountsum, cmap='hot')
-plt.title('Number of neurons that fire at each location')
+plt.title('Number of neurons that fire at each pixel\nin the rectangular room')
 plt.colorbar()
 
 # Trim and collect matrices
@@ -150,13 +150,13 @@ plt.show()
 unique_rates_per_pi = [np.unique(pi[pi != 0]) for pi in p]
 
 # Flatten the list and combine all unique rates
+# A list of all the rates that appear in each neuron uniquely
 all_unique_rates = np.concatenate(unique_rates_per_pi)
 
 # Plot histogram
 plt.hist(all_unique_rates, 
          bins=np.arange(all_unique_rates.min(), all_unique_rates.max() + 2) - 0.5, 
          edgecolor='black', alpha=0.7, density=True)
-plt.title('Distribution of Unique Rates Across all maps')
 plt.xlabel('AP rate')
 plt.ylabel('# of neurons with this AP rate in their place map')
 plt.xticks(np.unique(all_unique_rates))
@@ -173,15 +173,14 @@ result = minimize(neg_log_likelihood, initial_guess, args=(all_unique_rates,),
 rhat, phat = result.x
 
 pmf = nbinom.pmf(binplot, rhat, phat)
-plt.plot(binplot, pmf, 'ro-', label=f'Negative Binomial(r={rhat}, p={phat:.2f})')
-plt.ylabel('Number of neurons', fontsize=12)
-plt.xlabel('Number of place fields', fontsize=10)
+plt.plot(binplot, pmf, 'ro-', label=f'Negative Binomial(r={rhat:.2f}, p={phat:.2f})')
+plt.ylabel('# of neurons', fontsize=12)
+plt.xlabel('AP rates (Hz)', fontsize=10)
 plt.xticks(binplot)
 plt.tick_params(axis='x', labelsize=8)
 plt.legend()
 plt.tight_layout()
 plt.show()
-
 
 #%% Percentage of map covered
 
