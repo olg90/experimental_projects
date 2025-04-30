@@ -35,33 +35,41 @@ def get_filenames(excel_dir, txt_dir):
 #
 ###############################################################################
 
-def ainf(V): 
+Vshift=0
+
+def ainf(V):  #              31    6
     return (1 + np.exp(-(V + 31) / 6))**(-1 / 4)
-def binf(V): 
+def binf(V):  #             66    7
     return (1 + np.exp((V + 66) / 7))**(-1 / 2)
-def cinf(V): 
+def cinf(V): #              66    7
     return (1 + np.exp((V + 66) / 7))**(-1 / 2)
 
-def winf(V): 
-    return (1 + np.exp(-(V + 48) / 6))**(-1 / 4)
+def winf(V):  #                     48    6
+    return (1 + np.exp(-(V-Vshift + 48) / 6))**(-1 / 4)
 def zinf(V):
-    zeta = 0.5
-    return (1 - zeta) * (1 + np.exp((V + 71) / 10))**(-1) + zeta
+    zeta = 0.5                             #     71    10
+    return (1 - zeta) * (1 + np.exp((V -Vshift + 71) / 10))**(-1) + zeta
 
-def ninf(V):
-    return (1 + np.exp(-(V + 15) / 5))**(-1 / 2)
-def pinf(V): 
-    return (1 + np.exp(-(V + 23) / 6))**(-1)
+def ninf(V): #                      30    5
+    return (1 + np.exp(-(V-Vshift + 30) / 5))**(-1 / 2)
+def pinf(V): #                      23    6
+    return (1 + np.exp(-(V-Vshift + 23) / 6))**(-1)
 
 def minf(V): 
     value= 39.35 # good spike fit value
     # value = 38 # original
     # value = 44 # Jonas suggested
-    return (1 + np.exp(-(V + value) / 7))**(-1)
-def hinf(V): 
+    return (1 + np.exp(-(V-Vshift + value) / 7))**(-1)
+def hinf(V):  # original
     value = 65 # good spike fit value
     # value = 74 # Jonas suggested
-    return (1 + np.exp((V + value) / 6))**(-1)
+    return (1 + np.exp((V-Vshift + value) / 6))**(-1)
+# =============================================================================
+# def hinf(V):  # The 3x slower one
+#     value = 63.2 # good spike fit value
+#     # value = 74 # Jonas suggested
+#     return (1 + np.exp(0.1536*(V-Vshift + value)))**(-1)
+# =============================================================================
 
 def rinf(V): 
     # value = 76 # original
@@ -74,27 +82,33 @@ def rinf(V):
 #
 ###############################################################################
 
-def taua(V): 
+def taua(V):#                  60    14    29                60    24
     return (100*(7*np.exp((V + 60) / 14) + 29 * np.exp(-(V + 60) / 24))**(-1) + 0.1)*1e-3
-def taub(V): 
+def taub(V):#                        60    27    29                60    24 
     return (1000 * (14 * np.exp((V + 60) / 27) + 29 * np.exp(-(V + 60) / 24))**(-1) + 1)*1e-3
-def tauc(V): 
+def tauc(V): #                     66    17
     return (90 * (1 + np.exp(-(V + 66) / 17))**(-1) + 10)*1e-3
 
-def tauw(V): 
-    return (100 * (6 * np.exp((V + 60) / 6) + 16 * np.exp(-(V + 60) / 45))**(-1) + 1.5)*1e-3
-def tauz(V): 
-    return (1000 * (np.exp((V + 60) / 20) + np.exp(-(V + 60) / 8))**(-1) + 50)*1e-3
+# KLVT, original ----------------------- Make these slower
+def tauw(V): #100  6                     60        6    16 (16*0.2)               60    45
+    return (1000 * (6 * np.exp((V-Vshift + 60) / 6) + 16*0.2 * np.exp(-(V-Vshift + 60) / 45))**(-1) + 1.5)*1e-3
+def tauz(V):# 1000                     60    20     (1*0.2)                60    8           50
+    return (1000 * (np.exp((V-Vshift + 60) / 20) + 0.2*np.exp(-(V-Vshift + 60) / 8))**(-1) + 50)*1e-3
 
-def taun(V): 
-    return (100 * (11 * np.exp((V + 60) / 24) + 21 * np.exp(-(V + 60) / 23))**(-1) + 0.7)*1e-3
-def taup(V): 
-    return (100 * (4 * np.exp((V + 60) / 32) + 5 * np.exp(-(V + 60) / 22))**(-1) + 5)*1e-3
+def taun(V): #                             60    24    21                       60    23
+    return (100 * (11 * np.exp((V-Vshift + 60) / 24) + 21 * np.exp(-(V-Vshift + 60) / 23))**(-1) + 0.7)*1e-3
+def taup(V): #                            60    32    5                       60    22           5
+    return (100 * (4 * np.exp((V-Vshift + 60) / 32) + 5 * np.exp(-(V-Vshift + 60) / 22))**(-1) + 5)*1e-3
 
-def taum(V): 
-    return (10 * (5 * np.exp((V + 60)/18) + 36 * np.exp(-(V + 60) / 25))**(-1) + 0.04)*1e-3
-def tauh(V): 
-    return (100 * (7 * np.exp((V + 60) / 11) + 10 * np.exp(-(V + 60) / 25))**(-1) + 0.6)*1e-3
+def taum(V): #                           60  18    36                       60    25
+    return (10 * (5 * np.exp((V-Vshift + 60)/18) + 36 * np.exp(-(V-Vshift + 60) / 25))**(-1) + 0.04)*1e-3
+def tauh(V): #100  7                      60    11    10                       60    25
+    return (100 * (7 * np.exp((V-Vshift + 60) / 11) + 10 * np.exp(-(V-Vshift + 60) / 25))**(-1) + 0.6)*1e-3
+# =============================================================================
+# def tauh(V): # the 3x slower one
+#     return 7*(28.17+100.9*np.exp(-(V+63.2)**2/2/364.8))/(3**((39-32)/10))
+# 
+# =============================================================================
 
 def taur(V): 
     return (10**5 * (237 * np.exp((V + 60) / 12) + 17 * np.exp(-(V + 60) / 14))**(-1) + 25)*1e-3
@@ -105,25 +119,19 @@ def taur(V):
 #
 ###############################################################################
 
-# Change the file directories to where you put the data
-
-
-
-# Lab computer
-excel_dir = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\current_project\German group current data\excel_files'
-txt_dir = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\current_project\German group current data\txt_files'
-
 # =============================================================================
-# # Home laptop
+# # Change the file directories to where you put the data
 # excel_dir = r'C:\Users\Oliver\Desktop\German group current data\excel_files'
 # txt_dir = r'C:\Users\Oliver\Desktop\German group current data\txt_files'
+# 
 # =============================================================================
-
 # =============================================================================
-# # Travel laptop
 # excel_dir = r'C:\Users\ogamb\OneDrive\Desktop\German group current data\excel_files'
 # txt_dir = r'C:\Users\ogamb\OneDrive\Desktop\German group current data\txt_files'
 # =============================================================================
+
+excel_dir = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\current_project\German group current data\excel_files'
+txt_dir = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\current_project\German group current data\txt_files'
 
 # Read in the data
 # This is the file number in the directory, 0 is the 1st file, 1 is the 2nd file, etc...
@@ -133,7 +141,7 @@ data=read_data(0, enames[dataname], excel_dir, txt_dir)
 
 ttype=4 # 0 (normal data), or 4,6 (chirp data)
 if ttype==0:
-    Vdata = data[:, 0] # Membrane potential 
+    Vdata = data[:, 0] # Membrane potential
     G = data[:, 1] # Conductance
 if ttype==4:
     Idata=read_data(1, tnames[2], excel_dir, txt_dir)
@@ -143,10 +151,11 @@ if ttype==6:
     Vdata=read_data(1, tnames[1], excel_dir, txt_dir)
 
 imin=0
-imax=1000000 #len(Idata) #3000000 3e6
-# =============================================================================
-# imax=3000000
-# =============================================================================
+dlen=1
+if dlen==0:
+    imax=100000
+if dlen==1:
+    imax=len(Idata)
 Idata=Idata[imin:imax]
 Vdata=Vdata[imin:imax]
 
@@ -160,7 +169,7 @@ Vdata=Vdata[imin:imax]
 # gh = 10e-9  # Hyperpolarization-conductance
 # glk = 2e-9  # Leakage conductance
 # =============================================================================
- 
+
 # =============================================================================
 # # (2.) Low threshold potassium conductance matches AP's better+constant current
 # gA = 0e-9 # fast activating K+ conductance
@@ -316,7 +325,7 @@ for i in range(1, len(Vdata)):
 #                             Plot simulations
 #
 ###############################################################################
-#
+
 fs = 10
 # membrane potential
 plt.subplot(4,1,1)
@@ -326,8 +335,8 @@ plt.ylabel('membrane Potential (mV)', fontsize=fs)
 # =============================================================================
 # plt.plot(t, V6, label=enames[dataname], color='#ff7f0e')
 # =============================================================================
-plt.plot(t, Vdata, color='#ff7f0e', label='experimental')
-plt.plot(t, V, label='simulations', color='#1f77b4', alpha=0.6)
+plt.plot(t, Vdata, color='#ff7f0e', label='e')
+plt.plot(t, V, label='s', color='#1f77b4', alpha=0.6)
 plt.tick_params(axis='both', labelsize=fs)
 plt.grid(True, alpha=0.3)
 plt.legend(fontsize=fs, loc='upper right')
