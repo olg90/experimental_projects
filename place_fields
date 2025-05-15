@@ -71,7 +71,7 @@ plt.hist(n, bins=binarr, color='skyblue', edgecolor='black', alpha=0.7, density=
 pmf = nbinom.pmf(binplot, rhat, phat)
 plt.plot(binplot, pmf, 'ro-', label=f'Negative Binomial(r={rhat:.2f}, p={phat:.2f})')
 plt.ylabel('Density of # of neurons', fontsize=12)
-plt.xlabel('# of place fields', fontsize=10)
+plt.xlabel('# of place fields for a neuron', fontsize=10)
 plt.xticks(binplot)
 plt.tick_params(axis='x', labelsize=8)
 plt.legend()
@@ -109,20 +109,60 @@ binplot = np.arange(np.min(pcountsum), np.max(pcountsum) + 1)
 data_flat = pcountsum.flatten()
 # Fit Normal distribution
 mu_norm, std_norm = norm.fit(data_flat)
-# Compute Normal PDF at bin centers
-pdf_norm = norm.pdf(binplot, mu_norm, std_norm)
-plt.figure(figsize=(8, 3))
-plt.hist(data_flat, bins=binarr, color='skyblue', edgecolor='black', alpha=0.7, density=True, label='Data histogram')
-plt.plot(binplot, pdf_norm, 'g', label=f'Normal Fit ($\mu$={mu_norm:.2f}, $\sigma$={std_norm:.2f})')
-plt.ylabel('Density of # place fields', fontsize=12)
-plt.xlabel('# of neurons', fontsize=10)
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm, skewnorm
+from scipy.optimize import minimize
+
+# Flatten and bin data
+data = pcountsum.flatten()
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+binplot = np.arange(np.min(data), np.max(data) + 1)
+
+# ======== Fit Skew-Normal ========
+a_skew, loc_skew, scale_skew = skewnorm.fit(data)
+x_vals = np.linspace(np.min(data), np.max(data), 1000)
+pdf_skew = skewnorm.pdf(x_vals, a_skew, loc=loc_skew, scale=scale_skew)
+
+# ======== Fit Gaussian Mixture (2 components) ========
+def neg_log_likelihood(params):
+    w, mu1, sigma1, mu2, sigma2 = params
+    if not (0 < w < 1 and sigma1 > 0 and sigma2 > 0):
+        return np.inf
+    pdf_vals = w * norm.pdf(data, mu1, sigma1) + (1 - w) * norm.pdf(data, mu2, sigma2)
+    return -np.sum(np.log(pdf_vals + 1e-12))
+
+initial_guess = [0.5, np.percentile(data, 25), 1.0, np.percentile(data, 75), 1.0]
+bounds = [(1e-3, 1 - 1e-3), (None, None), (1e-3, None), (None, None), (1e-3, None)]
+result = minimize(neg_log_likelihood, initial_guess, bounds=bounds)
+w, mu1, sigma1, mu2, sigma2 = result.x
+pdf_mix = w * norm.pdf(x_vals, mu1, sigma1) + (1 - w) * norm.pdf(x_vals, mu2, sigma2)
+pdf1 = w * norm.pdf(x_vals, mu1, sigma1)
+pdf2 = (1 - w) * norm.pdf(x_vals, mu2, sigma2)
+
+# ======== Plot All Together ========
+plt.figure(figsize=(9, 4))
+plt.hist(data, bins=binarr, density=True, color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+# =============================================================================
+# plt.plot(x_vals, pdf_skew, 'g-', linewidth=2, label=f'Skew Normal (a={a_skew:.2f})')
+# =============================================================================
+plt.plot(x_vals, pdf_mix, 'r-', linewidth=2, label='Gaussian Mixture')
+# =============================================================================
+# plt.plot(x_vals, pdf1, 'k--', label='Component 1')
+# plt.plot(x_vals, pdf2, 'm--', label='Component 2')
+# =============================================================================
+
+plt.xlabel('# of neurons firing APs at a pixel')
+plt.ylabel('Density of # neurons firing APs at a pixel')
 plt.xticks(binplot)
-plt.tick_params(axis='x', labelsize=8)
 plt.legend()
 plt.tight_layout()
 plt.show()
 
 
+#
 
 
 
@@ -302,7 +342,7 @@ plt.figure(figsize=(6, 3))
 plt.bar(bin_centers, hist_y, width=1, edgecolor='black', alpha=0.6, label='Data (histogram)', color='skyblue')
 plt.plot(x_plot, pmf_fit, 'ro-', label=f'Negative Binomial Fit (r={r_hat:.2f}, p={p_hat:.2f})')
 plt.plot(x_wb, pdf_wb_scaled, 'g-', label=f'Weibull Fit (k={c_wb:.2f}, scale={scale_wb:.2f})')
-plt.xlabel('AP rate (Hz)')
+plt.xlabel('AP rate of a place field (Hz)')
 plt.ylabel('Density of # of neurons')
 plt.legend()
 plt.tight_layout()
