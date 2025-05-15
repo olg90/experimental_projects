@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -69,8 +70,8 @@ plt.figure(figsize=(8, 3))
 plt.hist(n, bins=binarr, color='skyblue', edgecolor='black', alpha=0.7, density=True)
 pmf = nbinom.pmf(binplot, rhat, phat)
 plt.plot(binplot, pmf, 'ro-', label=f'Negative Binomial(r={rhat:.2f}, p={phat:.2f})')
-plt.ylabel('Number of neurons', fontsize=12)
-plt.xlabel('Number of place fields', fontsize=10)
+plt.ylabel('Density of # of neurons', fontsize=12)
+plt.xlabel('# of place fields', fontsize=10)
 plt.xticks(binplot)
 plt.tick_params(axis='x', labelsize=8)
 plt.legend()
@@ -92,11 +93,41 @@ from collections import Counter
 shape_counts = Counter([pi.shape for pi in pcount])
 print(shape_counts) 
 
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import nbinom, norm
+
 pcountsum = np.sum(pcount, axis=0)
 plt.figure()
 plt.imshow(pcountsum, cmap='hot')
 plt.title('Number of neurons that fire at each pixel\nin the rectangular room')
 plt.colorbar()
+
+binarr = np.arange(np.min(pcountsum) - 0.5, np.max(pcountsum) + 1.5)
+binplot = np.arange(np.min(pcountsum), np.max(pcountsum) + 1)
+# Flatten data for fitting
+data_flat = pcountsum.flatten()
+# Fit Normal distribution
+mu_norm, std_norm = norm.fit(data_flat)
+# Compute Normal PDF at bin centers
+pdf_norm = norm.pdf(binplot, mu_norm, std_norm)
+plt.figure(figsize=(8, 3))
+plt.hist(data_flat, bins=binarr, color='skyblue', edgecolor='black', alpha=0.7, density=True, label='Data histogram')
+plt.plot(binplot, pdf_norm, 'g', label=f'Normal Fit ($\mu$={mu_norm:.2f}, $\sigma$={std_norm:.2f})')
+plt.ylabel('Density of # place fields', fontsize=12)
+plt.xlabel('# of neurons', fontsize=10)
+plt.xticks(binplot)
+plt.tick_params(axis='x', labelsize=8)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+
+
 
 # Trim and collect matrices
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
@@ -154,6 +185,7 @@ unique_rates_per_pi = [np.unique(pi[pi != 0]) for pi in p]
 all_unique_rates = np.concatenate(unique_rates_per_pi)
 
 # Plot histogram
+plt.figure(figsize=(6,4))
 plt.hist(all_unique_rates, 
          bins=np.arange(all_unique_rates.min(), all_unique_rates.max() + 2) - 0.5, 
          edgecolor='black', alpha=0.7, density=True)
@@ -186,7 +218,7 @@ plt.show()
 
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
 pcovered = [np.sum(pi.flatten()>0)/(pi.shape[0]*pi.shape[1]) for pi in p_trimmed]
-plt.hist(pcovered, bins=201)
+plt.hist(pcovered, bins=100)
 
 #%% What percentage of all maps do their largest place field have the largest rates?
 # For each pi, check if the largest place field has the largest rate
@@ -225,38 +257,122 @@ percent = np.mean(matches)
 print(percent, 'smallest place field, largest rate')
 
 #%%
-# Your data
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+from scipy.stats import nbinom, weibull_min
+
 data = all_unique_rates
 data = data[data > 0]
 
-# Histogram
+# Histogram (density=True for PDF scale)
 bin_edges = np.arange(data.min() - 0.5, data.max() + 1.5, 1)
 hist_y, _ = np.histogram(data, bins=bin_edges, density=True)
 bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
-# Negative log likelihood for Negative Binomial
+# --- Negative log likelihood for Negative Binomial ---
 def neg_log_likelihood(params, data):
     r, p = params
     if r <= 0 or not (0 < p < 1):
         return np.inf
     return -np.sum(nbinom.logpmf(data, r, p))
 
-# Fit parameters
+# Fit Negative Binomial params
 initial_guess = [5, 0.5]
 result = minimize(neg_log_likelihood, initial_guess, args=(data,), 
                   bounds=[(1e-3, None), (1e-5, 1-1e-5)])
 r_hat, p_hat = result.x
 
-# Plot
+# Negative Binomial PMF over data range
 x_plot = np.arange(data.min(), data.max() + 1)
 pmf_fit = nbinom.pmf(x_plot, r_hat, p_hat)
 
-plt.figure(figsize=(8, 4))
+# --- Weibull Fit ---
+# Weibull is continuous, so we use MLE from scipy (force loc=0)
+c_wb, loc_wb, scale_wb = weibull_min.fit(data, floc=0)
+x_wb = np.linspace(data.min(), data.max(), 1000)
+pdf_wb = weibull_min.pdf(x_wb, c_wb, loc=loc_wb, scale=scale_wb)
+
+# To compare Weibull PDF with histogram and NB PMF, scale PDF:
+# Multiply by bin width ~ 1 for visual comparison on histogram scale
+pdf_wb_scaled = pdf_wb
+
+# --- Plot ---
+plt.figure(figsize=(6, 3))
 plt.bar(bin_centers, hist_y, width=1, edgecolor='black', alpha=0.6, label='Data (histogram)', color='skyblue')
-plt.plot(x_plot, pmf_fit, 'ro-', label=f'Negative Binomial Fit (r={r_hat:.1f}, p={p_hat:.2f})')
-plt.xlabel('Rate')
-plt.ylabel('Probability')
-plt.title('Negative Binomial Fit to Data')
+plt.plot(x_plot, pmf_fit, 'ro-', label=f'Negative Binomial Fit (r={r_hat:.2f}, p={p_hat:.2f})')
+plt.plot(x_wb, pdf_wb_scaled, 'g-', label=f'Weibull Fit (k={c_wb:.2f}, scale={scale_wb:.2f})')
+plt.xlabel('AP rate (Hz)')
+plt.ylabel('Density of # of neurons')
 plt.legend()
 plt.tight_layout()
 plt.show()
+
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import weibull_min, invgamma, fisk  # fisk = log-logistic
+
+# Your positive data
+data = all_unique_rates
+data = data[data > 0]
+
+# Histogram for visualization
+bin_edges = np.arange(data.min() - 0.5, data.max() + 1.5, 1)
+hist_y, _ = np.histogram(data, bins=bin_edges, density=True)
+bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+# Fit Weibull (shape c), force loc=0
+c_wb, loc_wb, scale_wb = weibull_min.fit(data, floc=0)
+x = np.linspace(data.min(), data.max(), 1000)
+pdf_wb = weibull_min.pdf(x, c_wb, loc=loc_wb, scale=scale_wb)
+
+# Fit Inverse Gamma (shape a), force loc=0
+a_ig, loc_ig, scale_ig = invgamma.fit(data, floc=0)
+pdf_ig = invgamma.pdf(x, a_ig, loc=loc_ig, scale=scale_ig)
+
+# Fit Log-Logistic (Fisk), force loc=0
+c_ll, loc_ll, scale_ll = fisk.fit(data, floc=0)
+pdf_ll = fisk.pdf(x, c_ll, loc=loc_ll, scale=scale_ll)
+
+# Function to find inflection points (zero crossings of second derivative)
+def find_inflection_points(pdf_vals, x_vals):
+    dx = x_vals[1] - x_vals[0]
+    second_deriv = np.gradient(np.gradient(pdf_vals, dx), dx)
+    zero_crossings = np.where(np.diff(np.sign(second_deriv)))[0]
+    return x_vals[zero_crossings]
+
+# Find inflection points for each PDF
+inflect_wb = find_inflection_points(pdf_wb, x)
+inflect_ig = find_inflection_points(pdf_ig, x)
+inflect_ll = find_inflection_points(pdf_ll, x)
+
+# Plot
+plt.figure(figsize=(12, 6))
+plt.bar(bin_centers, hist_y, width=1, edgecolor='black', alpha=0.5, label='Data (histogram)', color='skyblue')
+
+plt.plot(x, pdf_wb, 'r-', label=f'Weibull (k={c_wb:.3f})')
+for ip in inflect_wb:
+    plt.axvline(ip, color='r', linestyle='--', alpha=0.5)
+
+plt.plot(x, pdf_ig, 'g-', label=f'Inverse Gamma (a={a_ig:.3f})')
+for ip in inflect_ig:
+    plt.axvline(ip, color='g', linestyle='--', alpha=0.5)
+
+plt.plot(x, pdf_ll, 'm-', label=f'Log-Logistic (c={c_ll:.3f})')
+for ip in inflect_ll:
+    plt.axvline(ip, color='m', linestyle='--', alpha=0.5)
+
+plt.xlabel('Rate')
+plt.ylabel('Probability density')
+plt.title('Fits and Inflection Points of Weibull, Inverse Gamma, Log-Logistic')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Print inflection points
+print("Inflection points (x values) where PDF curvature changes sign:")
+print(f"Weibull: {inflect_wb}")
+print(f"Inverse Gamma: {inflect_ig}")
+print(f"Log-Logistic: {inflect_ll}")
