@@ -23,18 +23,63 @@ vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
     -1.2,-1.2,-1.2,-1.2,-1.2,-1.2]
 
 dt=1e-3
-v=np.zeros(len(I))
-v[0]=vd[0]
-for i in range(1,len(I)):
-    dvdt=(vb[dnum]-v[i-1])/(tauv[dnum])+c[dnum]*I[i-1]
-    v[i]=v[i-1]+dvdt*dt
+
+def getv():
+    v=np.zeros(len(I))
+    v[0]=vd[0]
+    for i in range(1,len(I)):
+        dvdt=(vb[dnum]-v[i-1])/(tauv[dnum])+c[dnum]*I[i-1]
+        v[i]=v[i-1]+dvdt*dt
+    return v
+
+v=getv()
     
-plt.plot(vd, label='data')
-plt.ylabel('membrane potential')
-plt.xlabel('time (ms)')
-plt.plot(v, color='orange', label='sim')
-plt.title(names[dnum])
-plt.legend()
+%matplotlib qt5
+fig, ax = plt.subplots(3,1, figsize = (6,4))
+ax[0].plot(I)
+ax[0].set_ylabel('current')
+ax[1].plot(vd)
+ax[1].set_ylabel('membrane\npotential')
+ax[1].plot(v, color='orange')
+ax[2].plot(a)
+fig.suptitle(names[dnum])
+
+plt.show()
+
+#%% a method
+
+a0=0.1
+taua=0.01
+ca=500
+dt=1e-3
+
+
+def getva():
+    v=np.zeros(len(I))
+    a=np.zeros_like(v)
+    a[0]=a0
+    v[0]=vd[0]
+    for i in range(1,len(I)):
+        dvdt=(vb[dnum]-v[i-1])/(tauv[dnum]+a[i-1])+c[dnum]*I[i-1]
+        v[i]=v[i-1]+dvdt*dt
+        
+        dadt = (a0-a[i-1])/taua-ca*I[i-1]
+        a[i]=a[i-1]+dadt*dt
+    return v,a
+
+va,a=getva()
+
+    
+fig, ax = plt.subplots(3,1, figsize = (6,4))
+ax[0].plot(I)
+ax[0].set_ylabel('current')
+ax[1].plot(vd, label='vd')
+ax[1].set_ylabel('membrane\npotential')
+ax[1].plot(va, color='orange', label='va')
+ax[2].plot(a)
+fig.suptitle(names[dnum])
+ax[1].legend()
+
 plt.show()
 #%% a b method
 a0=8
@@ -84,18 +129,7 @@ for i in range(1,len(I)):
 # fig.suptitle(names[dnum])
 # =============================================================================
 
-# =============================================================================
-# fig, ax = plt.subplots(3,1, figsize = (6,4))
-# ax[0].plot(I)
-# ax[0].set_ylabel('current')
-# ax[1].plot(vd)
-# ax[1].set_ylabel('membrane\npotential')
-# ax[1].plot(v, color='orange')
-# ax[2].plot(a)
-# fig.suptitle(names[dnum])
-# 
-# plt.show()
-# =============================================================================
+
 
 fig, ax = plt.subplots(4,1, figsize = (6,4))
 ax[0].plot(I)
