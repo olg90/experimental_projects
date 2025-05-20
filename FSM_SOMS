@@ -497,7 +497,8 @@ c4=0.001
 taug0=0.02
 g10=0.01
 taug1=0.1
-c5=10
+c5=1
+c6=1
 
 v=np.zeros(len(I))
 a=np.zeros_like(v)
@@ -517,7 +518,7 @@ for i in range(1,len(I)):
     dvdt=((-(v[i-1]-vb[dnum])*g[i-1]+I[i-1]))/C
     v[i]=v[i-1]+dvdt*dt
     
-    dgdt = (g0[i-1]-g[i-1])/taug[i-1]+c1*I[i-1]+0.01-g1[i-1]
+    dgdt = (g0[i-1]-g[i-1])/taug[i-1]+c1*I[i-1]+0.01-c6*g1[i-1]
     g[i]=g[i-1]+dgdt*dt
     
     dtaugdt= -(taug[i-1]-taug0)/tautaug0 + c3*v[i-1]+2
