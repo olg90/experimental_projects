@@ -480,10 +480,21 @@ vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
     -1.235,-1.2,-1.2,-1.2,-1.28,-1.2]
 dt=1e-3
 
-C=0.002
-g0=0.0066
-c1=1
-taug=0.01
+# =============================================================================
+# C=0.002
+# g0=0.0066
+# c1=100
+# taug0=0.01
+# =============================================================================
+
+C=0.0019
+g00=0.006
+c1=60
+taug0=0.03
+tautaug0=0.01
+c3=0.01
+c4=0.001
+taug0=0.02
 
 v=np.zeros(len(I))
 a=np.zeros_like(v)
@@ -491,14 +502,24 @@ a[0]=a0
 ca=np.zeros_like(v)
 ca[0]=ca0
 g=np.zeros_like(v)
-g[0]=g0
+g[0]=g00
+taug=np.zeros_like(v)
+taug[0]=taug0
+g0=np.zeros_like(v)
+g0[0]=g00
 v[0]=vd[0]
 for i in range(1,len(I)):
     dvdt=((-(v[i-1]-vb[dnum])*g[i-1]+I[i-1]))/C
     v[i]=v[i-1]+dvdt*dt
     
-    dgdt = (g0-g[i-1])/taug+c1*I[i-1]
+    dgdt = (g0[i-1]-g[i-1])/taug[i-1]+c1*I[i-1]
     g[i]=g[i-1]+dgdt*dt
+    
+    dtaugdt= -(taug[i-1]-taug0)/tautaug0 + c3*v[i-1]
+    taug[i]=taug[i-1]+dtaugdt*dt
+    
+    dg0dt=-(g0[i-1]-g00)/taug0 + c4*v[i-1]
+    g0[i]=g0[i-1]+dg0dt*dt
     
 plt.figure(figsize=(9,4))
 plt.plot(vd, label='data')
