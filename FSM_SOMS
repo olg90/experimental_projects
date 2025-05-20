@@ -4,7 +4,11 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
-dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
+dtype=1
+if dtype==0:
+    dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
+if dtype == 1:
+    dir1=r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\SOM'
 os.chdir(dir1)
 
 df = pd.read_csv("Table0.csv")
@@ -51,7 +55,7 @@ v=getv()
 # plt.show()
 # =============================================================================
 plt.plot(vd)
-plt.plot(v, color='orange')
+plt.plot(v)
 plt.title(names[dnum])
 
 plt.show()
@@ -77,7 +81,6 @@ a0=0.2
 taua=0.01
 ca=10
 dt=1e-3
-
 
 def getva():
     v=np.zeros(len(I))
@@ -157,7 +160,7 @@ for i in range(1,len(I)):
 plt.plot(vd, label='data')
 plt.ylabel('membrane potential')
 plt.xlabel('time (ms)')
-plt.plot(v, color='orange', label='simulations')
+plt.plot(v, label='simulations')
 plt.title(names[dnum])
 plt.legend()
 plt.show()
@@ -224,7 +227,7 @@ ax[0].plot(I)
 ax[0].set_ylabel('current')
 ax[1].plot(vd)
 ax[1].set_ylabel('membrane\npotential')
-ax[1].plot(v, color='orange')
+ax[1].plot(v)
 ax[2].plot(e)
 fig.suptitle(names[dnum])
 
@@ -276,7 +279,7 @@ v, e, b=getv()
 
 plt.figure(figsize=(8,4))
 plt.plot(vd)
-plt.plot(v, color='orange')
+plt.plot(v)
 plt.title(names[dnum])
 
 plt.show()
@@ -377,7 +380,7 @@ vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
 
 a0=0.5
 ca0=250
-tauca = 0.1
+tauca = 0.01
 cca=500000
 taua=0.5
 
@@ -404,7 +407,7 @@ for i in range(1,len(I)):
 plt.plot(vd, label='data')
 plt.ylabel('membrane potential')
 plt.xlabel('time (ms)')
-plt.plot(v, color='orange', label='sims')
+plt.plot(v, label='sims')
 plt.title(names[dnum])
 plt.legend()
 plt.show()
@@ -425,7 +428,7 @@ vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
     -1.235,-1.2,-1.2,-1.2,-1.2,-1.2]
 
 a0=3.8
-ca0=800
+ca0=700
 tauca = 0.5
 cca=500000
 taua=0.01
@@ -454,7 +457,54 @@ for i in range(1,len(I)):
 plt.plot(vd, label='data')
 plt.ylabel('membrane potential')
 plt.xlabel('time (ms)')
-plt.plot(v, color='orange', label='sims')
+plt.plot(v, label='sims')
+plt.title(names[dnum])
+plt.legend()
+plt.show()
+
+#%% new method
+
+dnum=10 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
+dsize=0
+if dsize==0:
+    I=data[:, dnum][:12000]
+    vd=data[:, dnum+13][:12000]
+if dsize==1:
+    I=data[:, dnum]
+    vd=data[:, dnum+13]
+#  0   1   2   3   4   5   6   7   8   9   10  11
+c=[500,500,500,500,500,500,550,500,500,500,500,500]
+#     0   1   2   3   4   5   6   7   8   9   10  11
+tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
+vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
+    -1.235,-1.2,-1.2,-1.2,-1.28,-1.2]
+dt=1e-3
+
+C=0.002
+g0=0.01
+c1=1
+taug=10
+
+v=np.zeros(len(I))
+a=np.zeros_like(v)
+a[0]=a0
+ca=np.zeros_like(v)
+ca[0]=ca0
+g=np.zeros_like(v)
+g[0]=g0
+v[0]=vd[0]
+for i in range(1,len(I)):
+    dvdt=((-(v[i-1]-vb[dnum])*g0+I[i-1]))/C
+    v[i]=v[i-1]+dvdt*dt
+    
+    dgdt = (g0-g[i-1])/taug+c1*I[i-1]
+    g[i]=g[i-1]+dgdt*dt
+    
+plt.figure(figsize=(9,4))
+plt.plot(vd, label='data')
+plt.ylabel('membrane potential')
+plt.xlabel('time (ms)')
+plt.plot(v, label='sims')
 plt.title(names[dnum])
 plt.legend()
 plt.show()
