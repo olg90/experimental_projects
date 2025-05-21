@@ -16,453 +16,77 @@ data=np.array(df)
 
 names=df.columns
 
-dnum=6 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-# =============================================================================
-# I=data[:, dnum]
-# vd=data[:, dnum+13]
-# =============================================================================
+dnum=10 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
+dsize=0
+if dsize==0:
+    I=data[:, dnum][:12000]
+    vd=data[:, dnum+13][:12000]
+if dsize==1:
+    I=data[:, dnum]
+    vd=data[:, dnum+13]
 
-#  0   1   2   3   4   5   6   7   8   9   10  11
-c=[500,500,500,500,500,500,650,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.2,0.1,0.1,0.1,0.1,0.1,0.325,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.23, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.238,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-dt=1e-3
-
-def getv():
-    v=np.zeros(len(I))
-    v[0]=vd[0]
-    for i in range(1,len(I)):
-        dvdt=(vb[dnum]-v[i-1])/(tauv[dnum])+c[dnum]*I[i-1]
-        v[i]=v[i-1]+dvdt*dt
-    return v
-
-v=getv()
-    
-# =============================================================================
-# fig, ax = plt.subplots(2,1, figsize = (6,4))
-# ax[0].plot(I)
-# ax[0].set_ylabel('current')
-# ax[1].plot(vd)
-# ax[1].set_ylabel('membrane\npotential')
-# ax[1].plot(v, color='orange')
-# fig.suptitle(names[dnum])
-# 
-# plt.show()
-# =============================================================================
-plt.plot(vd)
-plt.plot(v)
-plt.title(names[dnum])
-
-plt.show()
-
-
-#%% a method
-
-dnum=6 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-# =============================================================================
-# I=data[:, dnum]
-# vd=data[:, dnum+13]
-# =============================================================================
-#  0   1   2   3   4   5   6   7   8   9   10  11
-c=[500,500,500,500,500,500,600,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.26,-1.2,-1.2,-1.2,-1.284,
-    -1.238,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-a0=0.2
-taua=0.01
-ca=10
-dt=1e-3
-
-def getva():
-    v=np.zeros(len(I))
-    a=np.zeros_like(v)
-    a[0]=a0
-    v[0]=vd[0]
-    for i in range(1,len(I)):
-        dvdt=(vb[dnum]-v[i-1])/(a[i-1])+c[dnum]*I[i-1]
-        v[i]=v[i-1]+dvdt*dt
-        
-        dadt = (a0-a[i-1])/taua-ca*I[i-1]
-        a[i]=a[i-1]+dadt*dt
-    return v,a
-
-va,a=getva()
-
-plt.plot(vd)
-plt.plot(va)
-plt.title(names[dnum])
-plt.show()
-    
-# =============================================================================
-# fig, ax = plt.subplots(3,1, figsize = (6,4))
-# ax[0].plot(I)
-# ax[0].set_ylabel('current')
-# ax[1].plot(vd, label='vd')
-# ax[1].set_ylabel('membrane\npotential')
-# ax[1].plot(va, color='orange', label='va')
-# ax[2].plot(a)
-# fig.suptitle(names[dnum])
-# ax[1].legend()
-# plt.show()
-# =============================================================================
-#%% a b method
-
-dnum=6 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-# =============================================================================
-# I=data[:, dnum]
-# vd=data[:, dnum+13]
-# =============================================================================
+I = 25*I
+vd=50*vd
 #  0   1   2   3   4   5   6   7   8   9   10  11
 c=[500,500,500,500,500,500,550,500,500,500,500,500]
 #     0   1   2   3   4   5   6   7   8   9   10  11
 tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.235,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-a0=0.2
-# taua=0.01
-ca=10
-
-b0=0.1
-taub=1
-cb=1000
-
-dt=1e-3
-v=np.zeros(len(I))
-a=np.zeros_like(v)
-a[0]=a0
-
-b=np.zeros_like(v)
-b[0]=b0
-
-v[0]=vd[0]
-for i in range(1,len(I)):
-    dvdt=(vb[dnum]-v[i-1])/(a[i-1])+c[dnum]*I[i-1]
-    v[i]=v[i-1]+dvdt*dt
-    
-    dadt = (a0-a[i-1])/b[i-1]-ca*I[i-1]
-    a[i]=a[i-1]+dadt*dt
-    
-    dbdt = (b0-b[i-1])/taub+cb*I[i-1]
-    b[i]=b[i-1]+dbdt*dt
-    
-plt.plot(vd, label='data')
-plt.ylabel('membrane potential')
-plt.xlabel('time (ms)')
-plt.plot(v, label='simulations')
-plt.title(names[dnum])
-plt.legend()
-plt.show()
-    
+vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-60,
+       -60,-60,-64,-60])
 # =============================================================================
-# fig, ax = plt.subplots(2,1, figsize = (6,4))
-# ax[0].plot(I)
-# ax[0].set_ylabel('current')
-# ax[1].plot(vd)
-# ax[1].set_ylabel('membrane\npotential')
-# ax[1].plot(v, color='orange')
-# fig.suptitle(names[dnum])
+# vb=50*np.array([-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
+#                 -1.235,-1.2,-1.2,-1.2,-1.28,-1.2])
 # =============================================================================
-
+dt=0.1e-3
 
 # =============================================================================
-# fig, ax = plt.subplots(3,1, figsize = (6,4))
-# ax[0].plot(I)
-# ax[0].set_ylabel('current')
-# ax[1].plot(vd)
-# ax[1].set_ylabel('membrane\npotential')
-# ax[1].plot(v, color='orange')
-# ax[2].plot(a)
-# # ax[3].plot(b)
-# fig.suptitle(names[dnum])
-# 
-# plt.show()
-# =============================================================================
-
-#%% Current pushback, e
-
-dnum=0 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-
-c=[500,500,500,500,500,500,500,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.2,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-e0=0.1
-taue=0.5
-ce=0.5
-cee=1000
-
-def getv():
-    v=np.zeros(len(I))
-    e=np.zeros_like(v)
-    e[0]=e0
-    v[0]=vd[0]
-    for i in range(1,len(I)):
-        dvdt=(vb[dnum]-v[i-1])/(tauv[dnum])+c[dnum]*I[i-1]+ce*e[i-1]
-        v[i]=v[i-1]+dvdt*dt
-        
-        dedt = -(e[i-1]-e0)/taue+cee*I[i-1]
-        e[i]= e[i-1] + dedt*dt
-    return v, e
-
-v, e =getv()
-    
-fig, ax = plt.subplots(3,1, figsize = (6,4))
-ax[0].plot(I)
-ax[0].set_ylabel('current')
-ax[1].plot(vd)
-ax[1].set_ylabel('membrane\npotential')
-ax[1].plot(v)
-ax[2].plot(e)
-fig.suptitle(names[dnum])
-
-plt.show()
-
-#%% e + b
-
-dnum=0 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-
-c=[500,500,500,500,500,500,500,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.2,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-
-e0=0.2
-taue=0.3
-ce=0.5
-cee=2000
-
-b0=0.01
-taub=0.01
-cb=500
-
-def getv():
-    v=np.zeros(len(I))
-    e=np.zeros_like(v)
-    b=np.zeros_like(v)
-    b[0]=b0
-    
-    v[0]=vd[0]
-    for i in range(1,len(I)):
-        dvdt=(vb[dnum]-v[i-1])/(tauv[dnum]+b[i-1])+c[dnum]*I[i-1]+ce*e[i-1]
-        v[i]=v[i-1]+dvdt*dt
-        
-        dedt = -(e[i-1]-e0)/taue+cee*I[i-1]
-        e[i]= e[i-1] + dedt*dt
-        
-        dbdt = (b0-b[i-1])/taub+cb*I[i-1]
-        b[i]=b[i-1]+dbdt*dt
-        
-
-    return v, e, b
-
-v, e, b=getv()
-
-plt.figure(figsize=(8,4))
-plt.plot(vd)
-plt.plot(v)
-plt.title(names[dnum])
-
-plt.show()
-    
-# =============================================================================
-# fig, ax = plt.subplots(3,1, figsize = (6,4))
-# ax[0].plot(I)
-# ax[0].set_ylabel('current')
-# ax[1].plot(vd)
-# ax[1].set_ylabel('membrane\npotential')
-# ax[1].plot(v, color='orange')
-# ax[2].plot(e)
-# ax[2].plot(b)
-# fig.suptitle(names[dnum])
-# 
-# plt.show()
-# =============================================================================
-#%% fitting the initial increase + sum a
-
-dnum= 6 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-
-c=[500,500,500,500,500,500,500,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.7,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.2,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-a0=0.4
-taua=0.05
-ca=1000
-
-
-def getv():
-    v=np.zeros(len(I))
-    a=np.zeros_like(v)
-    a[0]=a0
-    
-    v[0]=vd[0]
-    for i in range(1,len(I)):
-        dvdt=(vb[dnum]-v[i-1])/(tauv[dnum]-a[i-1])+c[dnum]*I[i-1]
-        v[i]=v[i-1]+dvdt*dt
-        
-        dadt=-(a[i-1]-a0)/taua+ca*I[i-1]
-        a[i]=a[i-1]+dadt*dt
-
-    return v
-
-v=getv()
-
-plt.figure(figsize=(8,4))
-plt.plot(vd)
-plt.plot(v, color='orange')
-plt.title(names[dnum])
-
-plt.show()
-
-#%% a and ca method
-
-dnum=6 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-# =============================================================================
-# I=data[:, dnum]
-# vd=data[:, dnum+13]
-# =============================================================================
-#  0   1   2   3   4   5   6   7   8   9   10  11
-c=[500,500,500,500,500,500,550,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.235,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-# =============================================================================
-# a0=0.6
-# ca0=300
-# tauca = 0.1
-# cca=10000
-# taua=1
+# # Good high fit bad low fit
+# C=0.00009 
+# g=0.0071
 # =============================================================================
 
 # =============================================================================
-# a0=0.6
-# ca0=200
-# tauca = 0.1
-# taua=1
-# cca=1000
+# # Better low fit, slightly overshooting the high fit
+# C=0.00011 # 90e-6
+# g=0.0037
 # =============================================================================
 
-# =============================================================================
-# a0=0.5
-# ca0=250
-# tauca = 0.2
-# cca=50000
-# taua=0.5
-# =============================================================================
-
-a0=0.5
-ca0=250
-tauca = 0.01
-cca=500000
-taua=0.5
-
-dt=1e-3
+# Better low fit, slightly overshooting the high fit
+C=0.00011 # 90e-6
+g=0.0037
 
 v=np.zeros(len(I))
-a=np.zeros_like(v)
-a[0]=a0
-
-ca=np.zeros_like(v)
-ca[0]=ca0
-
 v[0]=vd[0]
 for i in range(1,len(I)):
-    dvdt=(vb[dnum]-v[i-1])/(a[i-1])+ca[i-1]*I[i-1]
+    dvdt=((-g*(v[i-1]-vb[dnum])+I[i-1]))/C
     v[i]=v[i-1]+dvdt*dt
     
-    dadt = (a0-a[i-1])/taua-ca[i-1]*I[i-1]
-    a[i]=a[i-1]+dadt*dt
-    
-    dcadt = (ca0-ca[i-1])/tauca+cca*I[i-1]
-    ca[i]=ca[i-1]+dcadt*dt
-    
+plt.figure(figsize=(9,4))
 plt.plot(vd, label='data')
-plt.ylabel('membrane potential')
+plt.ylabel('membrane potential (mV)')
 plt.xlabel('time (ms)')
-plt.plot(v, label='sims')
-plt.title(names[dnum])
-plt.legend()
-plt.show()
-#%% a and current method method
-
-dnum=6 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-I=data[:, dnum][:12000]
-vd=data[:, dnum+13][:12000]
-# =============================================================================
-# I=data[:, dnum]
-# vd=data[:, dnum+13]
-# =============================================================================
-#  0   1   2   3   4   5   6   7   8   9   10  11
-c=[500,500,500,500,500,500,550,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.235,-1.2,-1.2,-1.2,-1.2,-1.2]
-
-a0=3.8
-ca0=700
-tauca = 0.5
-cca=500000
-taua=0.01
-cx=2000
-
-dt=1e-3
-
-v=np.zeros(len(I))
-a=np.zeros_like(v)
-a[0]=a0
-
-ca=np.zeros_like(v)
-ca[0]=ca0
-
-v[0]=vd[0]
-for i in range(1,len(I)):
-    dvdt=(vb[dnum]-v[i-1])*(a[i-1]+cx*I[i-1])+ca[i-1]*I[i-1]
-    v[i]=v[i-1]+dvdt*dt
-    
-    dadt = (a0-a[i-1])/taua-ca[i-1]*I[i-1]
-    a[i]=a[i-1]+dadt*dt
-    
-    dcadt = (ca0-ca[i-1])/tauca+cca*I[i-1]
-    ca[i]=ca[i-1]+dcadt*dt
-    
-plt.plot(vd, label='data')
-plt.ylabel('membrane potential')
-plt.xlabel('time (ms)')
-plt.plot(v, label='sims')
+plt.plot(v, label='model')
 plt.title(names[dnum])
 plt.legend()
 plt.show()
 
-#%% new method
+#%% Second method
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+
+dtype=1
+if dtype==0:
+    dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
+if dtype == 1:
+    dir1=r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\SOM'
+os.chdir(dir1)
+
+df = pd.read_csv("Table0.csv")
+data=np.array(df)
+
+names=df.columns
 
 dnum=10 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
 dsize=0
@@ -472,69 +96,44 @@ if dsize==0:
 if dsize==1:
     I=data[:, dnum]
     vd=data[:, dnum+13]
+
+I = 25*I
+vd=50*vd
 #  0   1   2   3   4   5   6   7   8   9   10  11
 c=[500,500,500,500,500,500,550,500,500,500,500,500]
 #     0   1   2   3   4   5   6   7   8   9   10  11
 tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=[-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-    -1.235,-1.2,-1.2,-1.2,-1.28,-1.2]
-dt=1e-3
-
+vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-60,
+       -60,-60,-64,-60])
 # =============================================================================
-# C=0.002
-# g0=0.0066
-# c1=100
-# taug0=0.01
+# vb=50*np.array([-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
+#                 -1.235,-1.2,-1.2,-1.2,-1.28,-1.2])
 # =============================================================================
+dt=0.1e-3
 
-C=0.0019
-g00=0.006
-c1=60
-taug0=0.03
-tautaug0=0.01
-c3=0.01
-c4=0.001
-taug0=0.02
-g10=0.01
-taug1=0.1
-c5=1
-c6=1
+# Better low fit, slightly overshooting the high fit
+C=0.0001 # 90e-6
+gb=0.003
+taug=0.015
+c1=3
 
+g=np.zeros_like(I)
 v=np.zeros(len(I))
-a=np.zeros_like(v)
-a[0]=a0
-ca=np.zeros_like(v)
-ca[0]=ca0
-g=np.zeros_like(v)
-g[0]=g00
-taug=np.zeros_like(v)
-taug[0]=taug0
-g0=np.zeros_like(v)
-g0[0]=g00
-g1=np.zeros_like(v)
-g1[0]=g10
 v[0]=vd[0]
 for i in range(1,len(I)):
-    dvdt=((-(v[i-1]-vb[dnum])*g[i-1]+I[i-1]))/C
+    dvdt=((-g[i-1]*(v[i-1]-vb[dnum])+I[i-1]))/C
     v[i]=v[i-1]+dvdt*dt
     
-    dgdt = (g0[i-1]-g[i-1])/taug[i-1]+c1*I[i-1]+0.01-c6*g1[i-1]
+    dgdt=-(g[i-1]-gb)/taug+c1*I[i-1]
     g[i]=g[i-1]+dgdt*dt
     
-    dtaugdt= -(taug[i-1]-taug0)/tautaug0 + c3*v[i-1]+2
-    taug[i]=taug[i-1]+dtaugdt*dt
     
-    dg0dt=-(g0[i-1]-g00)/taug0 + c4*v[i-1]-0.02
-    g0[i]=g0[i-1]+dg0dt*dt
-    
-    dg1dt=-(g1[i-1]-g10)/taug1+c5*I[i-1]
-    g1[i]=g1[i-1]+dg1dt*dt
     
 plt.figure(figsize=(9,4))
 plt.plot(vd, label='data')
-plt.ylabel('membrane potential')
+plt.ylabel('membrane potential (mV)')
 plt.xlabel('time (ms)')
-plt.plot(v, label='sims')
+plt.plot(v, label='model')
 plt.title(names[dnum])
 plt.legend()
 plt.show()
