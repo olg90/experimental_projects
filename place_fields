@@ -7,8 +7,8 @@ from scipy.stats import nbinom
 from scipy.optimize import minimize
 
 # ========================= Load data from .mat files =========================
-n = []
-p = []
+n = [] # number of place fields
+p = [] # neuron maps
 
 location=1
 if location==0:
@@ -28,6 +28,65 @@ for foldername in dir2:
         mat = loadmat(dir5)
         n.append(mat['numFields'][0][0])
         p.append(mat['pfields'])
+        
+        
+        
+#%%  Threshold (5 and 10) and divide into rectangles
+
+th=0
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+pth = [(pi>th)*pi for pi in p_trimmed]
+pthc = np.array([(pi>th)*1 for pi in p_trimmed]) # convert to 1s and 0s
+
+rates=np.unique(p_trimmed)
+
+# [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
+#       17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+
+# Convert them to grids and count per grid
+
+grid=(1,1)
+pshape = pth[0].shape # (65, 116) 
+
+x1 = pshape[0]//grid[0]
+x2 = pshape[1]//grid[1]
+
+plist=[]
+clist=[]
+for pi in pthc:
+    patches=np.zeros((x1,x2), dtype=object)
+    counts=np.zeros((x1,x2))
+    for i in range(x1):
+        for j in range(x2):
+            patch=pi[i*grid[0]:(i+1)*grid[0],j*grid[1]:+(j+1)*grid[1]]
+            count = 1*np.any(patch>0)
+            patches[i,j]=patch
+            counts[i,j]=count
+    plist.append(patches)
+    clist.append(counts)
+
+csum=np.sum(clist, axis=0)
+data=csum.flatten()
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+binplot = np.arange(np.min(data), np.max(data) + 1)
+fs=15
+plt.hist(data, bins=binarr, density=True, 
+         color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+plt.title('Searching a ({},{})-grid and counting all AP rates > {}'.format(grid[0], grid[1], th))
+plt.xlabel('# neurons firing APs in a ({},{}) grid'.format(grid[0], grid[1]), 
+           fontsize=fs)
+plt.ylabel('Density of # neurons', fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
+plt.show()
+# =============================================================================
+# plt.figure()
+# plt.imshow(csum, cmap='hot')
+# plt.title('Number of neurons firing in a ({},{})-grid'.format(grid[0], grid[1]))
+# plt.colorbar()
+# =============================================================================
+
+#%%
+
 
 # =================== Fit NB with integer r using grid search ===================
 
@@ -98,10 +157,13 @@ import matplotlib.pyplot as plt
 from scipy.stats import nbinom, norm
 
 pcountsum = np.sum(pcount, axis=0)
+
 plt.figure()
 plt.imshow(pcountsum, cmap='hot')
 plt.title('Number of neurons that fire at each pixel\nin the rectangular room')
 plt.colorbar()
+
+#%%
 
 binarr = np.arange(np.min(pcountsum) - 0.5, np.max(pcountsum) + 1.5)
 binplot = np.arange(np.min(pcountsum), np.max(pcountsum) + 1)
@@ -109,7 +171,6 @@ binplot = np.arange(np.min(pcountsum), np.max(pcountsum) + 1)
 data_flat = pcountsum.flatten()
 # Fit Normal distribution
 mu_norm, std_norm = norm.fit(data_flat)
-
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -160,14 +221,6 @@ plt.xticks(binplot)
 plt.legend()
 plt.tight_layout()
 plt.show()
-
-
-#
-
-
-
-
-
 
 # Trim and collect matrices
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
