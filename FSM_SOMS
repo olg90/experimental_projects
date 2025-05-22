@@ -19,7 +19,7 @@ names=df.columns
 # 0 - DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 6-NF1, 7-NF4, 8-NM1, 9-NM4
 # 10-NS1, 11-NS4
 
-dnum=7 # <--------------- neuron number
+dnum=11 # <----------------------------------- neuron number
 dsize= 1 # 0 full, 1 zoomed
 dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
 dlens=[4000,12000]
@@ -34,29 +34,18 @@ I = 25*I
 vd=50*vd
 dt=0.1e-3
 
-# =============================================================================
-# # Good high fit bad low fit
-# C=0.00009 
-# g=0.0071
-# =============================================================================
-# =============================================================================
-# # Better low fit, slightly overshooting the high fit
-# C=0.00011 # 90e-6
-# g=0.0037
-# =============================================================================
-
 #                0   1   2   3   4    5     6      7    8   9  10  11
 vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-60,-60,-64,-63.8])
 #    0        1           2          3        4         5
 C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
-   0.00011, 0.0001,  0.00011,  0.00011,  0.00011, 0.00011]
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.00011]
 #    6        7          8        9          10       11
 #    0        1          2      3        4        5
 g=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
-   0.0037, 0.0037,  0.0037,  0.0037,  0.0037, 0.0038]
+   0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
 #    6        7       8        9       10       11
 #     0    1    2     3    4    5    6    7    8   9    10   11
-vth=[-40, -40, -40, -40, -40, -40, -40, -35, -40, -40, -40, -38]
+vth=[-40, -40, -40, -40, -40, -40, -40, -40, -40, -40, -40, -40]
 
 v=np.zeros(len(I))
 v[0]=vd[0]
@@ -64,7 +53,7 @@ for i in range(1,len(I)):
     dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
     v[i]=v[i-1]+dvdt*dt
     if v[i-1]>vth[dnum]:
-        v[i]=-vth[dnum]
+        v[i]=vb[dnum]
     
 plt.figure(figsize=(9,4))
 plt.plot(vd, label='data')
@@ -75,7 +64,7 @@ plt.title(names[dnum])
 plt.legend()
 plt.show()
 
-#%% Second method - 10
+#%% Second method
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -136,261 +125,6 @@ for i in range(1,len(I)):
     g[i]=g[i-1]+dgdt*dt
     
     
-    
-plt.figure(figsize=(9,4))
-plt.plot(vd, label='data')
-plt.ylabel('membrane potential (mV)')
-plt.xlabel('time (ms)')
-plt.plot(v, label='model')
-plt.title(names[dnum])
-plt.legend()
-plt.show()
-
-#%% First method - 11
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pandas as pd
-
-# 0 - DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 6-NF1, 7-NF4, 8-NM1, 9-NM4
-# 10-NS1, 11-NS4
-
-
-dnum=11 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-dsize=0
-dlen=4000
-if dsize==0:
-    I=data[:, dnum][:dlen]
-    vd=data[:, dnum+13][:dlen]
-if dsize==1:
-    I=data[:, dnum]
-    vd=data[:, dnum+13]
-
-
-I = 25*I
-vd=50*vd
-#  0   1   2   3   4   5   6   7   8   9   10  11
-c=[500,500,500,500,500,500,550,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-60,
-       -60,-60,-64,-64])
-# =============================================================================
-# vb=50*np.array([-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-#                 -1.235,-1.2,-1.2,-1.2,-1.28,-1.2])
-# =============================================================================
-dt=0.1e-3
-
-# =============================================================================
-# # Good high fit bad low fit
-# C=0.00009 
-# g=0.0071
-# =============================================================================
-
-# =============================================================================
-# # Better low fit, slightly overshooting the high fit
-# C=0.00011 # 90e-6
-# g=0.0037
-# =============================================================================
-
-# Better low fit, slightly overshooting the high fit
-C=0.00011 # 90e-6
-g=0.0045
-
-v=np.zeros(len(I))
-v[0]=vd[0]
-for i in range(1,len(I)):
-    dvdt=((-g*(v[i-1]-vb[dnum])+I[i-1]))/C
-    v[i]=v[i-1]+dvdt*dt
-
-plt.figure(figsize=(9,4))
-plt.plot(vd, label='data')
-plt.ylabel('membrane potential (mV)')
-plt.xlabel('time (ms)')
-plt.plot(v, label='model')
-plt.title(names[dnum])
-plt.legend()
-plt.show()
-
-
-#%% Second method - 11
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pandas as pd
-
-dnum=11 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-
-# 0 - DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 6-NF1, 7-NF4, 8-NM1, 9-NM4
-# 10-NS1, 11-NS4
-
-dsize=0
-dlen=4000
-if dsize==0:
-    I=data[:, dnum][:dlen]
-    vd=data[:, dnum+13][:dlen]
-if dsize==1:
-    I=data[:, dnum]
-    vd=data[:, dnum+13]
-
-I = 25*I
-vd=50*vd
-#  0   1   2   3   4   5   6   7   8   9   10  11
-c=[500,500,500,500,500,500,550,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
-vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-60,
-       -60,-60,-64,-64])
-# =============================================================================
-# vb=50*np.array([-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-#                 -1.235,-1.2,-1.2,-1.2,-1.28,-1.2])
-# =============================================================================
-dt=0.1e-3
-
-# Better low fit, slightly overshooting the high fit
-C=0.0001 # 90e-6
-gb=0.003
-taug=0.015
-c1=3
-
-g=np.zeros_like(I)
-v=np.zeros(len(I))
-v[0]=vd[0]
-for i in range(1,len(I)):
-    dvdt=((-g[i-1]*(v[i-1]-vb[dnum])+I[i-1]))/C
-    v[i]=v[i-1]+dvdt*dt
-    
-    dgdt=-(g[i-1]-gb)/taug+c1*I[i-1]
-    g[i]=g[i-1]+dgdt*dt
-
-plt.figure(figsize=(9,4))
-plt.plot(vd, label='data')
-plt.ylabel('membrane potential (mV)')
-plt.xlabel('time (ms)')
-plt.plot(v, label='model')
-plt.title(names[dnum])
-plt.legend()
-plt.show()
-#%% First method - 6
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pandas as pd
-
-dtype=0
-if dtype==0:
-    dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
-if dtype == 1:
-    dir1=r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\SOM'
-os.chdir(dir1)
-
-df = pd.read_csv("Table0.csv")
-data=np.array(df)
-
-names=df.columns
-
-# 0 - DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 6-NF1, 7-NF4, 8-NM1, 9-NM4
-# 10-NS1, 11-NS4
-
-dnum=6 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-dsize=0
-if dsize==0:
-    I=data[:, dnum][:12000]
-    vd=data[:, dnum+13][:12000]
-if dsize==1:
-    I=data[:, dnum]
-    vd=data[:, dnum+13]
-
-I = 25*I
-vd=50*vd
-#                0   1   2   3   4    5     6      7    8   9  10  11
-vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-60,-60,-60,-64,-60])
-# =============================================================================
-# vb=50*np.array([-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-#                 -1.235,-1.2,-1.2,-1.2,-1.28,-1.2])
-# =============================================================================
-dt=0.1e-3
-
-# Better low fit, slightly overshooting the high fit
-C=0.00011 # 90e-6
-g=0.0037
-
-v=np.zeros(len(I))
-v[0]=vd[0]
-for i in range(1,len(I)):
-    dvdt=((-g*(v[i-1]-vb[dnum])+I[i-1]))/C
-    v[i]=v[i-1]+dvdt*dt
-    
-plt.figure(figsize=(9,4))
-plt.plot(vd, label='data')
-plt.ylabel('membrane potential (mV)')
-plt.xlabel('time (ms)')
-plt.plot(v, label='model')
-plt.title(names[dnum])
-plt.legend()
-plt.show()
-#%% First method - 7
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pandas as pd
-
-dtype=0
-if dtype==0:
-    dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
-if dtype == 1:
-    dir1=r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\SOM'
-os.chdir(dir1)
-
-df = pd.read_csv("Table0.csv")
-data=np.array(df)
-
-names=df.columns
-
-# 0 - DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 6-NF1, 7-NF4, 8-NM1, 9-NM4
-# 10-NS1, 11-NS4
-
-dnum=7 
-dsize=0
-if dsize==0:
-    I=data[:, dnum][:12000]
-    vd=data[:, dnum+13][:12000]
-if dsize==1:
-    I=data[:, dnum]
-    vd=data[:, dnum+13]
-
-I = 25*I
-vd=50*vd
-
-vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-60,
-       -60,-60,-64,-60])
-# =============================================================================
-# vb=50*np.array([-1.21, -1.2,-1.2,-1.2,-1.284,-1.284,
-#                 -1.235,-1.2,-1.2,-1.2,-1.28,-1.2])
-# =============================================================================
-dt=0.1e-3
-
-# =============================================================================
-# # Good high fit bad low fit
-# C=0.00009 
-# g=0.0071
-# =============================================================================
-
-# =============================================================================
-# # Better low fit, slightly overshooting the high fit
-# C=0.00011 # 90e-6
-# g=0.0037
-# =============================================================================
-
-# Better low fit, slightly overshooting the high fit
-C=0.00011 # 90e-6
-g=0.0037
-
-v=np.zeros(len(I))
-v[0]=vd[0]
-for i in range(1,len(I)):
-    dvdt=((-g*(v[i-1]-vb[dnum])+I[i-1]))/C
-    v[i]=v[i-1]+dvdt*dt
     
 plt.figure(figsize=(9,4))
 plt.plot(vd, label='data')
