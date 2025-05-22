@@ -73,6 +73,63 @@ plt.tick_params(axis='both', labelsize=fs)
 plt.show()
 
 #%% Second method
+# 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
+# 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
+
+dnum= 11 # <----------------------------------- neuron number
+dsize= 'z' # f full, z zoomed
+dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
+dlens=[4000,12000]
+if dsize=='f':
+    I=data[:, dnum]
+    vd=data[:, dnum+13]
+if dsize=='z':
+    I=data[:, dnum][:dlens[dsnum]]
+    vd=data[:, dnum+13][:dlens[dsnum]]
+    
+I = 25*I
+vd=50*vd
+dt=0.1e-3
+#                0   1   2   3   4    5     6      7    8   9  10  11
+vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-60,-65.5,-64,-63.8])
+#    0        1           2          3        4         5
+C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.00011]
+#    6        7          8        9          10       11
+#    0        1          2      3        4        5
+g=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
+#    6        7       8        9       10       11
+#     0    1    2     3    4    5    6    7    8   9    10   11
+vth=[-40, -40, -40, -40, -40, -40, -40, -40, -38, -40, -40, -40]
+
+v=np.zeros(len(I))
+v[0]=vd[0]
+aps=[]
+for i in range(1,len(I)):
+    dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
+    v[i]=v[i-1]+dvdt*dt
+    if v[i-1]>vth[dnum]:
+        v[i]=vb[dnum]
+        aps.append(i)
+
+fs=15
+plt.figure(figsize=(9,4))
+plt.plot(vd, label='data')
+plt.ylabel('membrane potential (mV)', fontsize=fs)
+plt.xlabel('time (ms)', fontsize=fs)
+plt.plot(v, label='model')
+plt.plot(vth[dnum]*np.ones(dlens[dsnum]), label='threshold',
+         color='k', linestyle='--', alpha=0.6)
+
+plt.scatter(aps, vth[dnum]*np.ones(len(aps)), color='r', s=200, marker='x',
+            zorder=2, label='action potentials')
+plt.title(names[dnum], fontsize=fs)
+plt.legend(loc='upper left', fontsize=fs, bbox_to_anchor=(0.01,0.95))
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Third method
 
 dnum= 11 # <----------------------------------- neuron number
 dsize= 'z' # f full, z zoomed
