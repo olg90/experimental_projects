@@ -1,4 +1,4 @@
-#%% First method - 10
+#%% First method
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -64,7 +64,7 @@ for i in range(1,len(I)):
     dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
     v[i]=v[i-1]+dvdt*dt
     if v[i-1]>vth[dnum]:
-        v[i]=-50
+        v[i]=-vth[dnum]
     
 plt.figure(figsize=(9,4))
 plt.plot(vd, label='data')
@@ -81,28 +81,36 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
-
-dnum=10 # 0 to 11, DE/NR F/M/S 10/40 (binary-like), +6 is the NR (5 max)
-
-# 0 - DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 6-NF1, 7-NF4, 8-NM1, 9-NM4
-# 10-NS1, 11-NS4
-
-dsize=0
-dlen=12000
+dnum=7 # <--------------- neuron number
+dsize= 1 # 0 full, 1 zoomed
+dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
+dlens=[4000,12000]
 if dsize==0:
-    I=data[:, dnum][:dlen]
-    vd=data[:, dnum+13][:dlen]
-if dsize==1:
     I=data[:, dnum]
     vd=data[:, dnum+13]
-
+if dsize==1:
+    I=data[:, dnum][:dlens[dsnum]]
+    vd=data[:, dnum+13][:dlens[dsnum]]
 
 I = 25*I
 vd=50*vd
-#  0   1   2   3   4   5   6   7   8   9   10  11
-c=[500,500,500,500,500,500,550,500,500,500,500,500]
-#     0   1   2   3   4   5   6   7   8   9   10  11
-tauv=[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]
+dt=0.1e-3
+
+#                0   1   2   3   4    5     6      7    8   9  10  11
+vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-60,-60,-64,-63.8])
+#    0        1           2          3        4         5
+C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00011, 0.0001,  0.00011,  0.00011,  0.00011, 0.00011]
+#    6        7          8        9          10       11
+#    0        1          2      3        4        5
+g=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0037, 0.0037,  0.0037,  0.0037,  0.0037, 0.0038]
+#    6        7       8        9       10       11
+#     0    1    2     3    4    5    6    7    8   9    10   11
+vth=[-40, -40, -40, -40, -40, -40, -40, -35, -40, -40, -40, -38]
+
+
+
 vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-60,
        -60,-60,-64,-60])
 # =============================================================================
