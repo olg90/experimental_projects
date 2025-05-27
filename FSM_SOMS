@@ -19,7 +19,7 @@ names=df.columns
 # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
-dnum= 9 # <----------------------------------- neuron number
+dnum= 11 # <----------------------------------- neuron number
 dsize= 'z' # f full, z zoomed
 dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
 dlens=[4000,12000]
@@ -76,7 +76,7 @@ plt.show()
 # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
-dnum= 9 # <----------------------------------- neuron number
+dnum= 11 # <----------------------------------- neuron number
 dsize= 'z' # f full, z zoomed
 dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
 dlens=[4000,12000]
@@ -188,6 +188,8 @@ gb=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
 #    6        7       8        9       10       11
 #     0    1    2     3    4    5    6    7    8   9    10   11
 vth=[-40, -40, -40, -40, -40, -40, -40, -40, -38, -40, -40, -40]
+
+
 
 dt=0.1e-3
 
@@ -323,10 +325,10 @@ plt.show()
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
 dnum= 8 # <----------------------------------- neuron number (8 or 9 here)
-dsize= 'f' # f full, z zoomed
+dsize= 'z' # f full, z zoomed
 dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
 dlens=[4000,12000]
-if dsize=='f':
+if dsize=='z':
     I=data[:, dnum]
     vd=data[:, dnum+13]
 if dsize=='z':
@@ -335,7 +337,7 @@ if dsize=='z':
     
 I = 25*I
 vd=50*vd
-dt=0.1e-3
+dt=0.1e-3                                # 8 is (6,10) and 9 is (7,11)
 #                0   1   2   3   4    5     6      7    8   9  10  11
 vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-64,-65.5,-64,-63.8])
 #                0   1   2   3   4    5     6       7    8   9     10    11
@@ -357,14 +359,13 @@ gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
    0.0035, 0.004,  0.0037,  0.0037,  0.0037, 0.005]
 #    6        7       8        9       10       11
 #     0    1    2     3    4    5    6    7    8   9    10   11
-vth=[-40, -40, -40, -40, -40, -40, -40, -40, -38, -40, -40, -39]
-
+vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
 
 v=np.zeros(len(I))
 v[0]=vd[0]
 aps=[]
 
-r=0.5
+r=0.1
 
 iS=np.zeros_like(v)
 iF=np.zeros_like(v)
@@ -376,21 +377,25 @@ for i in range(1,len(I)):
     
     if dnum==8: # fast
         if posttimer==False:
-            # dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
             icurr = r*g[6]*(v[i-1]-vb[dnum])+(1-r)*g[10]*(v[i-1]-vb[dnum])
             dvdt=((-icurr+I[i-1]))/C[dnum]
         if posttimer==True:
-            # dvdt=((-gr[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/Cr[dnum]
-            icurr = r*g[6]*(v[i-1]-vb[dnum])+(1-r)*g[10]*(v[i-1]-vb[dnum])
+            icurr = r*gr[6]*(v[i-1]-vb[dnum])+(1-r)*gr[10]*(v[i-1]-vb[dnum])
             dvdt=((-icurr+I[i-1]))/Cr[dnum]
     if dnum==9: # slow
+        
         if posttimer==False:
-            # dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
             icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
             dvdt=((-icurr+I[i-1]))/C[dnum]
         if posttimer==True:
-            # dvdt=((-gr[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/Cr[dnum]
-            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+I[i-1]))/Cr[dnum]
+    else: # slow
+        if posttimer==False:
+            icurr = g[dnum]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+I[i-1]))/C[dnum]
+        if posttimer==True:
+            icurr = gr[dnum]*(v[i-1]-vb[dnum])
             dvdt=((-icurr+I[i-1]))/Cr[dnum]
     
     if aptimer != np.inf:
