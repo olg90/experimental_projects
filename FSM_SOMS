@@ -322,8 +322,8 @@ plt.show()
 # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
-dnum= 11 # <----------------------------------- neuron number
-dsize= 'z' # f full, z zoomed
+dnum= 8 # <----------------------------------- neuron number (8 or 9 here)
+dsize= 'f' # f full, z zoomed
 dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
 dlens=[4000,12000]
 if dsize=='f':
@@ -359,33 +359,12 @@ gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
 #     0    1    2     3    4    5    6    7    8   9    10   11
 vth=[-40, -40, -40, -40, -40, -40, -40, -40, -38, -40, -40, -39]
 
-## Conductances for two channels
-#    0        1          2      3        4        5
-gs=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
-   0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
-#    6        7       8        9       10       11
-#    0        1          2      3        4        5
-gf=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
-   0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
-#    6        7       8        9       10       11
-#    0        1          2      3        4        5
-gsr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
-   0.0035, 0.004,  0.0037,  0.0037,  0.0037, 0.005]
-#    6        7       8        9       10       11
-#    0        1          2      3        4        5
-gfr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
-   0.0035, 0.004,  0.0037,  0.0037,  0.0037, 0.005]
-#    6        7       8        9       10       11
-
-#                0   1   2   3    4     5      6     7   8   9  10  11
-vbs=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-50,-50,-47,-64,-63.5])
-vbf=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-50,-50,-47,-64,-63])
 
 v=np.zeros(len(I))
 v[0]=vd[0]
 aps=[]
 
-r=1
+r=0.5
 
 iS=np.zeros_like(v)
 iF=np.zeros_like(v)
@@ -395,17 +374,25 @@ aptimer=np.inf
 posttimer=False
 for i in range(1,len(I)):
     
+    if dnum==8: # fast
+        if posttimer==False:
+            # dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
+            icurr = r*g[6]*(v[i-1]-vb[dnum])+(1-r)*g[10]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+I[i-1]))/C[dnum]
+        if posttimer==True:
+            # dvdt=((-gr[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/Cr[dnum]
+            icurr = r*g[6]*(v[i-1]-vb[dnum])+(1-r)*g[10]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+I[i-1]))/Cr[dnum]
+    if dnum==9: # slow
+        if posttimer==False:
+            # dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
+            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+I[i-1]))/C[dnum]
+        if posttimer==True:
+            # dvdt=((-gr[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/Cr[dnum]
+            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+I[i-1]))/Cr[dnum]
     
-    
-    if posttimer==False:
-        # dvdt=((-g[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/C[dnum]
-        icurr = r*gs[dnum]*(v[i-1]-vbs[dnum])+(1-r)*gf[dnum]*(v[i-1]-vbf[dnum])
-        dvdt=((-icurr+I[i-1]))/C[dnum]
-    if posttimer==True:
-        # dvdt=((-gr[dnum]*(v[i-1]-vb[dnum])+I[i-1]))/Cr[dnum]
-        icurr = r*gsr[dnum]*(v[i-1]-vbs[dnum])+(1-r)*gfr[dnum]*(v[i-1]-vbf[dnum])
-        dvdt=((-icurr+I[i-1]))/Cr[dnum]
-        
     if aptimer != np.inf:
         v[i] = v[i-1]
     else:
@@ -417,7 +404,7 @@ for i in range(1,len(I)):
     if aptimer != np.inf:
         aptimer-=1
     if v[i-1]>vth[dnum]:
-        v[i]=vbr[dnum]
+        v[i]=vbr[dnum] # vb[dnum]
         aps.append(i)
         aptimer=refper
         posttimer=True
