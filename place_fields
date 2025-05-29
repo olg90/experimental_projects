@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 n = [] # number of place fields
 p = [] # neuron maps
 
-location=1
+location=0
 if location==0:
     dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
 if location==1:
@@ -28,26 +28,353 @@ for foldername in dir2:
         mat = loadmat(dir5)
         n.append(mat['numFields'][0][0])
         p.append(mat['pfields'])
-        
-        
+
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+
+p0=p_trimmed[0]        
+pshape=p0.shape
+grid=(16,4)
+
+plt.figure(figsize=(10,4))
+plt.imshow(p0)
+plt.colorbar()
+plt.show()
+
+plt.figure(figsize=(10,4))
+plt.imshow(p0)
+plt.yticks([])
+plt.xticks([])
+plt.show()
+
+fs=20
+plt.figure(figsize=(10,4))
+plt.title('Firing rate map, grid size = ({},{})'.format(grid[0], grid[1]),fontsize=fs)
+# =============================================================================
+# plt.title('Firing rate map, Neuron # {}'.format(1),fontsize=fs)
+# =============================================================================
+im = plt.imshow(p0, cmap='viridis')
+# Add colorbar
+cbar = plt.colorbar(shrink=1)
+cbar.ax.tick_params(labelsize=fs)
+cbar.set_label('Firing rate', fontsize=fs, labelpad=20)
+cbar.ax.yaxis.label.set_rotation(270)
+plt.tick_params(axis='both', labelsize=fs)
+
+# Draw red horizontal grid lines
+for i in range(0, pshape[0], grid[0]):
+    plt.hlines(i - 0.5, xmin=-0.5, xmax=pshape[1] - 0.5, colors='red', linewidth=2)
+
+# Draw red vertical grid lines
+for j in range(0, pshape[1], grid[1]):
+    plt.vlines(j - 0.5, ymin=-0.5, ymax=pshape[0] - 0.5, colors='red', linewidth=2)
+
+plt.tight_layout()
+plt.show()
+
+
+#%%
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Your trimmed firing rate map and grid
+p0 = p_trimmed[0]
+pshape = p0.shape
+grid = (8, 4)
+
+# Plot the base firing rate map
+fig, ax = plt.subplots()
+im = ax.imshow(p0, cmap='viridis')
+
+# Add colorbar
+cbar = fig.colorbar(im, ax=ax, shrink=0.7)
+cbar.set_label('Firing rate', fontsize=15, labelpad=20)
+cbar.ax.yaxis.label.set_rotation(270)
+
+# Draw horizontal and vertical red lines
+for i in range(0, pshape[0], grid[0]):
+    ax.axhline(i - 0.5, color='red', linewidth=1)
+
+for j in range(0, pshape[1], grid[1]):
+    ax.axvline(j - 0.5, color='red', linewidth=1)
+
+# Optional: show tighter layout
+plt.tight_layout()
+plt.show()
+
+# =============================================================================
+# #%% Plots for collaborator meeting
+# 
+# th=10
+# p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+# p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+# pth = [(pi>th)*pi for pi in p_trimmed]
+# pthc = np.array([(pi>th)*1 for pi in p_trimmed]) # convert to 1s and 0s
+# rates=np.unique(p_trimmed)
+# 
+# plt.imshow(pth[0])
+# plt.xticks([])
+# plt.yticks([])
+# =============================================================================
+#%%  GPT beta binomali gaussian
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm, betabinom, binom
+from scipy.optimize import curve_fit, minimize
+
+# --- Data preparation (based on list of arrays `p`) ---
+# Step 1: Trim edges if necessary
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+pth = [(pi > 0) * 1 for pi in p_trimmed]
+
+# Step 2: Divide into grid and count active neurons
+pshape = pth[0].shape
+n = 1
+grid = (n, n)
+x1 = pshape[0] // grid[0]
+x2 = pshape[1] // grid[1]
+
+plist = []
+clist = []
+for pi in pth:
+    patches = np.zeros((x1, x2), dtype=object)
+    counts = np.zeros((x1, x2))
+    for i in range(x1):
+        for j in range(x2):
+            patch = pi[i * grid[0]:(i + 1) * grid[0], j * grid[1]:(j + 1) * grid[1]]
+            count = 1 * np.any(patch > 0)
+            patches[i, j] = patch
+            counts[i, j] = count
+    plist.append(patches)
+    clist.append(counts)
+
+# Step 3: Flatten counts
+csum = np.sum(clist, axis=0)
+data = csum.flatten()
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+bin_centers = (binarr[:-1] + binarr[1:]) / 2
+fs = 15
+
+# --- Gaussian Mixture Fit ---
+def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
+    w2 = 1 - w1
+    return w1 * norm.pdf(x, mu1, sigma1) + w2 * norm.pdf(x, mu2, sigma2)
+
+hist_vals, _ = np.histogram(data, bins=binarr, density=True)
+p0 = [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]
+bounds = ([0, -np.inf, 1e-3, -np.inf, 1e-3],
+          [1, np.inf, np.inf, np.inf, np.inf])
+
+params_gmm, _ = curve_fit(
+    gaussian_mixture, bin_centers, hist_vals, p0=p0, bounds=bounds, maxfev=10000
+)
+w1, mu1, sigma1, mu2, sigma2 = params_gmm
+y_gmm = gaussian_mixture(bin_centers, *params_gmm)
+
+# --- Beta-binomial Fit ---
+n_neurons = len(pth)
+
+def neg_log_likelihood(params):
+    a, b = params
+    if a <= 0 or b <= 0:
+        return np.inf
+    return -np.sum(betabinom.logpmf(data, n=n_neurons, a=a, b=b))
+
+res = minimize(neg_log_likelihood, x0=[2, 2], method='L-BFGS-B',
+               bounds=[(1e-5, None), (1e-5, None)])
+alpha_fit, beta_fit = res.x
+x_discrete = np.arange(0, n_neurons + 1)
+pmf_beta = betabinom.pmf(x_discrete, n=n_neurons, a=alpha_fit, b=beta_fit)
+
+# --- Binomial Fit (MLE) ---
+p_hat = np.mean(data) / n_neurons
+pmf_binom = binom.pmf(x_discrete, n=n_neurons, p=p_hat)
+
+# --- Plot All Fits ---
+plt.figure()
+plt.hist(data, bins=binarr, density=True,
+         color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
+
+plt.plot(bin_centers, y_gmm, 'r-', lw=5,
+         label=f'Gaussian mixture (w1={w1:.2f}, μ1={mu1:.2f}, σ1={sigma1:.2f}, μ2={mu2:.2f}, σ2={sigma2:.2f})')
+
+plt.plot(x_discrete, pmf_beta, 'g--', lw=5,
+         label=f'Beta-binomial (α={alpha_fit:.2f}, β={beta_fit:.2f})')
+
+plt.plot(x_discrete, pmf_binom, 'm-.', lw=5,
+         label=f'Binomial MLE (p={p_hat:.2f})')
+
+plt.title(f'({grid[0]},{grid[1]})-grid', fontsize=fs)
+plt.xlabel(f'# neurons firing APs in a ({grid[0]},{grid[1]}) grid', fontsize=fs)
+plt.ylabel('Density of # neurons', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs)
+plt.tight_layout()
+plt.show()
+
+
+
+#%% Binomial and negative binomial compare
+# =============================================================================
+# 
+# p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+# p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+# pth = [(pi>0)*1 for pi in p_trimmed]
+# rates=np.unique(p_trimmed)
+# 
+# ## The unique rates
+# # [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
+# #       17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+# 
+# pshape = pth[0].shape
+# 
+# n=1 # 1,2,4
+# grid=(n,n)
+# x1 = pshape[0]//grid[0]
+# x2 = pshape[1]//grid[1]
+# 
+# plist=[]
+# clist=[]
+# for pi in pth:
+#     patches=np.zeros((x1,x2), dtype=object)
+#     counts=np.zeros((x1,x2))
+#     for i in range(x1):
+#         for j in range(x2):
+#             patch=pi[i*grid[0]:(i+1)*grid[0],j*grid[1]:+(j+1)*grid[1]]
+#             count = 1*np.any(patch>0)
+#             patches[i,j]=patch
+#             counts[i,j]=count
+#     plist.append(patches)
+#     clist.append(counts)
+# 
+# csum=np.sum(clist, axis=0)
+# data=csum.flatten()
+# binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+# binplot = np.arange(np.min(data), np.max(data) + 1)
+# fs=15
+# 
+# from scipy.stats import norm
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from scipy.optimize import curve_fit
+# 
+# # mixture of two Gaussians
+# def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
+#     w2 = 1 - w1
+#     return w1 * norm.pdf(x, mu1, sigma1) + w2 * norm.pdf(x, mu2, sigma2)
+# 
+# # histogram
+# hist_vals, bin_edges = np.histogram(data, bins=binarr, density=True)
+# bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+# 
+# # fit
+# p0 = [0.5, np.mean(data)-1, 1, np.mean(data)+1, 1]
+# params, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0, maxfev=10000)
+# 
+# # evaluate fit
+# x_fit = np.linspace(np.min(data), np.max(data), 1000)
+# y_fit = gaussian_mixture(x_fit, *params)
+# 
+# # plot
+# plt.figure()
+# plt.hist(data, bins=binarr, density=True,
+#          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+# plt.plot(x_fit, y_fit, 'r', label='Gaussian mixture fit')
+# plt.title('({},{})-grid'.format(grid[0], grid[1]), fontsize=fs)
+# plt.xlabel('# neurons firing APs in a ({},{}) grid'.format(grid[0], grid[1]), fontsize=fs)
+# plt.ylabel('Density of # neurons', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.legend()
+# plt.show()
+# 
+# from scipy.stats import betabinom
+# from scipy.optimize import minimize
+# 
+# # Step 1: Your `data` already contains counts per region (number of neurons active)
+# data = csum.flatten()
+# 
+# # Step 2: Total number of neurons per grid patch = number of pthc arrays
+# n_neurons = len(pth)
+# 
+# # Step 3: Fit alpha, beta using MLE
+# def neg_log_likelihood(params):
+#     a, b = params
+#     if a <= 0 or b <= 0:
+#         return np.inf
+#     return -np.sum(betabinom.logpmf(data, n=n_neurons, a=a, b=b))
+# 
+# res = minimize(neg_log_likelihood, x0=[2, 2], method='L-BFGS-B', 
+#                bounds=[(1e-5, None), (1e-5, None)])
+# alpha_fit, beta_fit = res.x
+# 
+# print(f"Fitted alpha: {alpha_fit:.3f}, beta: {beta_fit:.3f}")
+# 
+# # Step 4: Plot histogram with fitted beta-binomial PMF
+# binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+# binplot = np.arange(np.min(data), np.max(data) + 1)
+# 
+# fs = 15
+# plt.figure()
+# plt.hist(data, bins=binarr, density=True, 
+#          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+# 
+# # Overlay beta-binomial fit
+# x = np.arange(0, n_neurons + 1)
+# pmf = betabinom.pmf(x, n=n_neurons, a=alpha_fit, b=beta_fit)
+# plt.plot(x, pmf, 'r--', lw=2, label='Beta-binomial fit')
+# 
+# plt.title('({},{})-grid'.format(
+#     grid[0], grid[1]), fontsize=fs)
+# plt.xlabel('# neurons firing APs in a ({},{}) grid'.format(grid[0], grid[1]), fontsize=fs)
+# plt.ylabel('Density of # neurons', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.legend(fontsize=fs)
+# plt.show()
+# =============================================================================
         
 #%%  Threshold (5 and 10) and divide into rectangles
 
 th=0
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
 pth = [(pi>th)*pi for pi in p_trimmed]
 pthc = np.array([(pi>th)*1 for pi in p_trimmed]) # convert to 1s and 0s
-
 rates=np.unique(p_trimmed)
 
+## The unique rates
 # [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
 #       17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
 
-# Convert them to grids and count per grid
+pshape = pth[0].shape
 
-grid=(1,1)
-pshape = pth[0].shape # (65, 116) 
+# =============================================================================
+# pshape = pth[0].shape # (65, 116)
+# def find_factors(num):
+#     factors = []
+#     for i in range(1, int(num**0.5) + 1):
+#         if num % i == 0:
+#             factors.append(i)
+#             if num // i != i:
+#                 factors.append(num // i)
+#     factors.sort()
+#     return factors
+# 
+# f1=find_factors(pshape[0])
+# f2=find_factors(pshape[1])
+# =============================================================================
+# =============================================================================
+# grid=(1,1)
+# x1 = pshape[0]//grid[0]
+# x2 = pshape[1]//grid[1]
+# =============================================================================
+# grid x shape = [1, 2, 4, 8, 16, 32, 64]
+# grid y shape = [1, 2, 4, 29, 58, 116]
 
+n=1 # 1,2,4
+grid=(n,n)
 x1 = pshape[0]//grid[0]
 x2 = pshape[1]//grid[1]
 
@@ -70,23 +397,187 @@ data=csum.flatten()
 binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
 binplot = np.arange(np.min(data), np.max(data) + 1)
 fs=15
-plt.hist(data, bins=binarr, density=True, 
-         color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
-plt.title('Searching a ({},{})-grid and counting all AP rates > {}'.format(grid[0], grid[1], th))
-plt.xlabel('# neurons firing APs in a ({},{}) grid'.format(grid[0], grid[1]), 
-           fontsize=fs)
-plt.ylabel('Density of # neurons', fontsize=fs)
-plt.tick_params(axis='both',labelsize=fs)
-plt.show()
+# =============================================================================
+# pth3=[]
+# for pi in plist:
+#     pth2 = np.zeros(plist[0].shape)
+#     pishape=pi.shape    
+#     for i in range(pishape[0]):
+#         for j in range(pishape[1]):
+#             pth2[i,j]=1 if np.sum(pi[i,j])>0 else 0
+#     pth3.append(pth2)
+# 
+# =============================================================================
+# =============================================================================
+# 
+##%%
+# fig, ax = plt.subplots()
+# 
+# im = ax.imshow(pth3[0], extent=[0, 116, 0, 64], cmap='gray', origin='lower')
+# 
+# ax.set_xticks([])
+# ax.set_yticks([])
+# 
+# # Horizontal lines: 16 rows → every 64/16 = 4 units
+# for i in range(17):  # 16 divisions = 17 lines
+#     y = i * (64 / 16)
+#     ax.axhline(y, color='red', linewidth=1)
+# 
+# # Vertical lines: 116 columns → every 1 unit
+# for j in range(117):  # 116 divisions = 117 lines
+#     x = j * (116 / 116)
+#     ax.axvline(x, color='red', linewidth=1)
+# 
+# plt.show()
+# 
+# 
+#     #%%
+# =============================================================================
+# =============================================================================
+# plt.figure()
+# plt.hist(data, bins=binarr, density=True, 
+#          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+# plt.title('({},{})-grid, counting all AP rates > {}'.format(
+#     grid[0], grid[1], th), fontsize=fs)
+# plt.xlabel('# neurons firing APs in a ({},{}) grid'.format(grid[0], grid[1]), 
+#            fontsize=fs)
+# plt.ylabel('Density of # neurons', fontsize=fs)
+# plt.tick_params(axis='both',labelsize=fs)
+# plt.show()
+# =============================================================================
 # =============================================================================
 # plt.figure()
 # plt.imshow(csum, cmap='hot')
 # plt.title('Number of neurons firing in a ({},{})-grid'.format(grid[0], grid[1]))
 # plt.colorbar()
 # =============================================================================
+from scipy.stats import norm
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 
+# mixture of two Gaussians
+def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
+    w2 = 1 - w1
+    return w1 * norm.pdf(x, mu1, sigma1) + w2 * norm.pdf(x, mu2, sigma2)
+
+# histogram
+hist_vals, bin_edges = np.histogram(data, bins=binarr, density=True)
+bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+# fit
+p0 = [0.5, np.mean(data)-1, 1, np.mean(data)+1, 1]
+params, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0)
+
+# evaluate fit
+x_fit = np.linspace(np.min(data), np.max(data), 1000)
+y_fit = gaussian_mixture(x_fit, *params)
+
+# plot
+plt.figure()
+plt.hist(data, bins=binarr, density=True,
+         color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+plt.plot(x_fit, y_fit, 'r', label='Gaussian mixture fit')
+plt.title('({},{})-grid, counting all AP rates > {}'.format(grid[0], grid[1], th), fontsize=fs)
+plt.xlabel('# neurons firing APs in a ({},{}) grid'.format(grid[0], grid[1]), fontsize=fs)
+plt.ylabel('Density of # neurons', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend()
+plt.show()
+
+from scipy.stats import betabinom
+from scipy.optimize import minimize
+
+# Step 1: Your `data` already contains counts per region (number of neurons active)
+data = csum.flatten()
+
+# Step 2: Total number of neurons per grid patch = number of pthc arrays
+n_neurons = len(pthc)
+
+# Step 3: Fit alpha, beta using MLE
+def neg_log_likelihood(params):
+    a, b = params
+    if a <= 0 or b <= 0:
+        return np.inf
+    return -np.sum(betabinom.logpmf(data, n=n_neurons, a=a, b=b))
+
+res = minimize(neg_log_likelihood, x0=[2, 2], method='L-BFGS-B', bounds=[(1e-5, None), (1e-5, None)])
+alpha_fit, beta_fit = res.x
+
+print(f"Fitted alpha: {alpha_fit:.3f}, beta: {beta_fit:.3f}")
+
+# Step 4: Plot histogram with fitted beta-binomial PMF
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+binplot = np.arange(np.min(data), np.max(data) + 1)
+
+fs = 15
+plt.figure()
+plt.hist(data, bins=binarr, density=True, 
+         color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+
+# Overlay beta-binomial fit
+x = np.arange(0, n_neurons + 1)
+pmf = betabinom.pmf(x, n=n_neurons, a=alpha_fit, b=beta_fit)
+plt.plot(x, pmf, 'r--', lw=2, label='Beta-binomial fit')
+
+plt.title('({},{})-grid, counting all AP rates > {}'.format(
+    grid[0], grid[1], th), fontsize=fs)
+plt.xlabel('# neurons firing APs in a ({},{}) grid'.format(grid[0], grid[1]), fontsize=fs)
+plt.ylabel('Density of # neurons', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs)
+plt.show()
+
+
+#%% Percentage of filling of the space
+
+th=10
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+pth = [(pi>th)*pi for pi in p_trimmed]
+
+per = [np.sum((pi>0)*1)/np.prod(pi.shape) for pi in p_trimmed]
+
+
+
+from scipy.stats import expon
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Compute histogram
+plt.hist(per, bins=40, density=True, label='data', edgecolor='k')
+
+# Fit exponential distribution
+loc, scale = expon.fit(per, floc=0)  # force location = 0
+x = np.linspace(min(per), max(per), 1000)
+pdf = expon.pdf(x, loc=loc, scale=scale)
+
+# Plot exponential fit
+plt.plot(x, pdf, 'r', label='exponential fit', linewidth=4, alpha=1)
+plt.legend()
+plt.xlabel('Percentage of the rectangular room the neuron fires in')
+plt.ylabel('Density')
+
+from scipy.stats import gamma
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.figure()
+
+# Histogram
+plt.hist(per, bins=45, density=True, label='data', edgecolor='k')
+
+# Fit gamma distribution
+shape, loc, scale = gamma.fit(per, floc=0)  # force location = 0
+x = np.linspace(min(per), max(per), 1000)
+pdf = gamma.pdf(x, a=shape, loc=loc, scale=scale)
+
+# Plot gamma fit
+plt.plot(x, pdf, 'r', label='gamma fit', linewidth=3)
+plt.legend()
+plt.xlabel('Percentage of the rectangular room the neuron fires in')
+plt.ylabel('Density')
 #%%
-
 
 # =================== Fit NB with integer r using grid search ===================
 
