@@ -1,0 +1,435 @@
+import numpy as np
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import plot
+from matplotlib.pyplot import plot as pt
+from numba import jit
+
+
+###############################################################################
+#
+#                        Functions for reading in the data
+#
+###############################################################################
+
+def read_data(ftype, fname, excel_dir, txt_dir):
+
+    if ftype == 0:  # Excel file
+        file_path = os.path.join(excel_dir, fname)
+        data = pd.read_csv(file_path)
+        return np.array(data)
+    elif ftype == 1:  # Text file
+        file_path = os.path.join(txt_dir, fname)
+        data = pd.read_csv(file_path, header=None).values.flatten()
+        return data
+    else:
+        print("Invalid file type. Please provide 0 for Excel file or 1 for text file.")
+
+def get_filenames(excel_dir, txt_dir):
+    excel_files = [f for f in os.listdir(excel_dir) if os.path.isfile(os.path.join(excel_dir, f))]
+    txt_files = [f for f in os.listdir(txt_dir) if os.path.isfile(os.path.join(txt_dir, f))]
+    return excel_files, txt_files
+
+###############################################################################
+#
+#                  Functions defining the gating variables
+#
+###############################################################################
+
+Vshift=0
+@jit(nopython=True)
+def ainf(V):  #              31    6
+    return (1 + np.exp(-(V + 31) / 6))**(-1 / 4)
+@jit(nopython=True)
+def binf(V):  #             66    7
+    return (1 + np.exp((V + 66) / 7))**(-1 / 2)
+@jit(nopython=True)
+def cinf(V): #              66    7
+    return (1 + np.exp((V + 66) / 7))**(-1 / 2)
+
+@jit(nopython=True)
+def winf(V):#1                       48    6 ------------------------------------------------------------------- (CHANGED HERE)
+    return (1 + np.exp(-(V-Vshift + 48) / 6))**(-1 / 4)
+@jit(nopython=True)
+def zinf(V):
+    zeta = 0.5                             #     71    10 ------------------------------------------------------------------- (CHANGED HERE)
+    return (1 - zeta) * (1 + np.exp((V -Vshift + 71) / 100))**(-1) + zeta
+
+@jit(nopython=True)
+def ninf(V): #                      30    5
+    return (1 + np.exp(-(V-Vshift + 30) / 5))**(-1 / 2)
+@jit(nopython=True)
+def pinf(V): #                      23    6
+    return (1 + np.exp(-(V-Vshift + 23) / 6))**(-1)
+
+@jit(nopython=True)
+def minf(V): 
+    value= 39.35 # good spike fit value
+    # value = 38 # original
+    # value = 44 # Jonas suggested
+    return (1 + np.exp(-(V-Vshift + value) / 7))**(-1)
+@jit(nopython=True)
+def hinf(V):  # original
+    value = 65 # good spike fit value
+    # value = 74 # Jonas suggested
+    # lower h 
+    return (1 + np.exp((V-Vshift + value) / 6))**(-1)
+# =============================================================================
+# def hinf(V):  # The 3x slower one
+#     value = 63.2 # good spike fit value
+#     # value = 74 # Jonas suggested
+#     return (1 + np.exp(0.1536*(V-Vshift + value)))**(-1)
+# =============================================================================
+
+@jit(nopython=True)
+def rinf(V):
+    # value = 76 # original
+    value = 77 # slightly better subthreshold fit
+    return (1 + np.exp((V + value) / 7))**(-1)
+
+###############################################################################
+#
+#             Functions defining tau for gating variables
+#
+###############################################################################
+
+@jit(nopython=True)
+def taua(V):#                  60    14    29                60    24
+    return (100*(7*np.exp((V + 60) / 14) + 29 * np.exp(-(V + 60) / 24))**(-1) + 0.1)*1e-3
+@jit(nopython=True)
+def taub(V):#                        60    27    29                60    24 
+    return (1000 * (14 * np.exp((V + 60) / 27) + 29 * np.exp(-(V + 60) / 24))**(-1) + 1)*1e-3
+@jit(nopython=True)
+def tauc(V): #                     66    17
+    return (90 * (1 + np.exp(-(V + 66) / 17))**(-1) + 10)*1e-3
+
+# KLVT, original ------------------------------------------------------------------------------------------------ Make these slower
+@jit(nopython=True)
+#            v - better at 1000
+def tauw(V): #100  6                        60    6    (16*0.2)                     60    45              1.5
+    return (2000 * (6 * np.exp((V-Vshift + 60) / 2) + 16*0.2 * np.exp(-(V-Vshift + 60) / 45))**(-1) + 0.5)*1e-3
+@jit(nopython=True)
+def tauz(V):# 1000                     60    20     (1*0.2)                60    8           50
+    return (1000 * (np.exp((V-Vshift + 60) / 20) + 0.2*np.exp(-(V-Vshift + 60) / 2))**(-1) + 50)*1e-3
+# END CHANGE --------------------------- End change
+
+@jit(nopython=True)
+def taun(V): #                             60    24    21                       60    23
+    return (100 * (11 * np.exp((V-Vshift + 60) / 24) + 21 * np.exp(-(V-Vshift + 60) / 23))**(-1) + 0.7)*1e-3
+@jit(nopython=True)
+def taup(V): #                            60    32    5                       60    22           5
+    return (100 * (4 * np.exp((V-Vshift + 60) / 32) + 5 * np.exp(-(V-Vshift + 60) / 22))**(-1) + 5)*1e-3
+
+@jit(nopython=True)
+def taum(V): #                           60  18    36                       60    25
+    return (10 * (5 * np.exp((V-Vshift + 60)/18) + 36 * np.exp(-(V-Vshift + 60) / 25))**(-1) + 0.04)*1e-3
+@jit(nopython=True)
+def tauh(V): #100  7                      60    11    10                       60    25
+    return (100 * (7 * np.exp((V-Vshift + 60) / 30) + 10 * np.exp(-(V-Vshift + 60) / 25))**(-1) + 0.6)*1e-3
+# =============================================================================
+# def tauh(V): # the 3x slower one
+#     return 7*(28.17+100.9*np.exp(-(V+63.2)**2/2/364.8))/(3**((39-32)/10))
+# 
+# =============================================================================
+
+@jit(nopython=True)
+def taur(V): 
+    return (10**5 * (237 * np.exp((V + 60) / 12) + 17 * np.exp(-(V + 60) / 14))**(-1) + 25)*1e-3
+
+###############################################################################
+#
+#                      Get the data
+#
+###############################################################################
+
+# =============================================================================
+# # Change the file directories to where you put the data
+# excel_dir = r'C:\Users\Oliver\Desktop\German group current data\excel_files'
+# txt_dir = r'C:\Users\Oliver\Desktop\German group current data\txt_files' 
+# =============================================================================
+
+# =============================================================================
+excel_dir = r'C:\Users\ogamb\OneDrive\Desktop\German group current data\excel_files'
+txt_dir = r'C:\Users\ogamb\OneDrive\Desktop\German group current data\txt_files'
+# =============================================================================
+
+# excel_dir = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\current_project\German group current data\excel_files'
+# txt_dir = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\current_project\German group current data\txt_files'
+
+# Read in the data
+# This is the file number in the directory, 0 is the 1st file, 1 is the 2nd file, etc...
+dataname=0 # <----------------------------- Dataset # in file
+enames, tnames = get_filenames(excel_dir, txt_dir)
+data=read_data(0, enames[dataname], excel_dir, txt_dir)
+
+ttype=4 # 0 (normal data), or 4,6 (chirp data)
+if ttype==0:
+    Vdata = data[:, 0] # Membrane potential
+    G = data[:, 1] # Conductance
+if ttype==4:
+    Idata=read_data(1, tnames[2], excel_dir, txt_dir)
+    Vdata=read_data(1, tnames[3], excel_dir, txt_dir)
+if ttype==6:
+    Idata=read_data(1, tnames[0], excel_dir, txt_dir)
+    Vdata=read_data(1, tnames[1], excel_dir, txt_dir)
+
+imin=0
+dlen=1
+if dlen==0:
+    imax=100000
+if dlen==1:
+    imax=len(Idata)
+Idata=Idata[imin:imax]
+Vdata=Vdata[imin:imax]
+
+###############################################################################
+#
+#                      set up parameters
+#
+###############################################################################
+
+
+
+# -----------------------------------------------------------------------------
+# =============================================================================
+# # (1.) Original
+# gA = 0e-9 # fast activating K+ conductance
+# gLT = 100e-9 # Low threshold K+ conductance
+# gHT = 150e-9  # High threshold K+ conductance
+# gNa = 1000e-9    # Fast activating sodium conductance
+# gh = 10e-9  # Hyperpolarization-conductance
+# glk = 2e-9  # Leakage conductance
+# =============================================================================
+
+# =============================================================================
+# # (2.) Low threshold potassium conductance matches AP's better+constant current
+# gA = 0e-9 # fast activating K+ conductance
+# gLT = 60e-9 # Low threshold K+ conductance #
+# gHT = 150e-9  # High threshold K+ conductance
+# gNa = 1000e-9    # Fast activating sodium conductance
+# gh = 10e-9  # Hyperpolarization-conductance
+# glk = 2e-9  # Leakage conductance
+# =============================================================================
+
+# =============================================================================
+# # (3.) Low threshold potassium conductance matches AP's better+constant current
+# gA = 0e-9 # fast activating K+ conductance
+# gLT = 50e-9 # Low threshold K+ conductance # X
+# gHT = 150e-9  # High threshold K+ conductance
+# gNa = 1000e-9    # Fast activating sodium conductance
+# gh = 100e-9  # Hyperpolarization-conductance # X
+# glk = 2e-9  # Leakage conductance
+# =============================================================================
+
+
+# (4.) Chirp data changing ILT and IH
+gA = 0e-9 # fast activating K+ conductance
+gHT = 150e-9  # High threshold K+ conductance
+gNa = 1000e-9    # Fast activating sodium conductance
+glk = 2e-9  # Leakage conductance
+
+gLT = 600e-9 # 50e-9 # X <---------------- #200e-9
+gh = 11e-9  # 100e-9 # X <---------------- # 20e-9, 11e-9
+
+#------------------------------------------------------------------------------
+
+VK = -0.08  # potassium reverse potential
+VNa = 0.055  # sodium reverse potential
+Vh = -0.043  # hyperpolarizing reverse potential
+Vlk = -0.065  # leakage reverse potential
+
+# Initial conditions
+V0 = -0.06  # initial membrane potential (mV)
+a0 = 0 # Fast transient K+ current
+b0 = 0  # Fast transient K+ current
+c0 = 0  # Fast transient K+ current
+
+w0 = 0.594  # Low-threshold K+ current
+z0 = 0.608  # Low-threshold K+ current
+
+n0 = 0.85  # High-threshold K+ current
+p0 = 0  # High-threshold K+ current
+
+m0 = 0.043  # sodium activation gating variable
+h0 = 0.293  # sodium inactivation gating variable
+r0 = 0.063  # Hyperpolarization current
+
+C_m = 12e-12  # membrane capacitance (uF/cm^2)
+
+phi = 0.85
+q10=(3**((37-22)/10))
+
+vlen = len(Vdata)
+
+# Iteratively solve the difference equations
+dt = 1e-5 # 1e-5 # time step for Euler equation
+
+@jit(nopython=True)
+def simulate():
+
+    # Time vector
+    t = np.linspace(0, vlen, vlen)
+    
+    # Variables initialization
+    V = np.zeros(vlen)
+    a = np.zeros(vlen)
+    b = np.zeros(vlen)
+    c = np.zeros(vlen)
+    w = np.zeros(vlen)
+    z = np.zeros(vlen)
+    n = np.zeros(vlen)
+    p = np.zeros(vlen)
+    m = np.zeros(vlen)
+    h = np.zeros(vlen)
+    r = np.zeros(vlen)
+    
+    # Set initial conditions
+    V[0] = V0
+    a[0] = a0 # Fast transient K+ current
+    b[0] = b0
+    c[0] = c0
+    w[0] = w0 # Low threshold K+ current
+    z[0] = z0
+    n[0] = n0 # High threshold K+ current
+    p[0] = p0
+    m[0] = m0 # Fast sodium current
+    h[0] = h0
+    r[0] = r0 # Leak current
+    
+    ###############################################################################
+    #
+    #                             Run simulations
+    #
+    ###############################################################################
+    
+    iA = np.zeros(vlen)
+    iLT = np.zeros(vlen)
+    iHT = np.zeros(vlen)
+    iNA = np.zeros(vlen)
+    ih = np.zeros(vlen)
+    ilk = np.zeros(vlen)
+    iE = np.zeros(vlen)
+    iext = np.zeros(vlen)
+    
+    for i in range(1, len(Vdata)):
+        # print(i/len(Vdata))
+        
+#         # Get all the current and voltage values and update the voltage
+#         i_A = gA * a[i-1]**4 * b[i-1] * c[i-1] * (V[i-1]- VK)
+#         i_LT = gLT * w[i-1]**4 * z[i-1] * (V[i-1] - VK)
+#         i_HT = gHT * (phi * n[i-1]**2 + (1 - phi) * p[i-1]) * (V[i-1] - VK)
+#         i_NA = gNa * m[i-1]**3 * h[i-1] * (V[i-1] - VNa)  # something weird
+#         i_h = gh * r[i-1] * (V[i-1] - Vh)  # something weird
+#         i_lk = glk * (V[i-1] - Vlk)
+
+        # Get all the current and voltage values and update the voltage
+        i_A = gA * a[i-1]*a[i-1]*a[i-1]*a[i-1]* b[i-1] * c[i-1] * (V[i-1]- VK)
+        i_LT = gLT * w[i-1]*w[i-1]*w[i-1]*w[i-1]*z[i-1] * (V[i-1] - VK)
+        i_HT = gHT * (phi * n[i-1]*n[i-1] + (1 - phi) * p[i-1]) * (V[i-1] - VK)
+        i_NA = gNa * m[i-1]*m[i-1]*m[i-1]* h[i-1] * (V[i-1] - VNa)  # something weird
+        i_h = gh * r[i-1] * (V[i-1] - Vh)  # something weird
+        i_lk = glk * (V[i-1] - Vlk)
+    
+        if ttype==0: # conductance test
+            i_E = G[i-1]* V[i-1] # off for chirp dataset
+            i_ext = -0.05e-9
+        else: # Chirp test
+            i_E=0
+            i_ext = Idata[i-1]-0.05e-9  
+    
+        dVdt = -(1 / C_m) * (i_A + i_LT + i_HT + i_NA + i_h + i_lk + i_E - i_ext)
+        V[i] = V[i-1] + dVdt * dt
+    
+        # Add all the current values to a list for plotting
+        iA[i] = i_A
+        iLT[i] = i_LT
+        iHT[i] = i_HT
+        iNA[i] = i_NA
+        ih[i] = i_h
+        ilk[i] = i_lk
+        iE[i] = i_E
+        iext[i] = i_ext
+    
+    
+        # Add the current value of each gating variable to a list containing
+        # all the previous values, for plotting
+        
+        vprev = V[i-1] * 1e3
+        
+        a[i] = a[i-1] + ((ainf(vprev) - a[i-1]) / taua(vprev)) * dt * q10
+        b[i] = b[i-1] + ((binf(vprev) - b[i-1]) / taub(vprev)) * dt * q10
+        c[i] = c[i-1] + ((cinf(vprev) - c[i-1]) / tauc(vprev)) * dt * q10
+        w[i] = w[i-1] + ((winf(vprev) - w[i-1]) / tauw(vprev)) * dt * q10
+        z[i] = z[i-1] + ((zinf(vprev) - z[i-1]) / tauz(vprev)) * dt * q10
+        n[i] = n[i-1] + ((ninf(vprev) - n[i-1]) / taun(vprev)) * dt * q10
+        p[i] = p[i-1] + ((pinf(vprev) - p[i-1]) / taup(vprev)) * dt * q10
+        m[i] = m[i-1] + ((minf(vprev) - m[i-1]) / taum(vprev)) * dt * q10
+        h[i] = h[i-1] + ((hinf(vprev) - h[i-1]) / tauh(vprev)) * dt * q10
+        r[i] = r[i-1] + ((rinf(vprev) - r[i-1]) / taur(vprev)) * dt * q10
+        
+    return V, t, a, b, c, w, z, n, p,m,h,r,iA, iLT, iHT , iNA , ih , ilk, iE, iext
+
+V, t, a, b, c, w, z, n, p,m,h,r,iA, iLT, iHT , iNA , ih , ilk, iE, iext= simulate()
+
+###############################################################################
+#
+#                             Plot simulations
+#
+###############################################################################
+fs = 10
+# membrane potential
+plt.figure(figsize=(14,4))
+# plt.subplot(2,1,1)
+plt.title('Hodgkin-Huxley-type model', fontsize=fs)
+plt.xlabel('time (ms)', fontsize=fs)
+plt.ylabel('membrane Potential (mV)', fontsize=fs)
+# =============================================================================
+# plt.plot(t, V6, label=enames[dataname], color='#ff7f0e')
+# =============================================================================
+plt.plot(t, Vdata, color='#ff7f0e', label='e')
+plt.plot(t, V, label='s', color='#1f77b4', alpha=0.6)
+plt.tick_params(axis='both', labelsize=fs)
+plt.grid(True, alpha=0.3)
+plt.legend(fontsize=fs, loc='upper right')
+gvs=[a,b,c,w,z,n,p,m,h,r]
+gn=['a','b','c','w','z','n','p','m','h','r']
+
+# # gateing variables
+# plt.subplot(2,1,2)
+# for i in range(len(gvs)):
+#     plt.plot(gvs[i], label='{}'.format(gn[i]))
+# plt.legend(loc='upper right')
+# plt.ylabel('gating variables')
+
+# # current
+# plt.subplot(4,1,3)
+# ivals=[iA, iLT, iHT, iNA, ih, ilk, iE, iext]
+# inames=['i_A', 'i_LT', 'i_HT', 'i_NA', 'i_h', 'i_lk', 'i_E', 'i_ext']
+# for i in range(len(inames)):
+#     if inames[i] != 'i_ext':
+#         plt.plot(ivals[i], label='{}'.format(inames[i]))
+# # =============================================================================
+# # if ttype!=0:
+# #     plt.plot(t, Idata, label='I{}'.format(ttype))
+# # =============================================================================
+# plt.ylabel('current')
+# plt.xlabel('time (ms)')
+# plt.legend(loc='upper right')
+
+# plt.subplot(4,1,4)
+# if ttype!=0:
+#     plt.plot(t, Idata, label='I{}'.format(ttype))
+# plt.ylabel('current')
+# plt.xlabel('time (yms)')
+# plt.legend(loc='upper right')
+# plt.show()
+
+# plt.subplots_adjust(top=0.964,
+# bottom=0.061,
+# left=0.045,
+# right=0.992,
+# hspace=0.233,
+# wspace=0.2)
+
+plt.show()
