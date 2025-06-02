@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import exp
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -40,53 +41,55 @@ def get_filenames(excel_dir, txt_dir):
 Vshift=0
 @jit(nopython=True)
 def ainf(V):  #              31    6
-    return (1 + np.exp(-(V + 31) / 6))**(-1 / 4)
+    return (1 + exp(-(V + 31) / 6))**(-1 / 4)
 @jit(nopython=True)
 def binf(V):  #             66    7
-    return (1 + np.exp((V + 66) / 7))**(-1 / 2)
+    return (1 + exp((V + 66) / 7))**(-1 / 2)
 @jit(nopython=True)
 def cinf(V): #              66    7
-    return (1 + np.exp((V + 66) / 7))**(-1 / 2)
+    return (1 + exp((V + 66) / 7))**(-1 / 2)
 
-@jit(nopython=True)
-def winf(V):#1                       48    6 ------------------------------------------------------------------- (CHANGED HERE)
-    return (1 + np.exp(-(V-Vshift + 48) / 6))**(-1 / 4)
-@jit(nopython=True)
-def zinf(V):
-    zeta = 0.5                             #     71    10 ------------------------------------------------------------------- (CHANGED HERE)
-    return (1 - zeta) * (1 + np.exp((V -Vshift + 71) / 100))**(-1) + zeta
+# =============================================================================
+# @jit(nopython=True)
+# def winf(V):#1                       48    6 ------------------------------------------------------------------- (CHANGED HERE)
+#     return (1 + exp(-(V-Vshift + 25) / 13))**(-1 / 4)
+# @jit(nopython=True)
+# def zinf(V):
+#     zeta = 0.5 #0.5                              71    10 ------------------------------------------------------------------- (CHANGED HERE)
+#     return (1 - zeta) * (1 + exp((V -Vshift + 100) / 0.1))**(-1) + zeta
+# =============================================================================
 
 @jit(nopython=True)
 def ninf(V): #                      30    5
-    return (1 + np.exp(-(V-Vshift + 30) / 5))**(-1 / 2)
+    return (1 + exp(-(V-Vshift + 30) / 5))**(-1 / 2)
 @jit(nopython=True)
 def pinf(V): #                      23    6
-    return (1 + np.exp(-(V-Vshift + 23) / 6))**(-1)
+    return (1 + exp(-(V-Vshift + 23) / 6))**(-1)
 
 @jit(nopython=True)
 def minf(V): 
     value= 39.35 # good spike fit value
     # value = 38 # original
     # value = 44 # Jonas suggested
-    return (1 + np.exp(-(V-Vshift + value) / 7))**(-1)
+    return (1 + exp(-(V-Vshift + value) / 7))**(-1)
 @jit(nopython=True)
 def hinf(V):  # original
     value = 65 # good spike fit value
     # value = 74 # Jonas suggested
     # lower h 
-    return (1 + np.exp((V-Vshift + value) / 6))**(-1)
+    return (1 + exp((V-Vshift + value) / 6))**(-1)
 # =============================================================================
 # def hinf(V):  # The 3x slower one
 #     value = 63.2 # good spike fit value
 #     # value = 74 # Jonas suggested
-#     return (1 + np.exp(0.1536*(V-Vshift + value)))**(-1)
+#     return (1 + exp(0.1536*(V-Vshift + value)))**(-1)
 # =============================================================================
 
 @jit(nopython=True)
 def rinf(V):
     # value = 76 # original
     value = 77 # slightly better subthreshold fit
-    return (1 + np.exp((V + value) / 7))**(-1)
+    return (1 + exp((V + value) / 7))**(-1)
 
 ###############################################################################
 #
@@ -96,46 +99,54 @@ def rinf(V):
 
 @jit(nopython=True)
 def taua(V):#                  60    14    29                60    24
-    return (100*(7*np.exp((V + 60) / 14) + 29 * np.exp(-(V + 60) / 24))**(-1) + 0.1)*1e-3
+    return (100*(7*exp((V + 60) / 14) + 29 * exp(-(V + 60) / 24))**(-1) + 0.1)*1e-3
 @jit(nopython=True)
 def taub(V):#                        60    27    29                60    24 
-    return (1000 * (14 * np.exp((V + 60) / 27) + 29 * np.exp(-(V + 60) / 24))**(-1) + 1)*1e-3
+    return (1000 * (14 * exp((V + 60) / 27) + 29 * exp(-(V + 60) / 24))**(-1) + 1)*1e-3
 @jit(nopython=True)
 def tauc(V): #                     66    17
-    return (90 * (1 + np.exp(-(V + 66) / 17))**(-1) + 10)*1e-3
+    return (90 * (1 + exp(-(V + 66) / 17))**(-1) + 10)*1e-3
 
 # KLVT, original ------------------------------------------------------------------------------------------------ Make these slower
 @jit(nopython=True)
-#            v - better at 1000
-def tauw(V): #100  6                        60    6    (16*0.2)                     60    45              1.5
-    return (2000 * (6 * np.exp((V-Vshift + 60) / 2) + 16*0.2 * np.exp(-(V-Vshift + 60) / 45))**(-1) + 0.5)*1e-3
+def winf(V):#1                   48    6 ------------------------------------------------------------------- (CHANGED HERE)
+    return (1 + exp(-(V-Vshift + 50) / 6))**(-1 / 4)
 @jit(nopython=True)
-def tauz(V):# 1000                     60    20     (1*0.2)                60    8           50
-    return (1000 * (np.exp((V-Vshift + 60) / 20) + 0.2*np.exp(-(V-Vshift + 60) / 2))**(-1) + 50)*1e-3
-# END CHANGE --------------------------- End change
+def zinf(V):
+    zeta = 0.5 #0.5                           71    10 ------------------------------------------------------------------- (CHANGED HERE)
+    return (1 - zeta)*(1 + exp((V - Vshift + 100) / 10))**(-1) + zeta
+
+@jit(nopython=True)
+#            v - better at 1000                                                                    shift hmp lft
+def tauw(V): #100  6                    60      6    16*0.2                    60    45           1.5
+    return (100 * (6 * exp((V-Vshift + 60) / 0.1) + 16*0.2 * exp(-(V-Vshift + 20) / 100))**(-1) + 100)*1e-3
+@jit(nopython=True)
+def tauz(V):# 1000                     60    20    0.2                     60    8           50
+    return (1000 * (exp((V-Vshift + 80) / 1) + 100*exp(-(V-Vshift + 40) / 2))**(-1) + 100)*1e-3
+# END CHANGE ---------------------------------------------------------------------------------------- End change
 
 @jit(nopython=True)
 def taun(V): #                             60    24    21                       60    23
-    return (100 * (11 * np.exp((V-Vshift + 60) / 24) + 21 * np.exp(-(V-Vshift + 60) / 23))**(-1) + 0.7)*1e-3
+    return (100 * (11 * exp((V-Vshift + 60) / 24) + 21 * exp(-(V-Vshift + 60) / 23))**(-1) + 0.7)*1e-3
 @jit(nopython=True)
 def taup(V): #                            60    32    5                       60    22           5
-    return (100 * (4 * np.exp((V-Vshift + 60) / 32) + 5 * np.exp(-(V-Vshift + 60) / 22))**(-1) + 5)*1e-3
+    return (100 * (4 * exp((V-Vshift + 60) / 32) + 5 * exp(-(V-Vshift + 60) / 22))**(-1) + 5)*1e-3
 
 @jit(nopython=True)
 def taum(V): #                           60  18    36                       60    25
-    return (10 * (5 * np.exp((V-Vshift + 60)/18) + 36 * np.exp(-(V-Vshift + 60) / 25))**(-1) + 0.04)*1e-3
+    return (10 * (5 * exp((V-Vshift + 60)/18) + 36 * exp(-(V-Vshift + 60) / 25))**(-1) + 0.04)*1e-3
 @jit(nopython=True)
 def tauh(V): #100  7                      60    11    10                       60    25
-    return (100 * (7 * np.exp((V-Vshift + 60) / 30) + 10 * np.exp(-(V-Vshift + 60) / 25))**(-1) + 0.6)*1e-3
+    return (100 * (7 * exp((V-Vshift + 60) / 30) + 10 * exp(-(V-Vshift + 60) / 25))**(-1) + 0.6)*1e-3
 # =============================================================================
 # def tauh(V): # the 3x slower one
-#     return 7*(28.17+100.9*np.exp(-(V+63.2)**2/2/364.8))/(3**((39-32)/10))
+#     return 7*(28.17+100.9*exp(-(V+63.2)**2/2/364.8))/(3**((39-32)/10))
 # 
 # =============================================================================
 
 @jit(nopython=True)
 def taur(V): 
-    return (10**5 * (237 * np.exp((V + 60) / 12) + 17 * np.exp(-(V + 60) / 14))**(-1) + 25)*1e-3
+    return (10**5 * (237 * exp((V + 60) / 12) + 17 * exp(-(V + 60) / 14))**(-1) + 25)*1e-3
 
 ###############################################################################
 #
