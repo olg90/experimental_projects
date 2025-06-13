@@ -320,8 +320,8 @@ plt.legend(loc='upper left', fontsize=fs, bbox_to_anchor=(0.01,0.95))
 plt.tick_params(axis='both', labelsize=fs)
 plt.show()
 
-#%% Fifth method - ratio S/F
-# 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
+#%% Fifth method - ratio S/F (Mixed)
+# 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4,
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
 dnum= 8 # <----------------------------------- neuron number (8 or 9 here)
@@ -430,4 +430,157 @@ plt.scatter(aps, vth[dnum]*np.ones(len(aps)), color='r', s=200, marker='x',
 plt.title(names[dnum], fontsize=fs)
 plt.legend(loc='upper left', fontsize=fs, bbox_to_anchor=(0.01,0.95))
 plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+#%% 6th method - FPT tests
+# 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
+# 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
+
+dt=0.1e-3                                # 8 is (6,10) and 9 is (7,11)
+#                0   1   2   3   4    5     6      7    8   9  10  11
+vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-64,-65.5,-64,-63.8])
+#                0   1   2   3   4    5     6       7    8   9     10    11
+vbr=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-50,-50,-47,-64,-50])
+#    0        1           2          3        4         5
+C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.000111]
+#    6        7          8        9          10       11
+#    0        1           2          3        4         5
+Cr=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.0001]
+#    6        7          8        9          10       11
+#    0        1          2      3        4        5
+g=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
+#    6        7       8        9       10       11
+#    0        1          2      3        4        5
+gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0035, 0.004,  0.0037,  0.0037,  0.0037, 0.005]
+#    6        7       8        9       10       11
+#     0    1    2     3    4    5    6    7    8   9    10   11
+vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
+
+# Parameters
+
+sper = 300 # ms, stimulation period
+runtime = int(4e3)
+
+y0 = 2000
+taui = 0.001
+tauy = 0.0025
+kiy = 1
+
+def getiext(sper, runtime, y0, taui, tauy, kiy):
+
+    pretimes=[]
+    i=1
+    while sper*i<runtime:
+        pretimes.append(sper*i)
+        i+=1
+    
+    Iext = np.zeros(runtime)
+    y = np.zeros_like(Iext)
+    # Time evolution
+    for i in range(1, runtime):
+        if i in pretimes:
+            y[i-1] = y0  # reset just before update
+    
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy*dt
+    
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext*dt
+    return Iext
+    
+Iext=getiext(sper, runtime, y0, taui, tauy, kiy)
+
+# =============================================================================
+# # Plot
+# plt.plot(np.arange(len(Iext)), Iext, label = 'Iext')
+# plt.plot(np.arange(len(I)), I, label='I')
+# plt.xlabel('Time (ms)')
+# plt.ylabel('Iext')
+# plt.grid(True)
+# plt.tight_layout()
+# plt.legend()
+# plt.show()
+# #%%
+# =============================================================================
+
+def gettmean(r, I, g, vb, dnum, C, Cr):
+    v=np.zeros(len(I))
+    v[0]=vd[0]
+    apinds=[]
+    refper=40
+    aptimer=np.inf
+    posttimer=False
+    for i in range(1,len(I)):
+
+        if posttimer==False:
+            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/C[dnum]
+        if posttimer==True:
+            icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
+            
+        if aptimer != np.inf:
+            v[i] = v[i-1]
+        else:
+            v[i] = v[i-1]+dvdt*dt
+        
+        if I[i]>I[i-1]:
+            posttimer=False
+            
+        if aptimer != np.inf:
+            aptimer-=1
+        if v[i-1]>vth[dnum]:
+            v[i]=vbr[dnum] # vb[dnum]
+            apinds.append(i)
+            aptimer=refper
+            posttimer=True
+        if aptimer==0:
+            aptimer=np.inf
+# =============================================================================
+#     # Comment out
+#     fig,ax=plt.subplots(2,1)
+#     ax[0].plot(Iext)
+#     ax[1].plot(range(len(vd)), v)
+# =============================================================================
+    
+    aptimes=np.array(apinds)*dt
+    tmean = np.mean(np.diff(aptimes))
+    return tmean
+
+# =============================================================================
+# gettmean(0.1, I, g, vb, dnum, C, Cr)
+# #%%
+# =============================================================================
+
+# =============================================================================
+# rlist=np.linspace(0,1,100)
+# tlist=[]
+# for i,r in enumerate(rlist):
+#     print(i, len(rlist))
+#     tmean=gettmean(r, I, g, vb, dnum, C, Cr)
+#     tlist.append(tmean)
+# tlist=np.array(tlist)
+#     
+# plt.plot(rlist, 1/tlist)
+# plt.xlabel('Percentage of fast SOM synapses')
+# plt.ylabel('Output frequency (Hz)')
+# plt.show()
+# 
+# =============================================================================
+
+r=0.1
+perlist=np.arange(1, 1000, 100)
+tlist=[]
+for per in perlist:
+    Iext=getiext(per, runtime, y0, taui, tauy, kiy)
+    tmean=gettmean(r, Iext, g, vb, dnum, C, Cr)
+    tlist.append(tmean)
+tlist=np.array(tlist)
+    
+plt.plot(perlist, 1/tlist)
+plt.xlabel('Time between presynaptic APs (ms)')
+plt.ylabel('Output frequency (Hz)')
 plt.show()
