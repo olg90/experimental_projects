@@ -724,7 +724,7 @@ tlist=np.array(tlist)
 plt.plot(rlist, 1/tlist)
 plt.xlabel('Percentage of fast SOM synapses')
 plt.ylabel('Output frequency (Hz)')
-plt.plot([],[],'', label='Input frequency = {} Hz'.format(sfreq))
+plt.plot([],[], ' ', label='Input frequency = {} Hz'.format(sfreq))
 plt.legend()
 plt.show()
 
