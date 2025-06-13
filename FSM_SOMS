@@ -619,8 +619,8 @@ vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
 
 # Parameters
 
-sfreq = 50  # Hz
-runtime_sec = 1 # total runtime in seconds
+sfreq = 80 # Hz
+runtime_sec = 10 # total runtime in seconds
 runtime = int(runtime_sec / dt)  # number of simulation steps
 
 y0 = 1500
@@ -703,9 +703,9 @@ def gettmean(r, I, g, vb, dnum, C, Cr):
 #     ax[0].plot(Iext)
 #     ax[1].plot(range(len(vd)), v)
 # =============================================================================
-    
     aptimes=np.array(apinds)*dt
-    tmean = np.mean(np.diff(aptimes))
+    ssaptimes=aptimes[int(0.3*len(aptimes)):]
+    tmean = np.mean(np.diff(ssaptimes))
     return tmean
 
 # =============================================================================
