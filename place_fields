@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 n = [] # number of place fields
 p = [] # neuron maps
 
-location=0
+location=1
 if location==0:
     dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
 if location==1:
@@ -1189,7 +1189,20 @@ pth = [(pi > 0).astype(int) for pi in p_trimmed]
 pshape = pth[0].shape
 
 # Grid size for patching
-n = 4
+n = 1
+
+ic_gmm=[[0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1],
+        [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1],
+        [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]]
+
+ic_bb=[[0.1, 1, 2, 5, 5],
+       [0.1, 1, 2, 5, 5],
+       [0.1, 1, 2, 5, 5]]
+
+ics_bin=[[0.05, 0.1, 0.2],
+         [0.05, 0.1, 0.2],
+         [0.05, 0.1, 0.2]]
+
 grid = (n, n)
 
 # Compute number of patches that fit in each dimension
@@ -1224,6 +1237,15 @@ binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
 bin_centers = (binarr[:-1] + binarr[1:]) / 2
 fs = 20  # Font size for plots
 
+
+def getics(ics, n):
+    if n == 1:
+        return ics[0]
+    if n==2:
+        return ics[1]
+    if n==4:
+        return ics[2]
+
 # --- Gaussian Mixture Model ---
 
 # Define PDF of 2-component Gaussian mixture
@@ -1234,11 +1256,11 @@ def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
 hist_vals, _ = np.histogram(data, bins=binarr, density=True)
 
 # Initial guess and bounds for fitting
-p0 = [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]
+
 bounds = ([0, -np.inf, 1e-3, -np.inf, 1e-3], [1, np.inf, np.inf, np.inf, np.inf])
 
 # Fit Gaussian mixture model to histogram
-params_gmm, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0, bounds=bounds)
+params_gmm, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=getics(ic_gmm,n), bounds=bounds)
 w1, mu1, sigma1, mu2, sigma2 = params_gmm
 y_gmm = gaussian_mixture(bin_centers, *params_gmm)
 
@@ -1263,7 +1285,7 @@ def nll_bb_mix(params):
     return np.inf
 
 # Minimize NLL to fit parameters    w  a1 b1 a2 b2
-res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
+res_bb_mix = minimize(nll_bb_mix, getics(ic_bb, n), bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
 w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
 
 # Generate PMF from fit
@@ -1294,7 +1316,7 @@ def nll_binom_mix(params):
     return np.inf
 
 # Minimize NLL to find best parameters
-res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+res_binom_mix = minimize(nll_binom_mix, getics(ics_bin,n), bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
 w_bm, p1_bm, p2_bm = res_binom_mix.x
 pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
 
@@ -1365,8 +1387,8 @@ from scipy.stats import norm, betabinom, binom
 
 # === User-defined parameters ===
 params_gmm = [0.5, 2.0, 1.0, 5.0, 1.5] # w, mu1, sigma1, mu2, sigma2
-params_bb  = [0.1, 1.0, 3.0, 5, 5]     # w, a1, b1, a2, b2
-params_bin = [0.2, 0.1, 0.17]          # w, p1, p2
+params_bb  = [0.5, 3,10, 1, 5]     # w, a1, b1, a2, b2
+params_bin = [0.83, 0.16, 0.11]          # w, p1, p2
 
 # === Prepare data ===
 n = 4
