@@ -977,151 +977,6 @@ print(f"Inverse Gamma: {inflect_ig}")
 print(f"Log-Logistic: {inflect_ll}")
 
 #%% Mixture Model Fits: Gaussian, Beta-binomial, Binomial Mixtures + AIC
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import norm, betabinom, binom
-from scipy.optimize import curve_fit, minimize
-
-# --- Data preparation (replace `p` with your actual list of arrays) ---
-p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
-p_trimmed = [pi[:-1, :] for pi in p_trimmed]
-pth = [(pi > 0) * 1 for pi in p_trimmed]
-
-pshape = pth[0].shape
-n = 3
-grid = (n, n)
-x1 = pshape[0] // grid[0]
-x2 = pshape[1] // grid[1]
-
-plist = []
-clist = []
-for pi in pth:
-    patches = np.zeros((x1, x2), dtype=object)
-    counts = np.zeros((x1, x2))
-    for i in range(x1):
-        for j in range(x2):
-            patch = pi[i * grid[0]:(i + 1) * grid[0], j * grid[1]:(j + 1) * grid[1]]
-            count = 1 * np.any(patch > 0)
-            patches[i, j] = patch
-            counts[i, j] = count
-    plist.append(patches)
-    clist.append(counts)
-
-csum = np.sum(clist, axis=0)
-data = csum.flatten()
-binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
-bin_centers = (binarr[:-1] + binarr[1:]) / 2
-fs = 20
-
-# --- Gaussian Mixture ---
-def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
-    return w1 * norm.pdf(x, mu1, sigma1) + (1 - w1) * norm.pdf(x, mu2, sigma2)
-
-hist_vals, _ = np.histogram(data, bins=binarr, density=True)
-p0 = [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]
-bounds = ([0, -np.inf, 1e-3, -np.inf, 1e-3], [1, np.inf, np.inf, np.inf, np.inf])
-params_gmm, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0, bounds=bounds)
-w1, mu1, sigma1, mu2, sigma2 = params_gmm
-y_gmm = gaussian_mixture(bin_centers, *params_gmm)
-cv2_1 = (sigma1 ** 2) / mu1 ** 2 if mu1 != 0 else np.nan
-cv2_2 = (sigma2 ** 2) / mu2 ** 2 if mu2 != 0 else np.nan
-
-# --- Beta-binomial Mixture ---
-n_neurons = len(pth)
-def pmf_bb_mix(x, w, a1, b1, a2, b2):
-    return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
-
-def nll_bb_mix(params):
-    w, a1, b1, a2, b2 = params
-    pmf = pmf_bb_mix(data, w, a1, b1, a2, b2)
-    return -np.sum(np.log(pmf + 1e-12)) if 0 < w < 1 and all(x > 0 for x in [a1, b1, a2, b2]) else np.inf
-
-res_bb_mix = minimize(nll_bb_mix, [0.5, 2, 2, 5, 5],
-                      bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
-w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
-x_discrete = np.arange(0, n_neurons + 1)
-pmf_bbmix = pmf_bb_mix(x_discrete, w_bb, a1_bb, b1_bb, a2_bb, b2_bb)
-
-mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
-var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / \
-          ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
-cv2_1_bb = var1_bb / mean1_bb ** 2
-
-mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
-var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / \
-          ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
-cv2_2_bb = var2_bb / mean2_bb ** 2
-
-# --- Binomial Mixture ---
-def pmf_binom_mix(x, w, p1, p2):
-    return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
-
-def nll_binom_mix(params):
-    w, p1, p2 = params
-    pmf = pmf_binom_mix(data, w, p1, p2)
-    return -np.sum(np.log(pmf + 1e-12)) if 0 < w < 1 and 0 < p1 < 1 and 0 < p2 < 1 else np.inf
-
-res_binom_mix = minimize(nll_binom_mix, [0.5, 0.2, 0.8],
-                         bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
-w_bm, p1_bm, p2_bm = res_binom_mix.x
-pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
-
-mean1_bm = n_neurons * p1_bm
-var1_bm = n_neurons * p1_bm * (1 - p1_bm)
-cv2_1_bm = var1_bm / mean1_bm ** 2
-
-mean2_bm = n_neurons * p2_bm
-var2_bm = n_neurons * p2_bm * (1 - p2_bm)
-cv2_2_bm = var2_bm / mean2_bm ** 2
-
-# --- AIC ---
-logL_gmm = np.sum(np.log(gaussian_mixture(data, *params_gmm) + 1e-12))
-logL_bbmix = np.sum(np.log(pmf_bb_mix(data, w_bb, a1_bb, b1_bb, a2_bb, b2_bb) + 1e-12))
-logL_binmix = np.sum(np.log(pmf_binom_mix(data, w_bm, p1_bm, p2_bm) + 1e-12))
-
-aic_gmm = 2 * 5 - 2 * logL_gmm
-aic_bbmix = 2 * 5 - 2 * logL_bbmix
-aic_binmix = 2 * 3 - 2 * logL_binmix
-
-print("\nMixture Model AIC Comparison:")
-print(f"{'Model':30} {'AIC':>10}")
-print("-" * 42)
-print(f"{'Gaussian Mixture':30} {aic_gmm:10.2f}")
-print(f"{'Beta-binomial Mixture':30} {aic_bbmix:10.2f}")
-print(f"{'Binomial Mixture':30} {aic_binmix:10.2f}")
-
-# --- Plot ---
-plt.figure(figsize=(10, 8))
-plt.hist(data, bins=binarr, density=False,
-         color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
-
-plt.plot(bin_centers, y_gmm * len(data), 'r-', lw=5,
-         label=f'Gaussian mixture\n'
-               f'(μ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
-               f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f})')
-
-plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
-         label=f'Beta-binomial mixture\n'
-               f'(μ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
-               f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f})')
-
-plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
-         label=f'Binomial mixture\n(n={n_neurons},\n'
-               f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
-               f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f})')
-
-plt.title(f'({grid[0]},{grid[1]})-grid: Mixture Model Fits', fontsize=fs+6)
-plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
-plt.ylabel('Count', fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
-plt.legend(fontsize=fs - 2)
-plt.tight_layout()
-plt.show()
-
-
-#%% COmmentd
-
-# Mixture Model Fits: Gaussian, Beta-binomial, Binomial Mixtures + AIC
 
 import numpy as np  # Numerical computing library
 import matplotlib.pyplot as plt  # Plotting library
@@ -1216,8 +1071,8 @@ def nll_bb_mix(params):
         return -np.sum(np.log(pmf + 1e-12))
     return np.inf
 
-# Minimize NLL to fit parameters
-res_bb_mix = minimize(nll_bb_mix, [0.5, 2, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
+# Minimize NLL to fit parameters    w  a1 b1 a2 b2
+res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
 w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
 
 # Generate PMF from fit
@@ -1248,7 +1103,7 @@ def nll_binom_mix(params):
     return np.inf
 
 # Minimize NLL to find best parameters
-res_binom_mix = minimize(nll_binom_mix, [0.5, 0.2, 0.3], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
 w_bm, p1_bm, p2_bm = res_binom_mix.x
 pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
 
@@ -1289,19 +1144,19 @@ plt.hist(data, bins=binarr, density=False,
 
 # Plot Gaussian Mixture
 plt.plot(bin_centers, y_gmm * len(data), 'r-', lw=5,
-         label=f'Gaussian mixture\n(μ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
-               f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f})')
+         label=f'Gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
+               f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\nAIC={aic_gmm:.2f}')
 
 # Plot Beta-binomial Mixture
 plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
-         label=f'Beta-binomial mixture\n(μ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
-               f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f})')
+         label=f'Beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
+               f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\nAIC={aic_bbmix:.2f}')
 
 # Plot Binomial Mixture
 plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
-         label=f'Binomial mixture\n(n={n_neurons},\n'
+         label=f'Binomial mixture\nn={n_neurons},\n'
                f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
-               f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f})')
+               f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nAIC={aic_binmix:.2f}')
 
 plt.title(f'({grid[0]},{grid[1]})-grid: Mixture Model Fits', fontsize=fs+6)
 plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
@@ -1309,5 +1164,301 @@ plt.ylabel('Count', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(fontsize=fs - 2)
 plt.tight_layout()
+plt.xlim([binarr[0]-1, binarr[-1]+1])
 plt.show()
 
+#%% Mixture Model Fits: Gaussian, Beta-binomial, Binomial Mixtures + AIC
+
+import numpy as np  # Numerical computing library
+import matplotlib.pyplot as plt  # Plotting library
+from scipy.stats import norm, betabinom, binom  # Probability distributions
+from scipy.optimize import curve_fit, minimize  # Optimization and fitting tools
+
+# --- Data Preparation ---
+
+# Trim each array in 'p' if it has 117 columns (remove last column)
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+
+# Remove the last row from all matrices to match expected size
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+
+# Binarize: convert all values > 0 to 1 (active), 0 otherwise
+pth = [(pi > 0).astype(int) for pi in p_trimmed]
+
+# Extract the shape of the arrays (should all be same shape)
+pshape = pth[0].shape
+
+# Grid size for patching
+n = 4
+grid = (n, n)
+
+# Compute number of patches that fit in each dimension
+x1 = pshape[0] // grid[0]
+x2 = pshape[1] // grid[1]
+
+# Initialize storage for patches and counts
+plist = []
+clist = []
+
+# Divide each array into patches and count active neurons in each patch
+for pi in pth:
+    patches = np.zeros((x1, x2), dtype=object)
+    counts = np.zeros((x1, x2))
+    for i in range(x1):
+        for j in range(x2):
+            # Extract n x n patch
+            patch = pi[i * grid[0]:(i + 1) * grid[0], j * grid[1]:(j + 1) * grid[1]]
+            # Count if any neuron is active in this patch
+            count = 1 * np.any(patch > 0)
+            patches[i, j] = patch
+            counts[i, j] = count
+    plist.append(patches)
+    clist.append(counts)
+
+# Sum counts across all neurons, flatten to 1D array
+csum = np.sum(clist, axis=0)
+data = csum.flatten()
+
+# Binning setup for histogram
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+bin_centers = (binarr[:-1] + binarr[1:]) / 2
+fs = 20  # Font size for plots
+
+# --- Gaussian Mixture Model ---
+
+# Define PDF of 2-component Gaussian mixture
+def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
+    return w1 * norm.pdf(x, mu1, sigma1) + (1 - w1) * norm.pdf(x, mu2, sigma2)
+
+# Histogram of data (used for fitting)
+hist_vals, _ = np.histogram(data, bins=binarr, density=True)
+
+# Initial guess and bounds for fitting
+p0 = [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]
+bounds = ([0, -np.inf, 1e-3, -np.inf, 1e-3], [1, np.inf, np.inf, np.inf, np.inf])
+
+# Fit Gaussian mixture model to histogram
+params_gmm, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0, bounds=bounds)
+w1, mu1, sigma1, mu2, sigma2 = params_gmm
+y_gmm = gaussian_mixture(bin_centers, *params_gmm)
+
+# Compute CV² for both Gaussian components
+cv2_1 = (sigma1 ** 2) / mu1 ** 2 if mu1 != 0 else np.nan
+cv2_2 = (sigma2 ** 2) / mu2 ** 2 if mu2 != 0 else np.nan
+
+# --- Beta-binomial Mixture Model ---
+
+n_neurons = len(pth)  # Number of neurons
+
+# Define 2-component beta-binomial mixture PMF
+def pmf_bb_mix(x, w, a1, b1, a2, b2):
+    return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
+
+# Negative log-likelihood for beta-binomial mixture
+def nll_bb_mix(params):
+    w, a1, b1, a2, b2 = params
+    pmf = pmf_bb_mix(data, w, a1, b1, a2, b2)
+    if 0 < w < 1 and all(x > 0 for x in [a1, b1, a2, b2]):
+        return -np.sum(np.log(pmf + 1e-12))
+    return np.inf
+
+# Minimize NLL to fit parameters    w  a1 b1 a2 b2
+res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
+w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
+
+# Generate PMF from fit
+x_discrete = np.arange(0, n_neurons + 1)
+pmf_bbmix = pmf_bb_mix(x_discrete, w_bb, a1_bb, b1_bb, a2_bb, b2_bb)
+
+# Compute mean, variance, CV² for each component
+mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
+var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
+cv2_1_bb = var1_bb / mean1_bb ** 2
+
+mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
+var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
+cv2_2_bb = var2_bb / mean2_bb ** 2
+
+# --- Binomial Mixture Model ---
+
+# Define 2-component binomial mixture PMF
+def pmf_binom_mix(x, w, p1, p2):
+    return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
+
+# Negative log-likelihood for binomial mixture
+def nll_binom_mix(params):
+    w, p1, p2 = params
+    pmf = pmf_binom_mix(data, w, p1, p2)
+    if 0 < w < 1 and 0 < p1 < 1 and 0 < p2 < 1:
+        return -np.sum(np.log(pmf + 1e-12))
+    return np.inf
+
+# Minimize NLL to find best parameters
+res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+w_bm, p1_bm, p2_bm = res_binom_mix.x
+pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
+
+# Compute means, variances, CV² for both binomial components
+mean1_bm = n_neurons * p1_bm
+var1_bm = n_neurons * p1_bm * (1 - p1_bm)
+cv2_1_bm = var1_bm / mean1_bm ** 2
+
+mean2_bm = n_neurons * p2_bm
+var2_bm = n_neurons * p2_bm * (1 - p2_bm)
+cv2_2_bm = var2_bm / mean2_bm ** 2
+
+# --- AIC Calculation ---
+
+# Compute log-likelihoods
+logL_gmm = np.sum(np.log(gaussian_mixture(data, *params_gmm) + 1e-12))
+logL_bbmix = np.sum(np.log(pmf_bb_mix(data, w_bb, a1_bb, b1_bb, a2_bb, b2_bb) + 1e-12))
+logL_binmix = np.sum(np.log(pmf_binom_mix(data, w_bm, p1_bm, p2_bm) + 1e-12))
+
+# AIC = 2k - 2*logL where k = number of fitted parameters
+aic_gmm = 2 * 5 - 2 * logL_gmm
+aic_bbmix = 2 * 5 - 2 * logL_bbmix
+aic_binmix = 2 * 3 - 2 * logL_binmix
+
+# Print AIC table
+print("\nMixture Model AIC Comparison:")
+print(f"{'Model':30} {'AIC':>10}")
+print("-" * 42)
+print(f"{'Gaussian Mixture':30} {aic_gmm:10.2f}")
+print(f"{'Beta-binomial Mixture':30} {aic_bbmix:10.2f}")
+print(f"{'Binomial Mixture':30} {aic_binmix:10.2f}")
+
+# --- Plotting ---
+
+plt.figure(figsize=(10, 8))
+plt.hist(data, bins=binarr, density=False,
+         color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
+
+# Plot Gaussian Mixture
+plt.plot(bin_centers, y_gmm * len(data), 'r-', lw=5,
+         label=f'Gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
+               f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\nAIC={aic_gmm:.2f}')
+
+# Plot Beta-binomial Mixture
+plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
+         label=f'Beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
+               f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\nAIC={aic_bbmix:.2f}')
+
+# Plot Binomial Mixture
+plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
+         label=f'Binomial mixture\nn={n_neurons},\n'
+               f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
+               f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nAIC={aic_binmix:.2f}')
+
+plt.title(f'({grid[0]},{grid[1]})-grid: Mixture Model Fits', fontsize=fs+6)
+plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
+plt.ylabel('Count', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs - 2)
+plt.tight_layout()
+plt.xlim([binarr[0]-1, binarr[-1]+1])
+plt.show()
+
+#%% Manual parameters
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm, betabinom, binom
+
+# === User-defined parameters ===
+params_gmm = [0.5, 2.0, 1.0, 5.0, 1.5] # w, mu1, sigma1, mu2, sigma2
+params_bb  = [0.1, 1.0, 3.0, 5, 5]     # w, a1, b1, a2, b2
+params_bin = [0.2, 0.1, 0.17]          # w, p1, p2
+
+# === Prepare data ===
+n = 4
+pth = [((pi[:, :-1] if pi.shape[1] == 117 else pi)[:-1, :] > 0).astype(int) for pi in p]
+x1, x2 = pth[0].shape[0] // n, pth[0].shape[1] // n
+csum = np.sum([[[np.any(pi[i*n:(i+1)*n, j*n:(j+1)*n])
+                 for j in range(x2)] for i in range(x1)] for pi in pth], axis=0)
+data = csum.flatten()
+
+# === Mixture model definitions ===
+n_neurons = len(pth)
+binarr = np.arange(data.min() - 0.5, data.max() + 1.5)
+bin_centers = (binarr[:-1] + binarr[1:]) / 2
+x_discrete = np.arange(0, n_neurons + 1)
+
+def gaussian_mixture(x, w, mu1, s1, mu2, s2):
+    return w * norm.pdf(x, mu1, s1) + (1 - w) * norm.pdf(x, mu2, s2)
+
+def pmf_bb_mix(x, w, a1, b1, a2, b2):
+    return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
+
+def pmf_binom_mix(x, w, p1, p2):
+    return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
+
+# === Evaluate Gaussian mixture ===
+w1, mu1, s1, mu2, s2 = params_gmm
+y_gmm = gaussian_mixture(bin_centers, *params_gmm)
+cv2_1 = (s1 / mu1)**2 if mu1 else np.nan
+cv2_2 = (s2 / mu2)**2 if mu2 else np.nan
+logL_gmm = np.sum(np.log(gaussian_mixture(data, *params_gmm) + 1e-12))
+aic_gmm = 2 * 5 - 2 * logL_gmm
+
+# === Evaluate beta-binomial mixture ===
+w_bb, a1_bb, b1_bb, a2_bb, b2_bb = params_bb
+pmf_bbmix = pmf_bb_mix(x_discrete, *params_bb)
+logL_bbmix = np.sum(np.log(pmf_bb_mix(data, *params_bb) + 1e-12))
+aic_bbmix = 2 * 5 - 2 * logL_bbmix
+
+mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
+var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
+cv2_1_bb = var1_bb / mean1_bb ** 2
+
+mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
+var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
+cv2_2_bb = var2_bb / mean2_bb ** 2
+
+# === Evaluate binomial mixture ===
+w_bm, p1_bm, p2_bm = params_bin
+pmf_binmix = pmf_binom_mix(x_discrete, *params_bin)
+logL_binmix = np.sum(np.log(pmf_binom_mix(data, *params_bin) + 1e-12))
+aic_binmix = 2 * 3 - 2 * logL_binmix
+
+mean1_bm = n_neurons * p1_bm
+var1_bm = n_neurons * p1_bm * (1 - p1_bm)
+cv2_1_bm = var1_bm / mean1_bm ** 2
+
+mean2_bm = n_neurons * p2_bm
+var2_bm = n_neurons * p2_bm * (1 - p2_bm)
+cv2_2_bm = var2_bm / mean2_bm ** 2
+
+# === AIC Table ===
+print("\nMixture Model AIC Comparison:")
+print(f"{'Model':30} {'AIC':>10}")
+print("-" * 42)
+print(f"{'Gaussian Mixture':30} {aic_gmm:10.2f}")
+print(f"{'Beta-binomial Mixture':30} {aic_bbmix:10.2f}")
+print(f"{'Binomial Mixture':30} {aic_binmix:10.2f}")
+
+# === Plotting ===
+fs = 20
+plt.figure(figsize=(10, 8))
+plt.hist(data, bins=binarr, density=False,
+         color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
+
+plt.plot(bin_centers, y_gmm * len(data), 'r-', lw=5,
+         label=f'Gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
+               f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\nAIC={aic_gmm:.2f}')
+
+plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
+         label=f'Beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
+               f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\nAIC={aic_bbmix:.2f}')
+
+plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
+         label=f'Binomial mixture\nn={n_neurons},\n'
+               f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
+               f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nAIC={aic_binmix:.2f}')
+
+plt.title(f'({n},{n})-grid: Mixture Model Fits', fontsize=fs + 6)
+plt.xlabel(f'# place fields per ({n},{n}) patch', fontsize=fs)
+plt.ylabel('Count', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs - 2)
+plt.tight_layout()
+plt.xlim([binarr[0] - 1, binarr[-1] + 1])
+plt.show()
