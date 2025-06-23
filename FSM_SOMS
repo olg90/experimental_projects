@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 
-dtype=0
+dtype=1
 if dtype==0:
     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
 if dtype == 1:
@@ -1058,10 +1058,9 @@ plt.show()
 
 #%% 9th - Ratio 2 with increasing inputs
 
-def getiext(sfreq, y0, taui, tauy, kiy, dt):
-
+def getiext(sfreq, y0, taui, tauy, kiy, dt, r):
     pretimes = [int(i/sfreq/dt) for i in range(1, 12)]
-    presizes = np.linspace(1,3, len(pretimes))
+    presizes = np.linspace(1,3.8*(1-r)+3, len(pretimes))
 
     runtime = pretimes[-1]
     Iext = np.zeros(runtime)
@@ -1157,32 +1156,45 @@ vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
 
 # Parameters
 
-sfreq = 5 # Hz
+sfreq = 30 # Hz
 y0 = 500
 taui = 0.001
 tauy = 0.0025
 kiy = 1
 
-r=1
-Iext = getiext(sfreq, y0, taui, tauy, kiy, dt)
+r=0
+Iext = getiext(sfreq, y0, taui, tauy, kiy, dt,r)
+
+def shift_forward(arr, n):
+    """
+    Shift the array forward (right) by n indices and remove the last n elements.
+    The result has the same length as the input array.
+    
+    Parameters:
+    arr (np.ndarray): 1D input array.
+    n (int): Number of indices to shift.
+
+    Returns:
+    np.ndarray: Shifted array.
+    """
+    if n <= 0:
+        return arr.copy()
+    elif n >= len(arr):
+        return np.zeros_like(arr)
+    else:
+        return np.concatenate((np.zeros(n, dtype=arr.dtype), arr[:-n]))
+    
 
 # =============================================================================
 # plt.plot(Iext)
 # #%%
 # =============================================================================
+#S
+# 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
+# 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
+
 # =============================================================================
-# #S
-# dtype=0
-# if dtype==0:
-#     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
-# if dtype == 1:
-#     dir1=r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\SOM'
-# os.chdir(dir1)
-# df = pd.read_csv("Table0.csv")
-# data=np.array(df)
-# # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
-# # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
-# dnum= 6 # <----------------------------------- neuron number
+# dnum= 7 # <----------------------------------- neuron number
 # dsize= 'z' # f full, z zoomed
 # dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
 # dlens=[4000,12000]
@@ -1197,36 +1209,41 @@ Iext = getiext(sfreq, y0, taui, tauy, kiy, dt)
 # peakvals=I[peaks]
 # peakratio=peakvals[-1]/peakvals[0]
 # print(peakratio)
-# plt.plot(I)
+# plt.plot(I, label='I')
+# plt.plot(Iext, label='Iext')
+# plt.legend()
 # #%%
 # =============================================================================
 
 #E
 
-# Plot
-fs=15
-v, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
-fig, ax = plt.subplots(2,1, figsize=(6,4))
-ax[0].plot(np.linspace(0,len(Iext)*dt, len(Iext)), Iext, label = 'Iext')
-ax[0].set_xticks([])
-ax[0].set_ylabel('Input\ncurrent', fontsize=fs)
-ax[0].tick_params(axis='both', labelsize=fs)
 # =============================================================================
-# ax[0].plot(np.arange(len(I)), I, label='I')
+# # Plot
+# fs=15
+# v, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
+# fig, ax = plt.subplots(2,1, figsize=(6,4))
+# ax[0].plot(np.linspace(0,len(Iext)*dt, len(Iext)), Iext, label = 'Iext')
+# ax[0].set_xticks([])
+# ax[0].set_ylabel('Input\ncurrent', fontsize=fs)
+# ax[0].tick_params(axis='both', labelsize=fs)
+# # =============================================================================
+# # ax[0].plot(np.arange(len(I)), I, label='I')
+# # =============================================================================
+# ax[1].plot(np.linspace(0,len(Iext)*dt, len(Iext)), v, color='k')
+# ax[1].set_xlabel('Time (sec)', fontsize=fs)
+# ax[1].set_ylabel('Membrane\npotential', fontsize=fs)
+# ax[1].tick_params(axis='both', labelsize=fs)
+# ax[1].plot(np.linspace(0,len(Iext)*dt, len(Iext)),vth[dnum]*np.ones(len(Iext)))
+# plt.show()
+# #%%
+# 
 # =============================================================================
-ax[1].plot(np.linspace(0,len(Iext)*dt, len(Iext)), v, color='k')
-ax[1].set_xlabel('Time (sec)', fontsize=fs)
-ax[1].set_ylabel('Membrane\npotential', fontsize=fs)
-ax[1].tick_params(axis='both', labelsize=fs)
-ax[1].plot(np.linspace(0,len(Iext)*dt, len(Iext)),vth[dnum]*np.ones(len(Iext)))
-plt.show()
-#%%
-
 # =============================================================================
 # gettmean(0.1, I, g, vb, dnum, C, Cr)
 # #%%
 # =============================================================================
 
+# Fix fin plot
 rlist=np.linspace(0,1,100)
 tlist=[]
 for i,r in enumerate(rlist):
@@ -1248,6 +1265,7 @@ plt.tick_params(axis='both', labelsize=fs)
 plt.show()
 
 # =============================================================================
+# # fix r plot
 # rlist2=[0, 0.25, 0.5, 0.75, 1]
 # flist=np.linspace(1,100,100)
 # foutlist=[]
@@ -1256,7 +1274,7 @@ plt.show()
 #     tlist=[]
 #     for j, sfreq in enumerate(flist):
 #         print(i, len(rlist2), j, len(flist))
-#         Iext=getiext(sfreq, 10, y0, taui, tauy, kiy, dt)
+#         Iext=getiext(sfreq, y0, taui, tauy, kiy, dt,r)
 #         _, tmean = gettmean(r, Iext, g, vb, dnum, C, Cr)
 #         tlist.append(tmean)
 #     fout=1/np.array(tlist)  
