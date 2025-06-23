@@ -1055,3 +1055,220 @@ plt.show()
 # plt.ylabel('Output frequency (Hz)')
 # plt.show()
 # =============================================================================
+
+#%% 9th - Ratio 2 with increasing inputs
+
+def getiext(sfreq, runtime, y0, taui, tauy, kiy, dt):
+
+    pretimes = []
+    i = 1
+    while (i / sfreq) < (runtime * dt):  # convert to seconds
+        pretimes.append(int((i / sfreq) / dt))  # convert time to index
+        i += 1
+        
+    
+    presizes = np.linspace(1,3, len(pretimes))
+    print(presizes)
+
+    Iext = np.zeros(runtime)
+    y = np.zeros_like(Iext)
+    # Time evolution
+    j=0
+    for i in range(1, runtime):
+        if i in pretimes:
+            y[i-1] = y0*presizes[j]  # reset just before update
+            j+=1
+
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy * dt
+
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext * dt
+
+    return Iext
+
+def gettmean(r, I, g, vb, dnum, C, Cr):
+    v=np.zeros(len(I))
+    v[0]=vd[0]
+    apinds=[]
+    refper=40
+    aptimer=np.inf
+    posttimer=False
+    for i in range(1,len(I)):
+
+        if posttimer==False:
+            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/C[dnum]
+        if posttimer==True:
+            icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
+            
+        if aptimer != np.inf:
+            v[i] = v[i-1]
+        else:
+            v[i] = v[i-1]+dvdt*dt
+        
+        if I[i]>I[i-1]:
+            posttimer=False
+            
+        if aptimer != np.inf:
+            aptimer-=1
+        if v[i-1]>vth[dnum]:
+            v[i]=vbr[dnum] # vb[dnum]
+            apinds.append(i)
+            aptimer=refper
+            posttimer=True
+        if aptimer==0:
+            aptimer=np.inf
+# =============================================================================
+#     # Comment out
+#     fig,ax=plt.subplots(2,1)
+#     ax[0].plot(Iext)
+#     ax[1].plot(range(len(vd)), v)
+# =============================================================================
+    aptimes=np.array(apinds)*dt
+    ssaptimes=aptimes[int(0.3*len(aptimes)):]
+    tmean = np.mean(np.diff(ssaptimes))
+    return v, tmean
+
+# 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4,
+# 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
+
+dt=0.1e-3                                # 8 is (6,10) and 9 is (7,11)
+#                0   1   2   3   4    5     6      7    8   9  10  11
+vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-64,-65.5,-64,-63.8])
+#                0   1   2   3   4    5     6       7    8   9     10    11
+vbr=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-50,-50,-47,-64,-50])
+#    0        1           2          3        4         5
+C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.000111]
+#    6        7          8        9          10       11
+#    0        1           2          3        4         5
+Cr=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.0001]
+#    6        7          8        9          10       11
+#    0        1          2      3        4        5
+g=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
+#    6        7       8        9       10       11
+#    0        1          2      3        4        5
+gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0035, 0.004,  0.0037,  0.0037,  0.0037, 0.005]
+#    6        7       8        9       10       11
+#     0    1    2     3    4    5    6    7    8   9    10   11
+vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
+
+# Parameters
+
+sfreq = 20 # Hz
+runtime_sec = 1 # total runtime in seconds
+runtime = int(runtime_sec / dt)  # number of simulation steps
+
+y0 = 1300
+taui = 0.001
+tauy = 0.0025
+kiy = 1
+
+r=1
+Iext = getiext(sfreq, runtime, y0, taui, tauy, kiy, dt)
+# =============================================================================
+# #S
+# dtype=0
+# if dtype==0:
+#     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
+# if dtype == 1:
+#     dir1=r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\SOM'
+# os.chdir(dir1)
+# df = pd.read_csv("Table0.csv")
+# data=np.array(df)
+# # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
+# # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
+# dnum= 6 # <----------------------------------- neuron number
+# dsize= 'z' # f full, z zoomed
+# dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
+# dlens=[4000,12000]
+# if dsize=='f':
+#     I=data[:, dnum]
+# if dsize=='z':
+#     I=data[:, dnum][:dlens[dsnum]]
+# # Processing the data
+# I = 25*I
+# from scipy.signal import find_peaks
+# peaks, _ = find_peaks(I)
+# peakvals=I[peaks]
+# peakratio=peakvals[-1]/peakvals[0]
+# print(peakratio)
+# plt.plot(I)
+# #%%
+# =============================================================================
+
+#E
+
+# =============================================================================
+# # Plot
+# fs=15
+# v, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
+# fig, ax = plt.subplots(2,1, figsize=(6,4))
+# ax[0].plot(np.arange(len(Iext)), Iext, label = 'Iext')
+# ax[0].set_xticks([])
+# ax[0].set_ylabel('Input\ncurrent', fontsize=fs)
+# ax[0].tick_params(axis='both', labelsize=fs)
+# # =============================================================================
+# # ax[0].plot(np.arange(len(I)), I, label='I')
+# # =============================================================================
+# ax[1].plot(np.arange(len(Iext)), v, color='k')
+# ax[1].set_xlabel('Time (ms)', fontsize=fs)
+# ax[1].set_ylabel('Membrane\npotential', fontsize=fs)
+# ax[1].tick_params(axis='both', labelsize=fs)
+# plt.show()
+# #%%
+# =============================================================================
+
+# =============================================================================
+# gettmean(0.1, I, g, vb, dnum, C, Cr)
+# #%%
+# =============================================================================
+
+rlist=np.linspace(0,1,100)
+tlist=[]
+for i,r in enumerate(rlist):
+    print(i, len(rlist))
+    _, tmean=gettmean(r, Iext, g, vb, dnum, C, Cr)
+    tlist.append(tmean)
+foutlist=1/np.array(tlist)
+
+fs=15
+plt.plot(rlist, foutlist)
+plt.xlabel('Percentage of fast SOM synapses', fontsize=fs)
+plt.ylabel('Output frequency (Hz)', fontsize=fs)
+# =============================================================================
+# plt.ylim([0, np.max(foutlist)])
+# =============================================================================
+plt.plot([], [], ' ', label='Input frequency = {} Hz'.format(sfreq))
+plt.legend(fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+# =============================================================================
+# rlist2=[0, 0.25, 0.5, 0.75, 1]
+# flist=np.linspace(1,100,100)
+# foutlist=[]
+# for i,r in enumerate(rlist2):
+#     print(i, len(rlist2))
+#     tlist=[]
+#     for j, sfreq in enumerate(flist):
+#         print(i, len(rlist2), j, len(flist))
+#         Iext=getiext(sfreq, 10, y0, taui, tauy, kiy, dt)
+#         _, tmean = gettmean(r, Iext, g, vb, dnum, C, Cr)
+#         tlist.append(tmean)
+#     fout=1/np.array(tlist)  
+#     foutlist.append(fout)
+#     
+# for i,fout in enumerate(foutlist):
+#     plt.plot(flist, fout, label='r={}'.format(np.around(rlist2[i],2)))
+#     
+# plt.legend()
+# plt.xlabel('Input frequency (Hz)')
+# plt.ylabel('Output frequency (Hz)')
+# plt.show()
+# =============================================================================
