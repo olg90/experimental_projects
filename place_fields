@@ -1293,3 +1293,403 @@ plt.legend(fontsize=fs - 2)
 plt.tight_layout()
 plt.xlim([binarr[0] - 1, binarr[-1] + 1])
 plt.show()
+#%% Complexity
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from scipy.stats import nbinom
+from scipy.optimize import minimize
+
+# ========================= Load csumflat from .mat files =========================
+n = [] # number of place fields
+p = [] # neuron maps
+
+location=1
+if location==0:
+    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
+if location==1:
+    dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
+os.chdir(dir1)
+dir2 = os.listdir(dir1)
+
+for foldername in dir2:
+    dir3 = os.path.join(dir1, foldername)
+    os.chdir(dir3)
+    dirs3 = os.listdir()
+    dirs4 = [x for x in dirs3 if x[-7] == 'm']
+    for matname in dirs4:
+        dir5 = os.path.join(dir3, matname)
+        mat = loadmat(dir5)
+        n.append(mat['numFields'][0][0])
+        p.append(mat['pfields'])
+        
+# Main code
+
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage.measure import label, regionprops, perimeter
+from scipy.ndimage import binary_fill_holes
+from skimage.morphology import convex_hull_image
+
+def shape_complexity_metrics(binary_image):
+    labeled = label(binary_image)
+    if labeled.max() == 0:
+        # Empty shape edge case
+        return {
+            'area': 0,
+            'perimeter': 0,
+            'holes': 0,
+            'compactness': 0,
+            'convexity_defect': 0
+        }
+
+    props = regionprops(labeled)[0]  # assume largest shape or first shape
+
+    area = props.area
+    perim = perimeter(binary_image)
+    convex = convex_hull_image(binary_image)
+    convex_area = np.sum(convex)
+
+    filled = binary_fill_holes(binary_image)
+    holes = np.sum(filled) - area
+
+    compactness = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
+    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
+
+    return {
+        'area': area,
+        'perimeter': perim,
+        'holes': holes,
+        'compactness': compactness,
+        'convexity_defect': convexity_defect
+    }
+
+def complexity_score(metrics):
+    # New positive-weighted complexity score:
+    holes_score = metrics['holes'] * 0.5
+    perimeter_score = metrics['perimeter'] * 0.1
+    convexity_score = metrics['convexity_defect'] * 5.0
+    compactness_score = (1 - metrics['compactness']) * 3.0
+    score = holes_score + perimeter_score + convexity_score + compactness_score
+    return score
+
+
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+
+p0=p_trimmed[1]        
+pshape=p0.shape
+grid=(16,4)
+
+plt.figure(figsize=(10,4))
+plt.imshow(p0)
+plt.show()
+
+#%% Complexity 2 corrected
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from skimage.measure import label, regionprops, perimeter
+from scipy.ndimage import binary_fill_holes
+from skimage.morphology import convex_hull_image
+from matplotlib.colors import BoundaryNorm
+
+# ========================= Load csumflat from .mat files =========================
+n = []  # number of place fields
+p = []  # neuron maps
+
+location = 1
+if location == 0:
+    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
+if location == 1:
+    dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
+os.chdir(dir1)
+dir2 = os.listdir(dir1)
+
+for foldername in dir2:
+    dir3 = os.path.join(dir1, foldername)
+    os.chdir(dir3)
+    dirs3 = os.listdir()
+    dirs4 = [x for x in dirs3 if x[-7] == 'm']
+    for matname in dirs4:
+        dir5 = os.path.join(dir3, matname)
+        mat = loadmat(dir5)
+        n.append(mat['numFields'][0][0])
+        p.append(mat['pfields'])
+
+# ========================= Complexity Analysis =========================
+
+def shape_complexity_metrics(binary_image):
+    if np.sum(binary_image) == 0:
+        return {
+            'area': 0,
+            'perimeter': 0,
+            'holes': 0,
+            'compactness': 0,
+            'convexity_defect': 0
+        }
+
+    # regionprops requires int label image of a single object
+    props = regionprops(binary_image.astype(int))[0]
+
+    area = props.area
+    perim = perimeter(binary_image)
+    convex = convex_hull_image(binary_image)
+    convex_area = np.sum(convex)
+
+    filled = binary_fill_holes(binary_image)
+    holes = np.sum(filled) - area
+
+    compactness_raw = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
+    compactness = min(1.0, compactness_raw)  # clamp compactness to max 1.0
+
+    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
+
+    return {
+        'area': area,
+        'perimeter': perim,
+        'holes': holes,
+        'compactness': compactness,
+        'convexity_defect': convexity_defect
+    }
+
+def complexity_score(metrics):
+    holes_score = metrics['holes'] * 0.5
+    perimeter_score = metrics['perimeter'] * 0.1
+    convexity_score = metrics['convexity_defect'] * 5.0
+    compactness_score = (1 - metrics['compactness']) * 3.0
+    score = holes_score + perimeter_score + convexity_score + compactness_score
+    return score
+
+# ========================= Preprocess and Analyze =========================
+
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :]>0 for pi in p_trimmed]
+
+# Example field map, ensure binary mask
+p0 = p_trimmed[30]
+
+print("Unique values in p0:", np.unique(p0))  # Should be [0, 1]
+
+plt.figure(figsize=(10, 4))
+plt.imshow(p0, cmap='gray')
+plt.title("Original Binary Field Map")
+plt.axis('off')
+plt.show()
+
+# Label contiguous patches
+labeled_patches, num_patches = label(p0, return_num=True, connectivity=1)
+print("Number of patches:", num_patches)
+print("Unique labels in labeled_patches:", np.unique(labeled_patches))
+
+patch_metrics = []
+patch_scores = []
+
+for i in range(1, num_patches + 1):
+    patch_mask = (labeled_patches == i)
+    metrics = shape_complexity_metrics(patch_mask)
+    score = complexity_score(metrics)
+    patch_metrics.append(metrics)
+    patch_scores.append(score)
+
+print("=== Complexity Metrics Per Patch ===")
+for i, (m, s) in enumerate(zip(patch_metrics, patch_scores)):
+    print(f"Patch {i+1}: Score = {s:.3f}, Metrics = {m}")
+
+print("\nList of Scores:")
+print(patch_scores)
+
+# ========================= Discrete Labeled Plot with Score Overlay =========================
+
+cmap = plt.cm.get_cmap('tab20', num_patches)
+bounds = np.arange(0.5, num_patches + 1.5, 1)
+norm = BoundaryNorm(bounds, cmap.N)
+
+plt.figure(figsize=(10, 4))
+im = plt.imshow(labeled_patches, cmap=cmap, norm=norm)
+plt.title("Labeled Patches with Complexity Scores")
+cbar = plt.colorbar(im, ticks=np.arange(1, num_patches + 1))
+cbar.set_label('Patch Index')
+
+# Overlay scores at patch centroids
+props = regionprops(labeled_patches)
+for prop in props:
+    y, x = prop.centroid
+    label_id = prop.label
+    score = patch_scores[label_id - 1]
+    plt.text(x, y, f"{score:.1f}", color='black', ha='center', va='center',
+             fontsize=9, fontweight='bold')
+
+plt.axis('off')
+plt.show()
+
+#%% Complexity 2 for all images - compute all patch scores and per image scores
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from skimage.measure import label, regionprops, perimeter
+from scipy.ndimage import binary_fill_holes
+from skimage.morphology import convex_hull_image
+from matplotlib.colors import BoundaryNorm
+
+# ========================= Load csumflat from .mat files =========================
+n = []  # number of place fields
+p = []  # neuron maps
+
+location = 1
+if location == 0:
+    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
+if location == 1:
+    dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
+os.chdir(dir1)
+dir2 = os.listdir(dir1)
+
+for foldername in dir2:
+    dir3 = os.path.join(dir1, foldername)
+    os.chdir(dir3)
+    dirs3 = os.listdir()
+    dirs4 = [x for x in dirs3 if x[-7] == 'm']
+    for matname in dirs4:
+        dir5 = os.path.join(dir3, matname)
+        mat = loadmat(dir5)
+        n.append(mat['numFields'][0][0])
+        p.append(mat['pfields'])
+
+# ========================= Complexity Analysis Functions =========================
+
+def shape_complexity_metrics(binary_image):
+    if np.sum(binary_image) == 0:
+        return {
+            'area': 0,
+            'perimeter': 0,
+            'holes': 0,
+            'compactness': 0,
+            'convexity_defect': 0
+        }
+
+    props = regionprops(binary_image.astype(int))[0]
+    area = props.area
+    perim = perimeter(binary_image)
+    convex = convex_hull_image(binary_image)
+    convex_area = np.sum(convex)
+    filled = binary_fill_holes(binary_image)
+    holes = np.sum(filled) - area
+
+    compactness_raw = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
+    compactness = min(1.0, compactness_raw)  # clamp compactness max 1.0
+
+    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
+
+    return {
+        'area': area,
+        'perimeter': perim,
+        'holes': holes,
+        'compactness': compactness,
+        'convexity_defect': convexity_defect
+    }
+
+def complexity_score(metrics):
+    holes_score = metrics['holes'] * 0.5
+    perimeter_score = metrics['perimeter'] * 0.1
+    convexity_score = metrics['convexity_defect'] * 5.0
+    compactness_score = (1 - metrics['compactness']) * 3.0
+    score = holes_score + perimeter_score + convexity_score + compactness_score
+    return score
+
+# ========================= Preprocess p_trimmed =========================
+
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [(pi[:-1, :] > 0) for pi in p_trimmed]
+
+# ========================= Compute complexity scores for all images =========================
+
+all_patch_scores = []     # Flat list of all patch scores across images
+scores_per_image = []     # List of lists: each inner list = scores of patches in one image
+
+for idx, img in enumerate(p_trimmed):
+    labeled_patches, num_patches = label(img, return_num=True, connectivity=1)
+    
+    image_scores = []
+    for i in range(1, num_patches + 1):
+        patch_mask = (labeled_patches == i)
+        metrics = shape_complexity_metrics(patch_mask)
+        score = complexity_score(metrics)
+        image_scores.append(score)
+        all_patch_scores.append(score)
+    
+    scores_per_image.append(image_scores)
+
+# Example printout
+print(f"Total images processed: {len(p_trimmed)}")
+print(f"Total patches found: {len(all_patch_scores)}")
+print(f"Scores for image 0 (first image): {scores_per_image[0]}")
+
+# Optional: Plot the first image's labeled patches and scores (like before)
+if len(p_trimmed) > 0:
+    img = p_trimmed[0]
+    labeled_patches, num_patches = label(img, return_num=True, connectivity=1)
+    patch_scores = scores_per_image[0]
+
+    cmap = plt.cm.get_cmap('tab20', num_patches)
+    bounds = np.arange(0.5, num_patches + 1.5, 1)
+    norm = BoundaryNorm(bounds, cmap.N)
+
+    plt.figure(figsize=(10, 4))
+    im = plt.imshow(labeled_patches, cmap=cmap, norm=norm)
+    plt.title("First Image: Labeled Patches with Complexity Scores")
+    cbar = plt.colorbar(im, ticks=np.arange(1, num_patches + 1))
+    cbar.set_label('Patch Index')
+
+    props = regionprops(labeled_patches)
+    for prop in props:
+        y, x = prop.centroid
+        label_id = prop.label
+        if label_id > 0 and label_id <= len(patch_scores):
+            score = patch_scores[label_id - 1]
+            plt.text(x, y, f"{score:.1f}", color='black', ha='center', va='center',
+                     fontsize=9, fontweight='bold')
+    plt.axis('off')
+    plt.show()
+    
+plt.title('All patch scores sorted')
+plt.scatter(np.arange(len(all_patch_scores)),np.sort(all_patch_scores))
+plt.show()
+#%%
+# =============================================================================
+# plt.hist(all_patch_scores, bins=np.linspace(0,100,100))
+# plt.xlim([0, 20])
+# =============================================================================
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import gamma
+
+data = np.array(all_patch_scores)
+data = data[data > 0]
+
+bins = np.linspace(0, 100, 100)  # your original bins
+
+# Fit Gamma distribution with loc fixed at 0
+shape, loc, scale = gamma.fit(data, floc=0)
+
+x = np.linspace(data.min(), data.max(), 1000)
+pdf_fitted = gamma.pdf(x, shape, loc=loc, scale=scale)
+
+# Calculate bin widths for histogram scaling
+bin_width = bins[1] - bins[0]
+
+plt.hist(data, bins=bins, density=False, alpha=0.6, color='b', label='Data histogram')
+
+# Scale PDF by total count * bin width to match histogram counts
+plt.plot(x, pdf_fitted * len(data) * bin_width, 'r-', lw=2, label='Fitted Gamma PDF')
+
+plt.xlim([0, 20])
+plt.xlabel('Complexity Score')
+plt.ylabel('Count')
+plt.title('Gamma Fit to Complexity Scores')
+plt.legend()
+plt.show()
+
