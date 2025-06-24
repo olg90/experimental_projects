@@ -1294,7 +1294,7 @@ ax[1].text(0.225, -35, 'AP', fontsize=fs)
 ax[2].plot(np.linspace(0,len(y)*dt,len(y)),y0*y, 
            label='y={}x+{}'.format(np.around(peakratio,2), np.around(b,2)), 
            color='g')
-ax[2].plot(np.linspace(0,len(y)*dt,len(y)),yi)
+ax[2].plot(np.linspace(0,len(y)*dt,len(y)),yi) 
 plt.show()
 #%%
 
