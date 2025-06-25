@@ -1,11 +1,11 @@
-#%% First method
+]#%% First method
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
 from scipy.signal import find_peaks
 
-dtype=0
+dtype=1
 if dtype==0:
     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
 if dtype == 1:
@@ -1091,51 +1091,7 @@ def fit_line(times, points):
     m, b = np.polyfit(times, points, 1)
     return m, b
 
-def getiext2(sfreq, taui, tauy, kiy, dt, r):
-    
-    pretimes = [int(i/sfreq/dt) for i in range(0,10)]
-    
-    extra=100
-    runtime = pretimes[-1]+extra
-    
-    a=1000
-    b=2
-    sfreq=1
-    Tmax=9/sfreq
-    slope=sfreq*(1-r)*a+b
-    const=1
-    yline=slope*np.linspace(0, Tmax*dt, runtime)+const
-    # plt.plot(yline)
-    
-    
-    Iext = np.zeros(runtime)
-    y = np.zeros(runtime)
-    # Time evolution
-    for i in range(0, runtime):
-        if i in pretimes:
-            y[i-1] = yline[i]  # reset just before update
 
-        dy = -y[i-1] / tauy
-        y[i] = y[i-1] + dy * dt
-
-        dIext = -Iext[i-1] / taui + kiy * y[i-1]
-        Iext[i] = Iext[i-1] + dIext * dt
-
-# =============================================================================
-#     Iext = 1*np.ones(int(1/dt))
-# =============================================================================
-    return Iext, y, yline
-
-sfreq=100
-Iext,y,yline = getiext2(sfreq, taui, tauy, 10, dt, 1)
-
-fig,ax=plt.subplots(2,1)
-ax[0].plot(Iext)
-ax[1].plot(y)
-ax[1].plot(yline)
-plt.show()
-
-#%%
 
 
 def getiext(sfreq, taui, tauy, kiy, dt, r):
@@ -1161,11 +1117,60 @@ def getiext(sfreq, taui, tauy, kiy, dt, r):
 
         dIext = -Iext[i-1] / taui + kiy * y[i-1]
         Iext[i] = Iext[i-1] + dIext * dt
+    return Iext, y, m, b, runtime
 
 # =============================================================================
-#     Iext = 1*np.ones(int(1/dt))
+# def getiext2(sfreq, taui, tauy, kiy, dt, r):
+#     
+#     pretimes = [int(i/sfreq/dt) for i in range(0,10)]
+#     
+#     extra=100
+#     runtime = pretimes[-1]+extra
+#     
+#     a=5000
+#     b=500
+#     Tmax=9/sfreq
+#     slope=a*sfreq*(1-r)+b*sfreq*r
+#     const=1
+#     yline=slope*np.linspace(0, Tmax*dt, runtime)+const
+#     plt.plot(yline)
+#     
+#     
+#     Iext = np.zeros(runtime)
+#     y = np.zeros(runtime)
+#     # Time evolution
+#     for i in range(0, runtime):
+#         if i in pretimes:
+#             y[i-1] = yline[i]  # reset just before update
+# 
+#         dy = -y[i-1] / tauy
+#         y[i] = y[i-1] + dy * dt
+# 
+#         dIext = -Iext[i-1] / taui + kiy * y[i-1]
+#         Iext[i] = Iext[i-1] + dIext * dt
+# 
+# # =============================================================================
+# #     Iext = 1*np.ones(int(1/dt))
+# # =============================================================================
+#     return Iext, y, yline, slope, const
+# 
 # =============================================================================
-    return Iext, y, m, b
+# =============================================================================
+# sfreq = 100 # Hz
+# taui = 0.001
+# tauy = 0.0025
+# kiy = 100
+# r=0
+# Iext,y,yline = getiext2(sfreq, taui, tauy, kiy, dt, r)
+# 
+# fig,ax=plt.subplots(2,1)
+# ax[0].plot(np.linspace(0,len(yline)*dt,len(yline)),Iext)
+# ax[1].plot(np.linspace(0,len(yline)*dt,len(yline)),y)
+# ax[1].plot(np.linspace(0,len(yline)*dt,len(yline)),yline)
+# plt.show()
+# 
+# #%%
+# =============================================================================
 
 def gettmean(r, I, g, vb, dnum, C, Cr):
     v=np.zeros(len(I))
@@ -1240,7 +1245,7 @@ gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
 vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
 
 # Parameters
-sfreq = 1 # Hz
+sfreq = 40 # Hz
 taui = 0.001
 tauy = 0.0025
 kiy = 500
@@ -1336,32 +1341,34 @@ def getline(Iext):
     return y, peakratio, b
 
 # Plot
-fs=15
 r=1
-sfreq=10
-Iext, yi, mi, bi = getiext(sfreq, taui, tauy, kiy, dt,r)
+sfreq=40
+Iext, yi, mi, bi, runtime = getiext(sfreq, taui, tauy, kiy, dt,r)
+# Iext, yi, yiline, slope, const = getiext2(sfreq, taui, tauy, kiy, dt, r)
 y, peakratioy, by = getline(Iext)
 
 yiline, peakratioyi, byi=getline(yi)
 
 v, tmeantest, naps, aps = gettmean(r, Iext, g, vb, dnum, C, Cr)
 
+fs=15
 fig, ax = plt.subplots(3, 1, figsize=(6, 5))
 # Originally ax[2] -> now ax[0]
-ax[0].plot(np.linspace(0, len(yi)*dt, len(yi)), yi) # y plot
+ax[0].plot(np.linspace(0, len(yi)*dt, len(yi)), yi, label='ysim') # y plot
 ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), #input
-           peakratioyi*np.linspace(0, len(Iext)*dt, len(Iext))+byi,
-# =============================================================================
-#            yiline, #output
-# =============================================================================
-           color='r',
+           # peakratioyi*np.linspace(0, len(Iext)*dt, len(Iext))+byi,
+            yiline, #output
+           color='r', # Red line <----------------
            label='y=f(0.05f(1-r)+2)t/9+1, y={} x + {}'.format(
                np.around(peakratioyi,2), np.around(byi,2)))
-ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), 
-           sfreq*(0.05*sfreq*(1-r)+2)/9*np.linspace(0,1,len(Iext))+1, 
-           color='k',
-           label='{}t + {}'.format(np.around(peakratioyi,2), 
-                                            np.around(byi,2)))
+# =============================================================================
+# ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), 
+#            # sfreq*(0.05*sfreq*(1-r)+r)/9*np.linspace(0,9/sfreq,len(Iext))+1, 
+#            slope*np.linspace(0, len(Iext)*dt, len(Iext))+const,
+#            color='k',
+#            label='{}t + {}'.format(np.around(slope,2), 
+#                                             np.around(const,2)))
+# =============================================================================
 ax[0].tick_params(axis='both', labelsize=fs)
 ax[0].set_ylabel('y input\nfor spikes', fontsize=fs)
 ax[0].set_xticks([])
@@ -1389,9 +1396,8 @@ ax[2].scatter(aps, vth[dnum]*np.ones(len(aps)), color='r', s=200, marker='x', zo
 ax[2].plot([], [], ' ', label='Output = {} Hz, #APs={}'.format(np.around(1/tmeantest), naps))
 ax[2].legend(loc='upper left', handlelength=1, fontsize=fs-3)
 ax[2].set_ylim([-67, -26])
-ax[2].text(0.225, -35, 'AP', fontsize=fs)
+# ax[2].text(0.225, -35, 'AP', fontsize=fs)
 ax[2].set_xlabel('Time (sec)', fontsize=fs)
-
 
 plt.show()
 
@@ -1403,13 +1409,16 @@ plt.show()
 # =============================================================================
 
 # Fix fin plot
+sfreq=50
 rlist=np.linspace(0,1,100)
 tlist=[]
+rateslist=[]
 napslist=[]
 for i,r in enumerate(rlist):
     print(i, len(rlist))
-    Iext, _, _, _ = getiext(sfreq, y0, taui, tauy, kiy, dt,r)
-    _, tmean, naps, _ =gettmean(r, Iext, g, vb, dnum, C, Cr)
+    Iext, _, _, _, runtime = getiext(sfreq, taui, tauy, kiy, dt, r)
+    _, tmean, naps, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
+    rateslist.append(naps/runtime/dt)
     tlist.append(tmean)
     napslist.append(naps)
 foutlist=1/np.array(tlist)
@@ -1418,6 +1427,18 @@ fs=15
 plt.plot(rlist, foutlist)
 plt.xlabel('Percentage of fast SOM synapses', fontsize=fs)
 plt.ylabel('Output frequency (Hz)', fontsize=fs)
+# =============================================================================
+# plt.ylim([0, np.max(foutlist)])
+# =============================================================================
+plt.plot([], [], ' ', label='Input frequency = {} Hz'.format(sfreq))
+plt.legend(fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+fs=15
+plt.plot(rlist, rateslist)
+plt.xlabel('Percentage of fast SOM synapses', fontsize=fs)
+plt.ylabel('Output rates (Hz)', fontsize=fs)
 # =============================================================================
 # plt.ylim([0, np.max(foutlist)])
 # =============================================================================
