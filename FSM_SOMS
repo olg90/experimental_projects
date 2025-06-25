@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from scipy.signal import find_peaks
 
-dtype=1
+dtype=0
 if dtype==0:
     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
 if dtype == 1:
@@ -1091,19 +1091,67 @@ def fit_line(times, points):
     m, b = np.polyfit(times, points, 1)
     return m, b
 
-def getiext(sfreq, y0, taui, tauy, kiy, dt, r):
+def getiext2(sfreq, taui, tauy, kiy, dt, r):
     
-    pretimes = [int(i/sfreq/dt) for i in range(1, 12)]
-    presizes = y0*np.linspace(1, sfreq*(1-r)*0.05+2, len(pretimes))
+    pretimes = [int(i/sfreq/dt) for i in range(0,10)]
     
+    extra=100
+    runtime = pretimes[-1]+extra
+    
+    a=1000
+    b=2
+    sfreq=1
+    Tmax=9/sfreq
+    slope=sfreq*(1-r)*a+b
+    const=1
+    yline=slope*np.linspace(0, Tmax*dt, runtime)+const
+    # plt.plot(yline)
+    
+    
+    Iext = np.zeros(runtime)
+    y = np.zeros(runtime)
+    # Time evolution
+    for i in range(0, runtime):
+        if i in pretimes:
+            y[i-1] = yline[i]  # reset just before update
+
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy * dt
+
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext * dt
+
+# =============================================================================
+#     Iext = 1*np.ones(int(1/dt))
+# =============================================================================
+    return Iext, y, yline
+
+sfreq=100
+Iext,y,yline = getiext2(sfreq, taui, tauy, 10, dt, 1)
+
+fig,ax=plt.subplots(2,1)
+ax[0].plot(Iext)
+ax[1].plot(y)
+ax[1].plot(yline)
+plt.show()
+
+#%%
+
+
+def getiext(sfreq, taui, tauy, kiy, dt, r):
+    
+    pretimes = [int(i/sfreq/dt) for i in range(0,10)]
+    presizes = np.linspace(1, sfreq*(1-r)*0.05+2, len(pretimes))
+
     m,b=fit_line(pretimes, presizes)
 
-    runtime = pretimes[-1]
+    extra=100
+    runtime = pretimes[-1]+extra
     Iext = np.zeros(runtime)
     y = np.zeros(runtime)
     # Time evolution
     j=0
-    for i in range(1, pretimes[-1]):
+    for i in range(0, runtime):
         if i in pretimes:
             y[i-1] = presizes[j]  # reset just before update
             j+=1
@@ -1192,15 +1240,17 @@ gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
 vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
 
 # Parameters
-sfreq = 40 # Hz
-y0 = 500
+sfreq = 1 # Hz
 taui = 0.001
 tauy = 0.0025
-kiy = 1
+kiy = 500
 
 # =============================================================================
 # r=1
-# Iext = getiext(sfreq, y0, taui, tauy, kiy, dt,r)
+# Iext, ytest, mtest, btest = getiext(sfreq, taui, tauy, kiy, dt,r)
+# plt.plot(ytest)
+# plt.plot(np.linspace(0, len(Iext), len(Iext))*mtest+btest)
+# #%%
 # =============================================================================
 
 # =============================================================================
@@ -1232,43 +1282,48 @@ kiy = 1
 # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
-dnum= 10 # <----------------------------------- neuron number
-dsize= 'z' # f full, z zoomed
-dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
-dlens=[4000,12000]
-if dsize=='f':
-    I=data[:, dnum]
-if dsize=='z':
-    I=data[:, dnum][:dlens[dsnum]]
-# Processing the data
-I = 25*I
-from scipy.signal import find_peaks
-peaks, _ = find_peaks(I)
-peakvals=I[peaks]
-peakratio=(peakvals[-1]-peakvals[0])/(peaks[-1]-peaks[0])/dt
-maxmin=peakvals[-1]/peakvals[0]
-print(peakratio)
-print(maxmin)
-plt.plot(np.linspace(0,len(I)*dt,len(I)),I, label='data')
-plt.title('{}'.format(names[dnum]), fontsize=fs)
 # =============================================================================
-# plt.plot(Iext, label='Iext')
+#
+## Get the real current data slope
+#
+# dnum= 10 # <----------------------------------- neuron number
+# dsize= 'z' # f full, z zoomed
+# dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
+# dlens=[4000,12000]
+# if dsize=='f':
+#     I=data[:, dnum]
+# if dsize=='z':
+#     I=data[:, dnum][:dlens[dsnum]]
+# # Processing the data
+# I = 25*I
+# from scipy.signal import find_peaks
+# peaks, _ = find_peaks(I)
+# peakvals=I[peaks]
+# peakratio=(peakvals[-1]-peakvals[0])/(peaks[-1]-peaks[0])/dt
+# maxmin=peakvals[-1]/peakvals[0]
+# print(peakratio)
+# print(maxmin)
+# plt.plot(np.linspace(0,len(I)*dt,len(I)),I, label='data')
+# plt.title('{}'.format(names[dnum]), fontsize=fs)
+# # =============================================================================
+# # plt.plot(Iext, label='Iext')
+# # =============================================================================
+# b=(peakvals[-1]*peaks[0]-peakvals[0]*peaks[-1])/(peaks[0]-peaks[-1])
+# y=peakratio*np.linspace(0,10000*dt, 10000)+b
+# plt.plot(np.linspace(0,len(y)*dt,len(y)),y, label='y={}x+{}'.format(np.around(peakratio,2), np.around(b,2)))
+# # =============================================================================
+# # plt.text(200, peakvals[3], 'y={}x+{}'.format(np.around(peakratio,2), np.around(b,2)))
+# # plt.text(200, peakvals[-4], 'max peak / min peak = {}'.format(np.around(maxmin,3)))
+# # =============================================================================
+# plt.plot([],[], ' ', label=' peak max/min = {}'.format(np.around(maxmin,3) ))
+# plt.xlabel('Time (sec)', fontsize=fs)
+# plt.ylabel('Current', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.legend(fontsize=fs-4, loc='upper left')
+# plt.show()
+# #%%
+# 
 # =============================================================================
-b=(peakvals[-1]*peaks[0]-peakvals[0]*peaks[-1])/(peaks[0]-peaks[-1])
-y=peakratio*np.linspace(0,10000*dt, 10000)+b
-plt.plot(np.linspace(0,len(y)*dt,len(y)),y, label='y={}x+{}'.format(np.around(peakratio,2), np.around(b,2)))
-# =============================================================================
-# plt.text(200, peakvals[3], 'y={}x+{}'.format(np.around(peakratio,2), np.around(b,2)))
-# plt.text(200, peakvals[-4], 'max peak / min peak = {}'.format(np.around(maxmin,3)))
-# =============================================================================
-plt.plot([],[], ' ', label=' peak max/min = {}'.format(np.around(maxmin,3) ))
-plt.xlabel('Time (sec)', fontsize=fs)
-plt.ylabel('Current', fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
-plt.legend(fontsize=fs-4, loc='upper left')
-plt.show()
-#%%
-
 def getline(Iext):
     peaks, _ = find_peaks(Iext)
     peakvals=Iext[peaks]
@@ -1280,52 +1335,66 @@ def getline(Iext):
     y=peakratio*np.linspace(0,len(Iext)*dt, len(Iext))+b
     return y, peakratio, b
 
-
 # Plot
 fs=15
-r=0
-sfreq=40
-Iext, yi, mi, bi = getiext(sfreq, y0, taui, tauy, kiy, dt,r)
-y, peakratioy, by =getline(Iext)
+r=1
+sfreq=10
+Iext, yi, mi, bi = getiext(sfreq, taui, tauy, kiy, dt,r)
+y, peakratioy, by = getline(Iext)
+
 yiline, peakratioyi, byi=getline(yi)
 
 v, tmeantest, naps, aps = gettmean(r, Iext, g, vb, dnum, C, Cr)
-fig, ax = plt.subplots(3,1, figsize=(6,5))
-ax[0].plot(np.linspace(0,len(Iext)*dt, len(Iext)), Iext, color='orange', 
-           label='current: 10 injections @ {} Hz, r={}'.format(
-               sfreq,r))
-ax[0].set_xticks([])
-ax[0].set_ylabel('Input\ncurrent', fontsize=fs)
+
+fig, ax = plt.subplots(3, 1, figsize=(6, 5))
+# Originally ax[2] -> now ax[0]
+ax[0].plot(np.linspace(0, len(yi)*dt, len(yi)), yi) # y plot
+ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), #input
+           peakratioyi*np.linspace(0, len(Iext)*dt, len(Iext))+byi,
+# =============================================================================
+#            yiline, #output
+# =============================================================================
+           color='r',
+           label='y=f(0.05f(1-r)+2)t/9+1, y={} x + {}'.format(
+               np.around(peakratioyi,2), np.around(byi,2)))
+ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), 
+           sfreq*(0.05*sfreq*(1-r)+2)/9*np.linspace(0,1,len(Iext))+1, 
+           color='k',
+           label='{}t + {}'.format(np.around(peakratioyi,2), 
+                                            np.around(byi,2)))
 ax[0].tick_params(axis='both', labelsize=fs)
-ax[0].plot(np.linspace(0,len(y)*dt,len(y)),y, 
-           label='y={}t+{}'.format(np.around(peakratio,2), np.around(b,2)), 
-           color='g')
-ax[0].legend(loc='upper left', fontsize=fs-3)
+ax[0].set_ylabel('y input\nfor spikes', fontsize=fs)
+ax[0].set_xticks([])
+ax[0].legend(fontsize=fs-3, loc='upper left')
 
-
-ax[1].plot(np.linspace(0,len(Iext)*dt, len(Iext)), v)
-ax[1].set_xlabel('Time (sec)', fontsize=fs)
-ax[1].set_ylabel('Membrane\npotential', fontsize=fs)
+# Originally ax[0] -> now ax[1]
+ax[1].plot(np.linspace(0, len(Iext)*dt, len(Iext)), Iext, color='orange', 
+           label='current: 10 injections @ {} Hz, r={}'.format(sfreq, r))
+ax[1].set_xticks([])
+ax[1].set_ylabel('Input\ncurrent', fontsize=fs)
 ax[1].tick_params(axis='both', labelsize=fs)
-ax[1].plot(np.linspace(0,len(Iext)*dt, len(Iext)),vth[dnum]*np.ones(len(Iext)), 
-           color='k')
-ax[1].scatter(aps, vth[dnum]*np.ones(len(aps)), color='r', s=200, marker='x',
-            zorder=2)
-ax[1].plot([],[],' ', label='Output = {} Hz, #APs={}'.format(np.around(1/tmeantest), 
-    naps))
-ax[1].legend(loc='upper left',  handlelength=1, fontsize=fs-3)
-ax[1].set_ylim([-67, -26])
-ax[1].text(0.225, -35, 'AP', fontsize=fs)
+ax[1].plot(np.linspace(0, len(y)*dt, len(y)), y, 
+           label='y={}t+{}'.format(np.around(peakratioy, 2), np.around(by, 2)), 
+           color='g')
+ax[1].legend(loc='upper left', fontsize=fs-3)
 
-
-ax[2].plot(np.linspace(0,len(y)*dt,len(y)),yi) 
-#np.linspace(1, sfreq*(1-r)*0.05+2, len(pretimes))
-ax[2].plot(np.linspace(0, len(Iext)*dt, len(Iext)),
-           yiline, color='r',
-           label='y=(0.05f(1-r)+2)t')
+# Originally ax[1] -> now ax[2]
+ax[2].plot(np.linspace(0, len(Iext)*dt, len(Iext)), v)
+ax[2].set_xlabel('Time (sec)', fontsize=fs)
+ax[2].set_ylabel('Membrane\npotential', fontsize=fs)
 ax[2].tick_params(axis='both', labelsize=fs)
-ax[2].legend()
+ax[2].plot(np.linspace(0, len(Iext)*dt, len(Iext)), vth[dnum]*np.ones(len(Iext)), 
+           color='k')
+ax[2].scatter(aps, vth[dnum]*np.ones(len(aps)), color='r', s=200, marker='x', zorder=2)
+ax[2].plot([], [], ' ', label='Output = {} Hz, #APs={}'.format(np.around(1/tmeantest), naps))
+ax[2].legend(loc='upper left', handlelength=1, fontsize=fs-3)
+ax[2].set_ylim([-67, -26])
+ax[2].text(0.225, -35, 'AP', fontsize=fs)
+ax[2].set_xlabel('Time (sec)', fontsize=fs)
+
+
 plt.show()
+
 #%%
 
 # =============================================================================
