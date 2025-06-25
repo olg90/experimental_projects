@@ -1,4 +1,4 @@
-]#%% First method
+#%% First method
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -1155,6 +1155,39 @@ def getiext(sfreq, taui, tauy, kiy, dt, r):
 #     return Iext, y, yline, slope, const
 # 
 # =============================================================================
+
+def getiext3(sfreq, taui, tauy, dt, r):
+    
+    pretimes = [int(i/sfreq/dt) for i in range(0,10)]
+    extra=100
+    runtime = pretimes[-1]+extra
+    
+    a=2000
+    b=1
+    Tmax=9/sfreq
+    slope=a*sfreq*(1-r)+b*sfreq*r
+    const=1
+    presizes=slope*np.linspace(0, Tmax*dt, runtime)+const
+
+
+    Iext = np.zeros(runtime)
+    # Time evolution
+    j=0
+    for i in range(0, runtime):
+        if i in pretimes:
+            print(presizes[i])
+            Iext[i] = presizes[i]  # reset just before update
+            j+=1
+        dIext = -Iext[i-1] / taui 
+        Iext[i] = Iext[i-1] + dIext * dt
+    return Iext, runtime, presizes
+
+Iext, runtime, presizes = getiext3(sfreq, taui, tauy, dt, r)
+
+plt.plot(Iext)
+plt.plot(presizes)
+
+#%%
 # =============================================================================
 # sfreq = 100 # Hz
 # taui = 0.001
@@ -1341,7 +1374,7 @@ def getline(Iext):
     return y, peakratio, b
 
 # Plot
-r=1
+r=0
 sfreq=40
 Iext, yi, mi, bi, runtime = getiext(sfreq, taui, tauy, kiy, dt,r)
 # Iext, yi, yiline, slope, const = getiext2(sfreq, taui, tauy, kiy, dt, r)
@@ -1401,6 +1434,7 @@ ax[2].set_xlabel('Time (sec)', fontsize=fs)
 
 plt.show()
 
+
 #%%
 
 # =============================================================================
@@ -1409,7 +1443,7 @@ plt.show()
 # =============================================================================
 
 # Fix fin plot
-sfreq=50
+sfreq=100
 rlist=np.linspace(0,1,100)
 tlist=[]
 rateslist=[]
@@ -1435,17 +1469,19 @@ plt.legend(fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.show()
 
-fs=15
-plt.plot(rlist, rateslist)
-plt.xlabel('Percentage of fast SOM synapses', fontsize=fs)
-plt.ylabel('Output rates (Hz)', fontsize=fs)
 # =============================================================================
-# plt.ylim([0, np.max(foutlist)])
+# fs=15
+# plt.plot(rlist, rateslist)
+# plt.xlabel('Percentage of fast SOM synapses', fontsize=fs)
+# plt.ylabel('Output rates (Hz)', fontsize=fs)
+# # =============================================================================
+# # plt.ylim([0, np.max(foutlist)])
+# # =============================================================================
+# plt.plot([], [], ' ', label='Input frequency = {} Hz'.format(sfreq))
+# plt.legend(fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.show()
 # =============================================================================
-plt.plot([], [], ' ', label='Input frequency = {} Hz'.format(sfreq))
-plt.legend(fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
-plt.show()
 
 #naps
 fs=15
