@@ -1449,7 +1449,7 @@ fig, ax = plt.subplots(2, 1, figsize=(6, 5))
 
 tarr=np.linspace(0, runtime*dt, runtime)
 ax[0].plot(tarr, Iext) 
-ax[0].plot(tarr, presizes, label='presizes')
+ax[0].plot(tarr, presizes, label='(a*f(1-r)+b*f*r)t+c')
 ax[0].plot(tarr, slope*np.linspace(0,runtime*dt, len(Iext))+const, label='{}*t + {}'.format(slope, const))  # same as above
 ax[0].tick_params(axis='both', labelsize=fs)
 ax[0].set_ylabel('Current', fontsize=fs)
