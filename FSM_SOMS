@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from scipy.signal import find_peaks
 
-dtype=1
+dtype=0
 if dtype==0:
     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
 if dtype == 1:
@@ -1091,9 +1091,6 @@ def fit_line(times, points):
     m, b = np.polyfit(times, points, 1)
     return m, b
 
-
-
-
 def getiext(sfreq, taui, tauy, kiy, dt, r):
     
     pretimes = [int(i/sfreq/dt) for i in range(0,10)]
@@ -1163,26 +1160,30 @@ def getiext3(sfreq, taui, tauy, dt, r):
     runtime = pretimes[-1]+extra
     
     a=2000
-    b=1
+    b=500
     Tmax=9/sfreq
     slope=a*sfreq*(1-r)+b*sfreq*r
     const=1
     presizes=slope*np.linspace(0, Tmax*dt, runtime)+const
 
-
     Iext = np.zeros(runtime)
     # Time evolution
     j=0
     for i in range(0, runtime):
+        dIext = -Iext[i-1] / taui 
+        Iext[i] = Iext[i-1] + dIext * dt
         if i in pretimes:
             print(presizes[i])
             Iext[i] = presizes[i]  # reset just before update
             j+=1
-        dIext = -Iext[i-1] / taui 
-        Iext[i] = Iext[i-1] + dIext * dt
-    return Iext, runtime, presizes
+    return Iext, runtime, presizes, slope, const, 
 
-Iext, runtime, presizes = getiext3(sfreq, taui, tauy, dt, r)
+sfreq = 40 # Hz
+taui = 0.001
+tauy = 0.0025
+r=1
+
+Iext, runtime, presizes, slope, const = getiext3(sfreq, taui, tauy, dt, r)
 
 plt.plot(Iext)
 plt.plot(presizes)
@@ -1312,7 +1313,6 @@ kiy = 500
 #         return np.concatenate((np.zeros(n, dtype=arr.dtype), arr[:-n]))
 # =============================================================================
     
-
 # =============================================================================
 # plt.plot(Iext)
 # #%%
@@ -1376,8 +1376,9 @@ def getline(Iext):
 # Plot
 r=0
 sfreq=40
-Iext, yi, mi, bi, runtime = getiext(sfreq, taui, tauy, kiy, dt,r)
+# Iext, yi, mi, bi, runtime = getiext(sfreq, taui, tauy, kiy, dt,r)
 # Iext, yi, yiline, slope, const = getiext2(sfreq, taui, tauy, kiy, dt, r)
+Iext, runtime, presizes, slope, const = getiext3(sfreq, taui, tauy, dt, r)
 y, peakratioy, by = getline(Iext)
 
 yiline, peakratioyi, byi=getline(yi)
@@ -1385,12 +1386,23 @@ yiline, peakratioyi, byi=getline(yi)
 v, tmeantest, naps, aps = gettmean(r, Iext, g, vb, dnum, C, Cr)
 
 fs=15
-fig, ax = plt.subplots(3, 1, figsize=(6, 5))
+fig, ax = plt.subplots(2, 1, figsize=(6, 5))
+
+tarr=np.linspace(0, len(Iext)*dt, len(Iext))
+ax[0].plot(tarr, Iext)
+ax[0].tick_params(axis='both', labelsize=fs)
+ax[0].set_ylabel('y input\nfor spikes', fontsize=fs)
+ax[0].set_xticks([])
+ax[0].legend(fontsize=fs-3, loc='upper left')
+
+ax[1].plot(tarr, v)
+#%%
+ax[0].plot()
 # Originally ax[2] -> now ax[0]
-ax[0].plot(np.linspace(0, len(yi)*dt, len(yi)), yi, label='ysim') # y plot
-ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), #input
-           # peakratioyi*np.linspace(0, len(Iext)*dt, len(Iext))+byi,
-            yiline, #output
+ax[0].plot(tarr, yi, label='ysim') # y plot
+ax[1].plot(np.linspace(0, len(Iext)*dt, len(Iext)), #input
+            slope*np.linspace(0, len(Iext)*dt, len(Iext))+const,
+            # yiline, #output
            color='r', # Red line <----------------
            label='y=f(0.05f(1-r)+2)t/9+1, y={} x + {}'.format(
                np.around(peakratioyi,2), np.around(byi,2)))
