@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from scipy.signal import find_peaks
 
-dtype=0
+dtype=1
 if dtype==0:
     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
 if dtype == 1:
@@ -1094,6 +1094,7 @@ def fit_line(times, points):
 def getiext(sfreq, taui, tauy, kiy, dt, r):
     
     pretimes = [int(i/sfreq/dt) for i in range(0,10)]
+    # presizes = np.linspace(1, sfreq*(1-r)*0.05+sfreq*r*0.01+2, len(pretimes))
     presizes = np.linspace(1, sfreq*(1-r)*0.05+2, len(pretimes))
 
     m,b=fit_line(pretimes, presizes)
@@ -1115,6 +1116,7 @@ def getiext(sfreq, taui, tauy, kiy, dt, r):
         dIext = -Iext[i-1] / taui + kiy * y[i-1]
         Iext[i] = Iext[i-1] + dIext * dt
     return Iext, y, m, b, runtime
+
 
 # =============================================================================
 # def getiext2(sfreq, taui, tauy, kiy, dt, r):
@@ -1158,13 +1160,12 @@ def getiext3(sfreq, taui, tauy, dt, r):
     pretimes = [int(i/sfreq/dt) for i in range(0,10)]
     extra=100
     runtime = pretimes[-1]+extra
-    
-    a=2000
-    b=500
-    Tmax=9/sfreq
+
+    a=0.3
+    b=0.2
     slope=a*sfreq*(1-r)+b*sfreq*r
     const=1
-    presizes=slope*np.linspace(0, Tmax*dt, runtime)+const
+    presizes=slope*np.linspace(0, runtime*dt, runtime)+const
 
     Iext = np.zeros(runtime)
     # Time evolution
@@ -1176,12 +1177,7 @@ def getiext3(sfreq, taui, tauy, dt, r):
             print(presizes[i])
             Iext[i] = presizes[i]  # reset just before update
             j+=1
-    return Iext, runtime, presizes, slope, const, 
-
-sfreq = 40 # Hz
-taui = 0.001
-tauy = 0.0025
-r=1
+    return Iext, runtime, presizes, slope, const
 
 Iext, runtime, presizes, slope, const = getiext3(sfreq, taui, tauy, dt, r)
 
@@ -1313,6 +1309,7 @@ kiy = 500
 #         return np.concatenate((np.zeros(n, dtype=arr.dtype), arr[:-n]))
 # =============================================================================
     
+
 # =============================================================================
 # plt.plot(Iext)
 # #%%
@@ -1374,11 +1371,10 @@ def getline(Iext):
     return y, peakratio, b
 
 # Plot
-r=0
+r=1
 sfreq=40
-# Iext, yi, mi, bi, runtime = getiext(sfreq, taui, tauy, kiy, dt,r)
+Iext, yi, mi, bi, runtime = getiext(sfreq, taui, tauy, kiy, dt,r)
 # Iext, yi, yiline, slope, const = getiext2(sfreq, taui, tauy, kiy, dt, r)
-Iext, runtime, presizes, slope, const = getiext3(sfreq, taui, tauy, dt, r)
 y, peakratioy, by = getline(Iext)
 
 yiline, peakratioyi, byi=getline(yi)
@@ -1386,25 +1382,14 @@ yiline, peakratioyi, byi=getline(yi)
 v, tmeantest, naps, aps = gettmean(r, Iext, g, vb, dnum, C, Cr)
 
 fs=15
-fig, ax = plt.subplots(2, 1, figsize=(6, 5))
-
-tarr=np.linspace(0, len(Iext)*dt, len(Iext))
-ax[0].plot(tarr, Iext)
-ax[0].tick_params(axis='both', labelsize=fs)
-ax[0].set_ylabel('y input\nfor spikes', fontsize=fs)
-ax[0].set_xticks([])
-ax[0].legend(fontsize=fs-3, loc='upper left')
-
-ax[1].plot(tarr, v)
-#%%
-ax[0].plot()
+fig, ax = plt.subplots(3, 1, figsize=(6, 5))
 # Originally ax[2] -> now ax[0]
-ax[0].plot(tarr, yi, label='ysim') # y plot
-ax[1].plot(np.linspace(0, len(Iext)*dt, len(Iext)), #input
-            slope*np.linspace(0, len(Iext)*dt, len(Iext))+const,
+ax[0].plot(np.linspace(0, len(yi)*dt, len(yi)), yi, label='ysim') # y plot
+ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), #input
+            peakratioyi*np.linspace(0, len(Iext)*dt, len(Iext))+byi,
             # yiline, #output
            color='r', # Red line <----------------
-           label='y=f(0.05f(1-r)+2)t/9+1, y={} x + {}'.format(
+           label='y=0.05f(1-r)+0.01*f*r+2, y={} x + {}'.format(
                np.around(peakratioyi,2), np.around(byi,2)))
 # =============================================================================
 # ax[0].plot(np.linspace(0, len(Iext)*dt, len(Iext)), 
@@ -1415,7 +1400,7 @@ ax[1].plot(np.linspace(0, len(Iext)*dt, len(Iext)), #input
 #                                             np.around(const,2)))
 # =============================================================================
 ax[0].tick_params(axis='both', labelsize=fs)
-ax[0].set_ylabel('y input\nfor spikes', fontsize=fs)
+ax[0].set_ylabel('Input for\nspikes', fontsize=fs)
 ax[0].set_xticks([])
 ax[0].legend(fontsize=fs-3, loc='upper left')
 
@@ -1446,6 +1431,43 @@ ax[2].set_xlabel('Time (sec)', fontsize=fs)
 
 plt.show()
 
+#%% current directly
+# Parameters
+sfreq = 40 # Hz
+taui = 0.001
+tauy = 0.0025
+# Plot
+r=0
+sfreq=40
+# Iext, yi, mi, bi, runtime = getiext(sfreq, taui, tauy, kiy, dt,r)
+# Iext, yi, yiline, slope, const = getiext2(sfreq, taui, tauy, kiy, dt, r)
+Iext, runtime, presizes, slope, const = getiext3(sfreq, taui, tauy, dt, r)
+v, tmeantest, naps, aps = gettmean(r, Iext, g, vb, dnum, C, Cr)
+
+fs=15
+fig, ax = plt.subplots(2, 1, figsize=(6, 5))
+
+tarr=np.linspace(0, runtime*dt, runtime)
+ax[0].plot(tarr, Iext) 
+ax[0].plot(tarr, presizes, label='presizes')
+ax[0].plot(tarr, slope*np.linspace(0,runtime*dt, len(Iext))+const, label='{}*t + {}'.format(slope, const))  # same as above
+ax[0].tick_params(axis='both', labelsize=fs)
+ax[0].set_ylabel('Current', fontsize=fs)
+# ax[0].set_xticks([])
+ax[0].legend(fontsize=fs-3, loc='upper left')
+
+ax[1].plot(tarr, v)
+ax[1].set_xlabel('Time (sec)', fontsize=fs)
+ax[1].set_ylabel('Membrane\npotential (mV)', fontsize=fs)
+ax[1].tick_params(axis='both', labelsize=fs)
+ax[1].plot(np.linspace(0, len(Iext)*dt, len(Iext)), vth[dnum]*np.ones(len(Iext)), 
+           color='k')
+ax[1].scatter(aps, vth[dnum]*np.ones(len(aps)), color='r', s=200, marker='x', zorder=2)
+ax[1].plot([], [], ' ', label='Output = {} Hz, #APs={}'.format(np.around(1/tmeantest), naps))
+ax[1].legend(loc='upper left', handlelength=1, fontsize=fs-3)
+ax[1].set_ylim([-67, -26])
+# ax[2].text(0.225, -35, 'AP', fontsize=fs)
+ax[1].set_xlabel('Time (sec)', fontsize=fs)
 
 #%%
 
@@ -1455,7 +1477,7 @@ plt.show()
 # =============================================================================
 
 # Fix fin plot
-sfreq=100
+sfreq=40
 rlist=np.linspace(0,1,100)
 tlist=[]
 rateslist=[]
@@ -1463,6 +1485,7 @@ napslist=[]
 for i,r in enumerate(rlist):
     print(i, len(rlist))
     Iext, _, _, _, runtime = getiext(sfreq, taui, tauy, kiy, dt, r)
+    # Iext, runtime, presizes, slope, const = getiext3(sfreq, taui, tauy, dt, r)
     _, tmean, naps, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
     rateslist.append(naps/runtime/dt)
     tlist.append(tmean)
