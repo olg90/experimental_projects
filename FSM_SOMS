@@ -1358,38 +1358,49 @@ Iext, y, runtime, slope, presizes = getiext(f, taui, tauy, kiy, dt,r, a1, b1, c1
 # Iext, y, m, b, runtime = getiext3(f, taui, tauy, dt, r, a, b)
 
 plt.plot(np.linspace(0,len(y), len(y)), y)
+#%% Integration current check
+
+# Parameters
+f = 40 # Hz
+taui = 0.001
+tauy = 0.0025   
+kiy = 500
+r=0
+
+a=0.6
+b=0.05
+
+a1=0.13
+b1=0.01
+c1=2
+
+fs=15
+
+Iext, yi, mi, bi, runtime = getiext(f, taui, tauy, kiy, dt,r, a1, b1, c1)
+Iext3, y, m, b, runtime = getiext3(f, taui, tauy, dt, r, a, b)
+tdata=np.linspace(0, len(Iext)*dt, len(Iext))
+plt.plot(tdata, Iext3, label='Spikes')
+plt.plot(tdata, Iext, label='Realistic')
+
+plt.tick_params(axis='both', labelsize=fs)
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Current', fontsize=fs)
+plt.plot([], [], ' ', label='Input frequency = {}'.format(f))
+plt.legend(loc='upper left', fontsize=fs)
+
+plt.figure()
+i1=np.cumsum(Iext)
+i3=np.cumsum(Iext3)
+plt.plot(tdata, i1, label='Realistic')
+plt.plot(tdata, i3, label='Spikes')
+plt.legend(loc='upper left', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Charge (Integral of current)', fontsize=fs)
+plt.plot([], [], ' ', label='Input frequency = {}'.format(f))
+plt.legend(fontsize=fs)
+
 #%%
-# =============================================================================
-# #%% Integration current check
-# 
-# # Parameters
-# f = 20 # Hz
-# taui = 0.001
-# tauy = 0.0025
-# kiy = 500
-# r=1
-# 
-# a=0.3
-# b=0.1
-# 
-# a1=0.05
-# b1=0.001
-# c1=2
-# 
-# Iext, yi, mi, bi, runtime = getiext(f, taui, tauy, kiy, dt,r, a1, b1, c1)
-# Iext3, y, m, b, runtime = getiext3(f, taui, tauy, dt, r, a, b)
-# plt.plot(Iext)
-# plt.plot(Iext3)
-# 
-# plt.figure()
-# i1=np.cumsum(Iext)
-# i3=np.cumsum(Iext3)
-# plt.plot(i1, label='1')
-# plt.plot(i3, label='3')
-# plt.legend()
-# 
-# #%%
-# =============================================================================
 
 
 v, tmeantest, naps, aps = gettmean(r, Iext, g, vb, dnum, C, Cr)
@@ -1503,22 +1514,6 @@ ax[1].set_xlabel('Time (sec)', fontsize=fs)
 # #%%
 # =============================================================================
 
-def getstats(f):
-    # Fix fin plot
-    rlist=np.linspace(0,1,100)
-    tlist=[]
-    rateslist=[]
-    napslist=[]
-    for ind,r in enumerate(rlist):
-        print(ind, len(rlist))
-        # Iext, _, _, _, runtime = getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1)
-        Iext, runtime, presizes, slope, const = getiext3(f, taui, tauy, dt, r, a, b)
-        _, tmean, naps, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
-        rateslist.append(naps/runtime/dt)
-        tlist.append(tmean)
-        napslist.append(naps)
-    foutlist=1/np.array(tlist)
-    return rlist, foutlist, napslist
 a=2
 b=0.1
 f=5
@@ -1531,12 +1526,37 @@ rlist, foutlist, napslist = getstats(f)
 plt.plot(rlist, napslist)
 #%% Get the AP numbers
 
-a1=0.2
-b1=0.03
+
+def getstats(f):
+    # Fix fin plot
+    rlist=np.linspace(0,1,100)
+    tlist=[]
+    rateslist=[]
+    napslist=[]
+    for ind,r in enumerate(rlist):
+        print(ind, len(rlist))
+        Iext, _, _, _, runtime = getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1)
+        # Iext, runtime, presizes, slope, const = getiext3(f, taui, tauy, dt, r, a, b)
+        _, tmean, naps, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
+        rateslist.append(naps/runtime/dt)
+        tlist.append(tmean)
+        napslist.append(naps)
+    foutlist=1/np.array(tlist)
+    return rlist, foutlist, napslist
+
+a=0.6
+b=0.05
+
+a1=0.13
+b1=0.01
 c1=2
 
-a=0.5
-b=0.2
+# a1=0.2
+# b1=0.03
+# c1=2
+
+# a=0.5
+# b=0.2
 flist=[5, 10, 20, 40]
 aps=[]
 for ind, f in enumerate(flist):
@@ -1556,6 +1576,8 @@ plt.ylabel('# of APs', fontsize=fs)
 # plt.plot([], [], ' ', label='Input frequency = {} Hz'.format(f))
 plt.legend(fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
+plt.title('Realistic injection', fontsize=fs)
+# plt.title('Spike injection', fontsize=fs)
 plt.show()
 
     
@@ -1626,3 +1648,54 @@ plt.show()
 # plt.ylabel('Output frequency (Hz)')
 # plt.show()
 # =============================================================================
+
+#%%
+from scipy.signal import find_peaks
+
+fig, ax = plt.subplots(3, 3, figsize=(12, 9))
+
+sfreq = 40
+dlens = [4000, 12000]
+dt = 1 / 10000  # 10 kHz sampling rate
+
+for idx, dnum in enumerate(range(6, 12)):
+    dsize = 'z'  # zoomed
+    dsnum = 1 if dnum in [0, 2, 4, 6, 8, 10] else 0
+    
+    if dsize == 'z':
+        I = data[:, dnum][:dlens[dsnum]]
+    
+    I = 25 * I
+
+    peaks, _ = find_peaks(I)
+    if len(peaks) >= 2:
+        peakvals = I[peaks]
+        ratio = peakvals[-1] / peakvals[0]
+
+        # Fit line between first and last peak (convert x to time)
+        t_first, t_last = peaks[0] * dt, peaks[-1] * dt
+        y_first, y_last = peakvals[0], peakvals[-1]
+        slope = (y_last - y_first) / (t_last - t_first)
+        intercept = y_first - slope * t_first
+        t_line = [0, len(I) * dt]
+        y_line = [slope * t_line[0] + intercept, slope * t_line[1] + intercept]
+    else:
+        ratio = float('nan')
+        slope, intercept = float('nan'), float('nan')
+        t_line, y_line = [0, len(I) * dt], [0, 0]
+
+    row, col = divmod(idx, 3)
+    t = np.arange(len(I)) * dt
+    ax[row, col].plot(t, I, label='peak max/min ratio ={:.2f}\ny={:.3f}t+{:.2f}'.format(ratio, slope, intercept))
+    ax[row, col].plot(t_line, y_line, color='r', linestyle='-')
+    ax[row, col].set_title('{}'.format(names[idx]))
+    ax[row, col].set_xlabel('Time (s)')
+    ax[row, col].set_ylabel('Current')
+    ax[row, col].legend(fontsize=9)
+
+# Hide any unused subplots in the 3x3 grid
+for j in range(idx + 1, 9):
+    fig.delaxes(ax.flatten()[j])
+
+plt.tight_layout()
+plt.show()
