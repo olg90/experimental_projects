@@ -5,6 +5,28 @@ import os
 import pandas as pd
 from scipy.signal import find_peaks
 
+def getiext(sper, runtime, y0, taui, tauy, kiy):
+
+    pretimes=[]
+    i=1
+    while sper*i<runtime:
+        pretimes.append(sper*i)
+        i+=1
+    
+    Iext = np.zeros(runtime)
+    y = np.zeros_like(Iext)
+    # Time evolution
+    for i in range(1, runtime):
+        if i in pretimes:
+            y[i-1] = y0  # reset just before update
+    
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy*dt
+    
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext*dt
+    return Iext
+
 dtype=0
 if dtype==0:
     dir1=r'C:\Users\ogamb\OneDrive\Desktop\Research\FSM_pyramidal'
@@ -481,27 +503,7 @@ taui = 0.001
 tauy = 0.0025
 kiy = 1
 
-def getiext(sper, runtime, y0, taui, tauy, kiy):
 
-    pretimes=[]
-    i=1
-    while sper*i<runtime:
-        pretimes.append(sper*i)
-        i+=1
-    
-    Iext = np.zeros(runtime)
-    y = np.zeros_like(Iext)
-    # Time evolution
-    for i in range(1, runtime):
-        if i in pretimes:
-            y[i-1] = y0  # reset just before update
-    
-        dy = -y[i-1] / tauy
-        y[i] = y[i-1] + dy*dt
-    
-        dIext = -Iext[i-1] / taui + kiy * y[i-1]
-        Iext[i] = Iext[i-1] + dIext*dt
-    return Iext
     
 Iext=getiext(sper, runtime, y0, taui, tauy, kiy)
 
@@ -1194,7 +1196,6 @@ def gettmean(r, Iext, g, vb, dnum, C, Cr):
         else:
             v[i] = v[i-1]+dvdt*dt
 
-
         if Iext[i]>Iext[i-1]:
             posttimer=False
 
@@ -1207,6 +1208,29 @@ def gettmean(r, Iext, g, vb, dnum, C, Cr):
             posttimer=True
         if aptimer==0:
             aptimer=np.inf
+# =============================================================================
+#     # Comment out
+#     fig,ax=plt.subplots(2,1)
+#     ax[0].plot(Iext)
+#     ax[1].plot(range(len(vd)), v)
+# =============================================================================
+    aptimes=np.array(apinds)*dt
+    naps=len(aptimes)
+    ssaptimes=aptimes[int(0.3*len(aptimes)):]
+    tmean = np.mean(np.diff(ssaptimes))
+    return v, tmean, naps, aptimes
+
+def gettmean2(r, Iext, g, vb, dnum, C, Cr):
+    v=np.zeros(len(Iext))
+    v[0]=vd[0]
+    apinds=[]
+    for i in range(1,len(Iext)):
+        icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+        dvdt=((-icurr+Iext[i-1]))/C[dnum]
+        v[i] = v[i-1]+dvdt*dt
+        if v[i-1]>vth[dnum]:
+            v[i]=vb[dnum] # vb[dnum]
+            apinds.append(i)
 # =============================================================================
 #     # Comment out
 #     fig,ax=plt.subplots(2,1)
@@ -1566,7 +1590,7 @@ for ind, f in enumerate(flist):
 
 #naps
 fs=15
-for i,apl in enumerate(aps):
+for i, apl in enumerate(aps):
     plt.plot(rlist, apl, label='f={}'.format(flist[i]))
 plt.xlabel('Proportion of fast synapses', fontsize=fs)
 plt.ylabel('# of APs', fontsize=fs)
@@ -1623,56 +1647,93 @@ plt.show()
 # plt.tick_params(axis='both', labelsize=fs)
 # plt.show()
 # =============================================================================
+#%% fix r plot
 
-# =============================================================================
-# # fix r plot
-# rlist2=[0, 0.25, 0.5, 0.75, 1]
-# flist=np.linspace(1,100,100)
-# foutlist=[]
-# for i,r in enumerate(rlist2):
-#     print(i, len(rlist2))
-#     tlist=[]
-#     for j, f in enumerate(flist):
-#         print(i, len(rlist2), j, len(flist))
-#         Iext=getiext(f, y0, taui, tauy, kiy, dt,r)
-#         _, tmean = gettmean(r, Iext, g, vb, dnum, C, Cr)
-#         tlist.append(tmean)
-#     fout=1/np.array(tlist)  
-#     foutlist.append(fout)
-#     
-# for i,fout in enumerate(foutlist):
-#     plt.plot(flist, fout, label='r={}'.format(np.around(rlist2[i],2)))
-#     
-# plt.legend()
-# plt.xlabel('Input frequency (Hz)')
-# plt.ylabel('Output frequency (Hz)')
-# plt.show()
-# =============================================================================
+def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
+    
+    pretimes = [int(i/f/dt) for i in range(0,10)]
+    extra=100
+    runtime = pretimes[-1]+extra
+    # presizes = np.linspace(1, f*(1-r)*0.05+f*r*0.01+2, len(pretimes))
+    # presizes = np.linspace(1, f*(1-r)*a+f*r*b+c, len(pretimes))
+    slope = f*(1-r)*a1+f*r*b1
+    presizes = slope*np.linspace(0, runtime*dt, runtime)+c1
 
-#%%
+    
+    Iext = np.zeros(runtime)
+    y = np.zeros(runtime)
+    # Time evolution
+    for i in range(0, runtime):
+        if i in pretimes:
+            y[i-1] = presizes[i]  # reset just before update
+
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy * dt
+
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext * dt
+    return Iext, y, runtime, slope, presizes
+
+a1=0.13
+b1=0.01
+c1=2
+
+taui = 0.001
+tauy = 0.0025
+kiy=500
+
+rlist2=[0, 0.25, 0.5, 0.75, 1]
+flist=np.linspace(1,100,100)
+foutlist=[]
+napslist=[]
+for i,r in enumerate(rlist2):
+    print(i, len(rlist2))
+    tlist=[]
+    napslisti=[]
+    for j, f in enumerate(flist):
+        print(i, len(rlist2), j, len(flist))
+        Iext, runtime, presizes, slope, const=getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1)
+        v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr)
+        tlist.append(tmean)
+        napslisti.append(naps)
+    fout=1/np.array(tlist)  
+    foutlist.append(fout)
+    napslist.append(napslisti)
+
+for i,fout in enumerate(foutlist):
+    plt.plot(flist, napslist[i], label='r={}'.format(np.around(rlist2[i],2)), marker='o')
+    
+plt.legend()
+plt.xlabel('Input frequency (Hz)')
+plt.ylabel('# of APs')
+plt.show()
+
+#%% Plot all 12 I traces in 2x6 grid
 from scipy.signal import find_peaks
+import matplotlib.pyplot as plt
+import numpy as np
 
-fig, ax = plt.subplots(3, 3, figsize=(12, 9))
+fig, ax = plt.subplots(2, 6, figsize=(24, 8))  # 2 rows x 6 columns
 
 sfreq = 40
 dlens = [4000, 12000]
 dt = 1 / 10000  # 10 kHz sampling rate
 
-for idx, dnum in enumerate(range(6, 12)):
+for idx, dnum in enumerate(range(12)):  # loop over 0-11
     dsize = 'z'  # zoomed
     dsnum = 1 if dnum in [0, 2, 4, 6, 8, 10] else 0
     
     if dsize == 'z':
         I = data[:, dnum][:dlens[dsnum]]
-    
+
     I = 25 * I
 
+    # Peak analysis & line fitting
     peaks, _ = find_peaks(I)
     if len(peaks) >= 2:
         peakvals = I[peaks]
         ratio = peakvals[-1] / peakvals[0]
 
-        # Fit line between first and last peak (convert x to time)
         t_first, t_last = peaks[0] * dt, peaks[-1] * dt
         y_first, y_last = peakvals[0], peakvals[-1]
         slope = (y_last - y_first) / (t_last - t_first)
@@ -1684,18 +1745,345 @@ for idx, dnum in enumerate(range(6, 12)):
         slope, intercept = float('nan'), float('nan')
         t_line, y_line = [0, len(I) * dt], [0, 0]
 
-    row, col = divmod(idx, 3)
+    # Subplot placement
+    row, col = divmod(idx, 6)
     t = np.arange(len(I)) * dt
-    ax[row, col].plot(t, I, label='peak max/min ratio ={:.2f}\ny={:.3f}t+{:.2f}'.format(ratio, slope, intercept))
+    ax[row, col].plot(t, I, label='ratio={:.2f}\ny={:.3f}t+{:.2f}'.format(ratio, slope, intercept))
     ax[row, col].plot(t_line, y_line, color='r', linestyle='-')
-    ax[row, col].set_title('{}'.format(names[idx]))
+    ax[row, col].set_title('{}'.format(names[dnum]))
     ax[row, col].set_xlabel('Time (s)')
-    ax[row, col].set_ylabel('Current')
-    ax[row, col].legend(fontsize=9)
-
-# Hide any unused subplots in the 3x3 grid
-for j in range(idx + 1, 9):
-    fig.delaxes(ax.flatten()[j])
+    ax[row, col].set_ylabel('Current (pA)')
+    ax[row, col].legend(fontsize=8)
 
 plt.tight_layout()
 plt.show()
+
+#%% 3x4
+
+from scipy.signal import find_peaks
+import matplotlib.pyplot as plt
+import numpy as np
+
+fig, ax = plt.subplots(3, 4, figsize=(18, 12))  # 3 rows x 4 columns
+
+sfreq = 40
+dlens = [4000, 12000]
+dt = 1 / 10000  # 10 kHz sampling rate
+
+for idx, dnum in enumerate(range(12)):  # loop over 0-11
+    dsize = 'z'  # zoomed
+    dsnum = 1 if dnum in [0, 2, 4, 6, 8, 10] else 0
+    
+    if dsize == 'z':
+        I = data[:, dnum][:dlens[dsnum]]
+
+    I = 25 * I
+
+    # Peak analysis & line fitting
+    peaks, _ = find_peaks(I)
+    if len(peaks) >= 2:
+        peakvals = I[peaks]
+        ratio = peakvals[-1] / peakvals[0]
+
+        t_first, t_last = peaks[0] * dt, peaks[-1] * dt
+        y_first, y_last = peakvals[0], peakvals[-1]
+        slope = (y_last - y_first) / (t_last - t_first)
+        intercept = y_first - slope * t_first
+        t_line = [0, len(I) * dt]
+        y_line = [slope * t_line[0] + intercept, slope * t_line[1] + intercept]
+    else:
+        ratio = float('nan')
+        slope, intercept = float('nan'), float('nan')
+        t_line, y_line = [0, len(I) * dt], [0, 0]
+
+    # Subplot placement
+    row, col = divmod(idx, 4)
+    t = np.arange(len(I)) * dt
+    ax[row, col].plot(t, I, label='ratio={:.2f}\ny={:.3f}t+{:.2f}'.format(ratio, slope, intercept))
+    ax[row, col].plot(t_line, y_line, color='r', linestyle='-')
+    ax[row, col].set_title('{}'.format(names[dnum]))
+    ax[row, col].set_xlabel('Time (s)')
+    ax[row, col].set_ylabel('Current (pA)')
+    ax[row, col].legend(fontsize=14)
+
+plt.tight_layout()
+plt.show()
+
+#%% New changes - Slope increases (LINEAR) proportional to frequency for slow type
+# Fix the averages of the fast type
+
+def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
+
+    pretimes = [int(i/f/dt) for i in range(0,10)]
+    extra=100
+    runtime = pretimes[-1]+extra
+    # presizes = np.linspace(1, f*(1-r)*0.05+f*r*0.01+2, len(pretimes))
+    # presizes = np.linspace(1, f*(1-r)*a+f*r*b+c, len(pretimes))
+    slope = f*(1-r)*a1+b1*r
+    presizes = slope*np.linspace(0, runtime*dt, runtime)+c1
+
+    Iext = np.zeros(runtime)
+    y = np.zeros(runtime)
+    # Time evolution
+    for i in range(0, runtime):
+        if i in pretimes:
+            y[i-1] = presizes[i]  # reset just before update
+
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy * dt
+
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext * dt
+    return Iext, y, runtime, slope, presizes
+
+def getstats(f):
+    # Fix fin plot
+    rlist=np.linspace(0,1,100)
+    tlist=[]
+    rateslist=[]
+    napslist=[]
+    for ind,r in enumerate(rlist):
+        print(ind, len(rlist))
+        Iext, _, _, _, runtime = getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1)
+        # Iext, runtime, presizes, slope, const = getiext3(f, taui, tauy, dt, r, a, b)
+        _, tmean, naps, _ = gettmean(r, Iext, g, vb, dnum, C, Cr)
+        rateslist.append(naps/runtime/dt)
+        tlist.append(tmean)
+        napslist.append(naps)
+    foutlist=1/np.array(tlist)
+    return rlist, foutlist, napslist
+
+def gettmean(r, Iext, g, vb, dnum, C, Cr):
+    v=np.zeros(len(Iext))
+    v[0]=vd[0]
+    apinds=[]
+    refper=40
+    aptimer=np.inf
+    posttimer=False
+    for i in range(1,len(Iext)):
+
+        if posttimer==False:
+            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/C[dnum]
+        if posttimer==True:
+            icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
+
+        if aptimer != np.inf:
+            v[i] = v[i-1]
+        else:
+            v[i] = v[i-1]+dvdt*dt
+
+        if Iext[i]>Iext[i-1]:
+            posttimer=False
+
+        if aptimer != np.inf:
+            aptimer-=1
+        if v[i-1]>vth[dnum]:
+            v[i]=vbr[dnum] # vb[dnum]
+            apinds.append(i)
+            aptimer=refper
+            posttimer=True
+        if aptimer==0:
+            aptimer=np.inf
+# =============================================================================
+#     # Comment out
+#     fig,ax=plt.subplots(2,1)
+#     ax[0].plot(Iext)
+#     ax[1].plot(range(len(vd)), v)
+# =============================================================================
+    aptimes=np.array(apinds)*dt
+    naps=len(aptimes)
+    ssaptimes=aptimes[int(0.3*len(aptimes)):]
+    tmean = np.mean(np.diff(ssaptimes))
+    return v, tmean, naps, aptimes
+
+dt=0.1e-3                                # 8 is (6,10) and 9 is (7,11)
+#                0   1   2   3   4    5     6      7    8   9  10  11
+vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-64,-65.5,-64,-63.8])
+#                0   1   2   3   4    5     6       7    8   9     10    11
+vbr=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-50,-50,-47,-64,-50])
+#    0        1           2          3        4         5
+C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.000111]
+#    6        7          8        9          10       11
+#    0        1           2          3        4         5
+Cr=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
+   0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.0001]
+#    6        7          8        9          10       11
+#    0        1          2      3        4        5
+g=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
+#    6        7       8        9       10       11
+#    0        1          2      3        4        5
+gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
+   0.0035, 0.004,  0.0037,  0.0037,  0.0037, 0.005]
+#    6        7       8        9       10       11
+#     0    1    2     3    4    5    6    7    8   9    10   11
+vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
+
+# a=0.6
+# b=0.05
+
+a1=0.13 # slow slope coeff
+b1=0.1 # fast slope coeff
+# c1=2
+
+taui = 0.001
+tauy = 0.0025
+kiy=500
+
+rlist=np.linspace(0,1,100)
+
+# =============================================================================
+# r=1
+# f=40
+# fs=15
+# flist2 = [5, 10, 20, 40]
+# Iextlist=[]
+# for fi in flist2:
+#     Iext, _, _, _, runtime = getiext(fi, taui, tauy, kiy, dt, r, a1, b1, c1)
+#     Iextlist.append(Iext)
+# for i in range(len(Iextlist)):
+#     plt.plot(np.arange(len(Iextlist[i]))*dt, Iextlist[i], label='{} Hz'.format(flist2[i]))
+# plt.legend(loc='upper right')
+# plt.xlabel('Time', fontsize=fs)
+# plt.ylabel('Input current', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.title('10 current injections, r={}'.format(r), fontsize=fs)
+# plt.show()
+# #%%
+# =============================================================================
+
+# Run tests
+flist=[5, 10, 20, 40]
+aps=[]
+for ind, f in enumerate(flist):
+    print(ind, len(flist))
+    _, _, napslist = getstats(f)
+    aps.append(napslist)
+
+#naps
+fs=15
+for i, apl in enumerate(aps):
+    plt.plot(rlist, apl, label='f={}'.format(flist[i]))
+plt.xlabel('Proportion of fast synapses', fontsize=fs)
+plt.ylabel('# of APs', fontsize=fs)
+plt.legend(fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.title('Realistic injection', fontsize=fs)
+# plt.title('Spike injection', fontsize=fs)
+plt.show()
+#%% Fix r plot with new (proportional, fixed fast)
+
+def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
+
+    pretimes = [int(i/f/dt) for i in range(0,10)]
+    extra=100
+    runtime = pretimes[-1]+extra
+    # presizes = np.linspace(1, f*(1-r)*0.05+f*r*0.01+2, len(pretimes))
+    # presizes = np.linspace(1, f*(1-r)*a+f*r*b+c, len(pretimes))
+    slope = f*(1-r)*a1+b1*r
+    presizes = slope*np.linspace(0, runtime*dt, runtime)+c1
+
+    Iext = np.zeros(runtime)
+    y = np.zeros(runtime)
+    # Time evolution
+    for i in range(0, runtime):
+        if i in pretimes:
+            y[i-1] = presizes[i]  # reset just before update
+
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy * dt
+
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext * dt
+    return Iext, y, runtime, slope, presizes
+a1=0.13
+b1=0.01
+c1=2
+
+taui = 0.001
+tauy = 0.0025
+kiy=500
+
+# rlist2=[0, 0.25, 0.5, 0.75, 1]
+rlist2=np.linspace(0.8, 1, 5)
+flist=np.linspace(1,60,100)
+foutlist=[]
+napslist=[]
+for i,r in enumerate(rlist2):
+    print(i, len(rlist2))
+    tlist=[]
+    napslisti=[]
+    for j, f in enumerate(flist):
+        print(i, len(rlist2), j, len(flist))
+        Iext, runtime, presizes, slope, const=getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1)
+        v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr)
+        tlist.append(tmean)
+        napslisti.append(naps)
+    fout=1/np.array(tlist)  
+    foutlist.append(fout)
+    napslist.append(napslisti)
+
+for i,fout in enumerate(foutlist):
+    plt.plot(flist, napslist[i], label='r={}'.format(np.around(rlist2[i],2)), marker='o')
+    
+plt.legend(fontsize=fs-3)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.ylabel('# of APs', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Statistics on the number of APs for each proportion
+import matplotlib.pyplot as plt
+import numpy as np
+
+fs = 15  # font size
+
+napslist2 = []
+for naps in napslist:
+    naps2 = [x for x in naps if x != 9]
+    napslist2.append(naps2)
+
+n = len(napslist2)
+
+# Flatten all lists to find the global min and max
+all_values = np.concatenate(napslist2)
+min_val, max_val = np.min(all_values), np.max(all_values)
+
+# Create bin edges to include every integer in the full range
+bins = np.arange(min_val, max_val + 2)  # +2 so rightmost bin includes max
+
+# Calculate the global max count for consistent ylim
+max_count = 0
+for data in napslist2:
+    counts, _ = np.histogram(data, bins=bins)
+    max_count = max(max_count, counts.max())
+
+# Set up vertical subplots
+fig, axes = plt.subplots(n, 1, figsize=(6, 2.5 * n), sharex=True)
+
+# Get the default color cycle from matplotlib
+prop_cycle = plt.rcParams['axes.prop_cycle']
+colors = prop_cycle.by_key()['color']
+
+# Plot each histogram with cycling colors
+for i, data in enumerate(napslist2):
+    ax = axes[i] if n > 1 else axes
+    color = colors[i % len(colors)]
+    ax.hist(data, bins=bins, align='left', edgecolor='black', rwidth=0.8, color=color)
+    ax.set_ylabel('Counts, r={}'.format(np.around(rlist2[i], 3)), fontsize=fs)
+    ax.set_ylim(0, max_count + 1)  # Same ylim for all
+    ax.tick_params(axis='both', labelsize=fs)
+    ax.grid(axis='y', linestyle='--', alpha=0.5)
+
+# Common x-axis settings
+plt.xticks(np.arange(min_val, max_val + 1), fontsize=fs)
+axes[-1].set_xlabel('# of APs', fontsize=fs)
+axes[0].set_title('Histograms of # of APs for each r', fontsize=fs)
+plt.show()
+
+
+
+
