@@ -75,44 +75,13 @@ d1=d.iloc[1:, -3:][7*excnum:7*(excnum+1)] # Mean sustained rate
 # 0 = 8 nS/input, 1 = 4 nS/input, 2 = 2 nS/input 
 estrengths=[10,4,1]
 istrengths=[8,4,2]
+for i in range(3):
+    plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
 # =============================================================================
-# for i in range(3):
-#     plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
 # plt.legend()
 # plt.show()
 # #%%
 # =============================================================================
-
-fi=10
-f=10
-y0i=10 # synthetic spiking variable amplitude
-y0e=10
-tauyi=0.01 # decay rate of synthetic spiking variable
-tauye=0.01
-tauii=0.1 # current decay rate
-tauie=0.1
-kii=1 #  convert trom y to I
-kie=1
-
-tauv=1
-vrest=-70e-3
-
-vth0=-50e-3
-tauvth=0.01
-
-kw=100
-tauw=1
-w0=1
-kw2=100
-wmax=0.01
-
-kx=100
-xmax1=0.02
-xmax2=0
-tauxrecover=0.1
-
-tmax=100
-delta_t=0.001
 
 def getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t):
     
@@ -134,7 +103,9 @@ def getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, del
     return tlisti, tliste, iext, eext
 
 
-tlisti, tliste, iext, eext = getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t)
+# =============================================================================
+# tlisti, tliste, iext, eext = getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t)
+# =============================================================================
     
 # =============================================================================
 # # Plot them
@@ -211,7 +182,6 @@ def simulate(tlisti, tliste, iext, eext):
 # =============================================================================
 # t, V, w, vth, x, aplist = simulate()
 # =============================================================================
-
 def getstats(aplist):
 
     aps = [apind*delta_t for apind in aplist if apind!=0]
@@ -260,15 +230,45 @@ def getstats(aplist):
 
 # Get the statistics
 
+f=10
+y0i=10 # synthetic spiking variable amplitude
+y0e=10
+tauyi=0.01 # decay rate of synthetic spiking variable
+tauye=0.01
+tauii=0.1 # current decay rate
+tauie=0.1
+kii=1 #  convert trom y to I
+kie=1
+
+tauv=1
+vrest=-70e-3
+
+vth0=-50e-3
+tauvth=0.01
+
+kw=100
+tauw=1
+w0=1
+kw2=100
+wmax=0.01
+
+kx=100
+xmax1=0.02
+xmax2=0
+tauxrecover=0.1
+
+tmax=100
+delta_t=0.001
+
 filist=[0,50,100,150,200,250,300]
-navgs=3
+navgs=100
 tmeanavg=[]
 cvavg=[]
 for i, fi in enumerate(filist):
     tmeani=[]
     cvi=[]
-    for _ in range(navgs):
-        print(_, navgs, i, len(filist))
+    for j in range(navgs):
+        print(i, len(filist), j, navgs)
         tlisti, tliste, iext, eext = getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t)
         vlen=len(tlisti)
         t, V, w, vth, x, aplist = simulate(tlisti, tliste, iext, eext)
@@ -279,5 +279,6 @@ for i, fi in enumerate(filist):
     cvavg.append(np.mean(cvi))
     
 
-plt.plot(filist, 1/np.array(tmeanavg))
+plt.plot(filist, 1/np.array(tmeanavg), marker='o', label='simulations', color='k')
+plt.legend()
 plt.show()
