@@ -98,13 +98,16 @@ tauv=1
 vrest=-70e-3
 
 vth0=-50e-3
-tauvth=0.1
+tauvth=0.01
 
-kw=10
+kw=100
 tauw=1
 w0=1
 kw2=100
 wmax=0.01
+
+kx=100
+xmax=0.01
 
 tref = 3e-3
 
@@ -142,6 +145,7 @@ def simulate():
     # Variables initialization
     V = np.zeros(vlen)
     w = np.zeros(vlen)
+    x = np.zeros(vlen)
     vth=np.zeros(vlen)
     # Set initial conditions
     V[0] = vrest
@@ -163,8 +167,14 @@ def simulate():
         else:
             V[i] = Vnext
         if V[i]<vrest:
-            dwdt = -kw2*V[i-1]*(wmax-w[i-1])
+            
+            dxdt=-kx*V[i-1]*(xmax-x[i-1])
+            x[i]=x[i-1]+dxdt*delta_t
+
+            dwdt = -kw2*V[i-1]*(x[i-1]-w[i-1])
             w[i]= w[i-1] + dwdt*delta_t
+            
+            
             
 # =============================================================================
 #         if Vnext>vth0:
@@ -183,11 +193,11 @@ def simulate():
 #             refblock=0
 # =============================================================================
         
-    return t, V, w, vth
+    return t, V, w, vth, x
 
-t, V, w, vth = simulate()
+t, V, w, vth, x = simulate()
 
-fig, ax = plt.subplots(4, 1)
+fig, ax = plt.subplots(5, 1)
 
 ax[0].plot(tlisti, iext)
 ax[0].set_ylabel('Inhibitory\ncurrent')
@@ -205,6 +215,9 @@ ax[2].set_ylabel('Membrane\npotential (mV)')
 ax[3].plot(t * delta_t, w)
 ax[3].set_ylabel('w')
 ax[3].set_xlabel('Time (s)')
+
+ax[4].plot(t*delta_t, x)
+ax[4].set_ylabel('x')
 
 plt.show()
 
