@@ -1,0 +1,210 @@
+#%% Define the functions for fitting
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+
+def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
+    
+        tlist=[]
+        ylist=[]
+        Iextlist=[]
+        
+        Iext=0
+        y=0
+        
+        tcurr=0
+        timer = delta_t
+        
+        while tcurr < tmax:
+            t0=np.random.exponential(1/f) # action potential
+            t1 = timer
+            
+            if t0 < t1:
+                y = y0
+                tmin=t0
+                timer-=tmin
+            else:
+                Iextlist.append(Iext)
+                ylist.append(y)
+                tlist.append(tcurr)
+                timer=delta_t
+                tmin=timer
+            
+            tcurr += tmin
+
+            # Update the continuous dynamics
+            
+            Iext += (-Iext/taui + ki*y)*tmin
+            y += (-y/tauy)*tmin
+            
+        return np.array(tlist), np.array(ylist), np.array(Iextlist)
+    
+
+# Load the entire Excel file
+file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"  # Change this to your actual path
+
+# Read all data into a dictionary
+data = pd.read_excel(file_path, sheet_name=None, header=None)
+
+# # Print all sheet names
+# print("data found:", list(data.keys()))
+
+# # Loop through data and preview first few rows
+# for sheet_name, df in data.items():
+#     print(f"\n--- Sheet: {sheet_name} ---")
+#     print(df.head())
+
+names = ['Summary', '240425_E4', '240425_E5', '240425_E6', 
+         '240426_E2', '240426_E3', '240426_E5', '240515_E2', 
+         '240516_E2', '240516_E7']
+
+d=data[names[0]]
+# rates = d.iloc[:, 0][:8]
+filist=[0,50,100,150,200,250,300]
+excnum=2 # #0=exc weight 10, #1=exc weight 4, #2=exc weight 1
+d1=d.iloc[1:, -3:][7*excnum:7*(excnum+1)] # Mean sustained rate
+# susrates=[d.iloc[1:, -3:][7*i:7*(i+1)] for i in range(3)]
+# plt.plot(rates, d1.iloc[:,2], marker='o') # 0 = 8 nS/input, 1 = 4 nS/input, 2 = 2 nS/input 
+
+# 0 = 8 nS/input, 1 = 4 nS/input, 2 = 2 nS/input 
+estrengths=[10,4,1]
+istrengths=[8,4,2]
+# =============================================================================
+# for i in range(3):
+#     plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
+# plt.legend()
+# plt.show()
+# #%%
+# =============================================================================
+
+fi=1
+f=1
+y0i=10 # synthetic spiking variable amplitude
+y0e=10
+tauyi=0.01 # decay rate of synthetic spiking variable
+tauye=0.01
+tauii=0.1 # current decay rate
+tauie=0.1
+kii=1 #  convert trom y to I
+kie=1
+
+tauv=1
+vrest=-70e-3
+
+vth0=-50e-3
+tauvth=0.1
+
+kw=10
+tauw=1
+w0=1
+kw2=100
+wmax=0.01
+
+tref = 3e-3
+
+tmax=20
+delta_t=0.001
+
+# Get the currents
+tlisti, _, iext = getiext(fi, y0i, tauyi, tauii, kii, tmax, delta_t)
+tliste, _, eext = getiext(f, y0e, tauye, tauie, kie, tmax, delta_t)
+
+# Make them the same size
+llist=[len(tlisti), len(tliste)]
+largmin=np.argmin(llist)
+if largmin==0:
+    tliste = tliste[:llist[largmin]]
+    eext = eext[:llist[largmin]]
+else:
+    tlisti = tlisti[:llist[largmin]]
+    iext = iext[:llist[largmin]]
+
+# # Plot them
+# plt.subplot(2,1,1)
+# plt.plot(tlisti, iext)
+# plt.subplot(2,1,2)
+# plt.plot(tliste, eext)
+# plt.show()
+
+vlen=len(tliste)
+
+# Integrate them into Iext into membrane potential
+@jit(nopython=True)
+def simulate():
+    # Time vector
+    t = np.linspace(0, vlen, vlen)
+    # Variables initialization
+    V = np.zeros(vlen)
+    w = np.zeros(vlen)
+    vth=np.zeros(vlen)
+    # Set initial conditions
+    V[0] = vrest
+    w[0] = 0
+    vth[0] = vth0
+    for i in range(1, vlen):
+        
+        dVdt =  -(V[i-1]-vrest)/tauv+eext[i-1]-iext[i-1]
+        Vnext= V[i-1] + dVdt * delta_t # *(1-refblock)
+        
+        dwdt=-w[i-1]/tauw
+        w[i]=w[i-1]+dwdt*delta_t
+        
+        dvthdt = - (vth[i-1]-vth0)/tauvth-kw*w[i-1]
+        vth[i]= vth[i-1] + dvthdt*delta_t
+        
+        if Vnext>vth[i]:
+            V[i]=vrest
+        else:
+            V[i] = Vnext
+        if V[i]<vrest:
+            dwdt = -kw2*V[i-1]*(wmax-w[i-1])
+            w[i]= w[i-1] + dwdt*delta_t
+            
+# =============================================================================
+#         if Vnext>vth0:
+#             V[i]=vrest
+#             refblock=1
+#             reftimer=tref
+#             
+#         else:
+#             V[i] = Vnext
+#             
+#         if reftimer>0 and reftimer!=np.inf:
+#             reftimer-=delta_t
+#             print(reftimer)
+#         if reftimer<=0:
+#             reftimer=np.inf
+#             refblock=0
+# =============================================================================
+        
+    return t, V, w, vth
+
+t, V, w, vth = simulate()
+
+fig, ax = plt.subplots(4, 1)
+
+ax[0].plot(tlisti, iext)
+ax[0].set_ylabel('Inhibitory\ncurrent')
+ax[0].set_xticks([])
+
+ax[1].plot(tliste, eext)
+ax[1].set_ylabel('Excitatory\ncurrent')
+ax[1].set_xticks([])
+
+ax[2].plot(t * delta_t, vrest * 1000 * np.ones(len(t)), linestyle='--', color='gray', alpha=0.5)
+ax[2].plot(t * delta_t, vth * 1000 * np.ones(len(t)), linestyle='-', color='k', alpha=1)
+ax[2].plot(t * delta_t, V * 1000)
+ax[2].set_ylabel('Membrane\npotential (mV)')
+
+ax[3].plot(t * delta_t, w)
+ax[3].set_ylabel('w')
+ax[3].set_xlabel('Time (s)')
+
+plt.show()
+
