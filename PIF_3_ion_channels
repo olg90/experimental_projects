@@ -107,8 +107,8 @@ kw2=100
 wmax=0.01
 
 kx=100
-xmax1=1
-xmax2=0.01
+xmax1=0.02
+xmax2=0
 taux1=1
 
 tref = 3e-3
