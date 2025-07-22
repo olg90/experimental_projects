@@ -107,7 +107,9 @@ kw2=100
 wmax=0.01
 
 kx=100
-xmax=0.01
+xmax1=1
+xmax2=0.01
+taux1=1
 
 tref = 3e-3
 
@@ -150,8 +152,12 @@ def simulate():
     # Set initial conditions
     V[0] = vrest
     w[0] = 0
+    x[0]=xmax1
     vth[0] = vth0
     for i in range(1, vlen):
+        
+        dxdt= - (x[i-1]-xmax1)/taux1
+        x[i]=x[i-1]+dxdt*delta_t
         
         dVdt =  -(V[i-1]-vrest)/tauv+eext[i-1]-iext[i-1]
         Vnext= V[i-1] + dVdt * delta_t # *(1-refblock)
@@ -168,7 +174,7 @@ def simulate():
             V[i] = Vnext
         if V[i]<vrest:
             
-            dxdt=-kx*V[i-1]*(xmax-x[i-1])
+            dxdt=-kx*V[i-1]*(xmax2-x[i-1]) # x should start high and then decrease
             x[i]=x[i-1]+dxdt*delta_t
 
             dwdt = -kw2*V[i-1]*(x[i-1]-w[i-1])
