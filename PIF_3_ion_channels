@@ -20,9 +20,9 @@ def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
         
         tcurr=0
         timer = delta_t
-        
+        e=1e-6
         while tcurr < tmax:
-            t0=np.random.exponential(1/f) # action potential
+            t0=np.random.exponential(1/(f+e)) # action potential
             t1 = timer
             
             if t0 < t1:
@@ -83,8 +83,8 @@ istrengths=[8,4,2]
 # #%%
 # =============================================================================
 
-fi=1
-f=1
+fi=10
+f=10
 y0i=10 # synthetic spiking variable amplitude
 y0e=10
 tauyi=0.01 # decay rate of synthetic spiking variable
@@ -109,39 +109,47 @@ wmax=0.01
 kx=100
 xmax1=0.02
 xmax2=0
-tauxrecover=1
+tauxrecover=0.1
 
-tref = 3e-3
-
-tmax=20
+tmax=100
 delta_t=0.001
 
-# Get the currents
-tlisti, _, iext = getiext(fi, y0i, tauyi, tauii, kii, tmax, delta_t)
-tliste, _, eext = getiext(f, y0e, tauye, tauie, kie, tmax, delta_t)
+def getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t):
+    
 
-# Make them the same size
-llist=[len(tlisti), len(tliste)]
-largmin=np.argmin(llist)
-if largmin==0:
-    tliste = tliste[:llist[largmin]]
-    eext = eext[:llist[largmin]]
-else:
-    tlisti = tlisti[:llist[largmin]]
-    iext = iext[:llist[largmin]]
+    # Get the currents
+    tlisti, _, iext = getiext(fi, y0i, tauyi, tauii, kii, tmax, delta_t)
+    tliste, _, eext = getiext(f, y0e, tauye, tauie, kie, tmax, delta_t)
+    
+    # Make them the same size
+    llist=[len(tlisti), len(tliste)]
+    largmin=np.argmin(llist)
+    if largmin==0:
+        tliste = tliste[:llist[largmin]]
+        eext = eext[:llist[largmin]]
+    else:
+        tlisti = tlisti[:llist[largmin]]
+        iext = iext[:llist[largmin]]
+        
+    return tlisti, tliste, iext, eext
 
+
+tlisti, tliste, iext, eext = getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t)
+    
+# =============================================================================
 # # Plot them
 # plt.subplot(2,1,1)
 # plt.plot(tlisti, iext)
 # plt.subplot(2,1,2)
 # plt.plot(tliste, eext)
 # plt.show()
-
-vlen=len(tliste)
+# vlen=len(tliste)
+# #%%
+# =============================================================================
 
 # Integrate them into Iext into membrane potential
 @jit(nopython=True)
-def simulate():
+def simulate(tlisti, tliste, iext, eext):
     # Time vector
     t = np.linspace(0, vlen, vlen)
     # Variables initialization
@@ -149,6 +157,7 @@ def simulate():
     w = np.zeros(vlen)
     x = np.zeros(vlen)
     vth=np.zeros(vlen)
+    aplist=np.zeros(vlen)
     # Set initial conditions
     V[0] = vrest
     w[0] = 0
@@ -167,21 +176,20 @@ def simulate():
         
         dvthdt = - (vth[i-1]-vth0)/tauvth-kw*w[i-1]
         vth[i]= vth[i-1] + dvthdt*delta_t
-        
+
         if Vnext>vth[i]:
             V[i]=vrest
+            aplist[i]=i
         else:
             V[i] = Vnext
         if V[i]<vrest:
-            
+
             dxdt=-kx*V[i-1]*(xmax2-x[i-1]) # x should start high and then decrease
             x[i]=x[i-1]+dxdt*delta_t
 
             dwdt = -kw2*V[i-1]*(x[i-1]-w[i-1])
             w[i]= w[i-1] + dwdt*delta_t
-            
-            
-            
+
 # =============================================================================
 #         if Vnext>vth0:
 #             V[i]=vrest
@@ -198,32 +206,78 @@ def simulate():
 #             reftimer=np.inf
 #             refblock=0
 # =============================================================================
-        
-    return t, V, w, vth, x
+    return t, V, w, vth, x, aplist
 
-t, V, w, vth, x = simulate()
+# =============================================================================
+# t, V, w, vth, x, aplist = simulate()
+# =============================================================================
 
-fig, ax = plt.subplots(5, 1)
+def getstats(aplist):
 
-ax[0].plot(tlisti, iext)
-ax[0].set_ylabel('Inhibitory\ncurrent')
-ax[0].set_xticks([])
+    aps = [apind*delta_t for apind in aplist if apind!=0]
+    
+    tdiffs=np.diff(aps)
+    
+    tmean=np.mean(tdiffs)
+    var=np.var(tdiffs)
+    cv=var/tmean**2
+    
+    return tmean, var, cv
 
-ax[1].plot(tliste, eext)
-ax[1].set_ylabel('Excitatory\ncurrent')
-ax[1].set_xticks([])
+# =============================================================================
+# tmean, var, cv = getstats(aplist)
+# =============================================================================
 
-ax[2].plot(t * delta_t, vrest * 1000 * np.ones(len(t)), linestyle='--', color='gray', alpha=0.5)
-ax[2].plot(t * delta_t, vth * 1000 * np.ones(len(t)), linestyle='-', color='k', alpha=1)
-ax[2].plot(t * delta_t, V * 1000)
-ax[2].set_ylabel('Membrane\npotential (mV)')
+# =============================================================================
+# print(1/tmean, var, cv)
+# =============================================================================
 
-ax[3].plot(t * delta_t, w)
-ax[3].set_ylabel('w')
-ax[3].set_xlabel('Time (s)')
+# =============================================================================
+# fig, ax = plt.subplots(5, 1)
+# 
+# ax[0].plot(tlisti, iext)
+# ax[0].set_ylabel('Inhibitory\ncurrent')
+# ax[0].set_xticks([])
+# 
+# ax[1].plot(tliste, eext)
+# ax[1].set_ylabel('Excitatory\ncurrent')
+# ax[1].set_xticks([])
+# 
+# ax[2].plot(t * delta_t, vrest * 1000 * np.ones(len(t)), linestyle='--', color='gray', alpha=0.5)
+# ax[2].plot(t * delta_t, vth * 1000 * np.ones(len(t)), linestyle='-', color='k', alpha=1)
+# ax[2].plot(t * delta_t, V * 1000)
+# ax[2].set_ylabel('Membrane\npotential (mV)')
+# 
+# ax[3].plot(t * delta_t, w)
+# ax[3].set_ylabel('w')
+# ax[3].set_xlabel('Time (s)')
+# 
+# ax[4].plot(t*delta_t, x)
+# ax[4].set_ylabel('x')
+# 
+# plt.show()
+# =============================================================================
 
-ax[4].plot(t*delta_t, x)
-ax[4].set_ylabel('x')
+# Get the statistics
 
+filist=[0,50,100,150,200,250,300]
+navgs=3
+tmeanavg=[]
+cvavg=[]
+for i, fi in enumerate(filist):
+    tmeani=[]
+    cvi=[]
+    for _ in range(navgs):
+        print(_, navgs, i, len(filist))
+        tlisti, tliste, iext, eext = getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t)
+        vlen=len(tlisti)
+        t, V, w, vth, x, aplist = simulate(tlisti, tliste, iext, eext)
+        tmean, var, cv = getstats(aplist)
+        tmeani.append(tmean)
+        cvi.append(cv)
+    tmeanavg.append(np.mean(tmeani))
+    cvavg.append(np.mean(cvi))
+    
+
+plt.plot(filist, 1/np.array(tmeanavg))
 plt.show()
-
