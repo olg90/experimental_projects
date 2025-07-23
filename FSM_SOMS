@@ -1947,7 +1947,7 @@ vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
 
 a1=0.13 # slow slope coeff
 b1=0.1 # fast slope coeff
-# c1=2
+c1=2
 
 taui = 0.001
 tauy = 0.0025
@@ -1956,7 +1956,7 @@ kiy=500
 rlist=np.linspace(0,1,100)
 
 # =============================================================================
-# r=1
+# r=0
 # f=40
 # fs=15
 # flist2 = [5, 10, 20, 40]
@@ -2919,6 +2919,7 @@ def getiext(f, taui0,tauy0,kiy0,taui1,tauy1,kiy1,dt,r,m01,b01,m04,b04,m11,b11,m1
     b0f= zform(b01, b04, 10, 40, f)
     m1f= zform(m11, m14, 10, 40, f)
     b1f= zform(b11, b14, 10, 40, f)
+    
     slope = m0f*(1-r)+m1f*r
     const=b0f*(1-r)+b1f*r
     presizes = slope*np.linspace(0, runtime*dt, runtime)+const
@@ -2969,6 +2970,7 @@ names = {
     0: 'DE-F-10 Hz', 1: 'DE-F-40 Hz',
     2: 'DE-M-10 Hz', 3: 'DE-M-40 Hz',
     4: 'DE-S-10 Hz', 5: 'DE-S-40 Hz',
+    
     6: 'NR-F-10 Hz', 7: 'NR-F-40 Hz',
     8: 'NR-M-10 Hz', 9: 'NR-M-40 Hz',
     10: 'NR-S-10 Hz', 11: 'NR-S-40 Hz'
@@ -2978,6 +2980,7 @@ names = {
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
 dt=0.1e-3                                # 8 is (6,10) and 9 is (7,11)
+
 #                0   1   2   3   4    5     6      7    8   9  10  11
 vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-64,-65.5,-64,-63.8])
 #                0   1   2   3   4    5     6       7    8   9     10    11
@@ -2994,7 +2997,7 @@ Cr=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
 g=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
    0.0035, 0.0037,  0.0037,  0.0037,  0.0037, 0.003]
 #    6        7       8        9       10       11
-#    0         1         2        3        4        5
+#    0        1          2      3        4        5
 gr=[0.0037,  0.0037,  0.0037,  0.0037,  0.0037,  0.0037,
    0.0035, 0.004,  0.0037,  0.0037,  0.0037, 0.005]
 #    6        7       8        9       10       11
@@ -3008,27 +3011,25 @@ for num in [6,7,10,11]:
     Is.append(Ival)
     vs.append(vval)
 
-m01=3.89 # S10
-b01=1
-m04=16.75 #S40
-b04=-1.187
-m11=1.55 #F10
-b11=0.58
-m14=12.3 #F40
-b14=0.9
+m01=1.55 # S10
+b01=0.58
 
-taui = 0.0012
-tauy = 0.00055
-kiy=650
+m04=12.3 # S40
+b04=0.9
 
+m11=3.92 # F10
+b11=1.01
 
-taui0 = 0.00155 # Slow
-tauy0 = 0.00027
-kiy0 = 1000
+m14=16.95 # F40
+b14=-1.2
 
-taui1 = 0.0025 # Fast
-tauy1 = 0.0008
-kiy1 = 350
+taui0 = 0.0035 # Slow
+tauy0 = 0.0006
+kiy0 = 370
+
+taui1 = 0.0014 # Fast
+tauy1 = 0.00034
+kiy1 = 860
 
 Iext100, _, _, _, _ =getiext(10, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, 0, m01,b01,m04,b04,m11,b11,m14,b14)
 Iext400, _, _, _, _ =getiext(40, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, 0, m01,b01,m04,b04,m11,b11,m14,b14)
@@ -3037,22 +3038,21 @@ Iext401, _, _, _, _ =getiext(40, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, 1, m01,b
 
 fig, ax = plt.subplots(2,2)
 sl=1000
-ws=50
+ws=100
 ax[0,0].plot(Is[0][sl:sl+ws])
 ax[0,1].plot(Is[1][sl:sl+ws])
 ax[1,0].plot(Is[2][sl:sl+ws])
 ax[1,1].plot(Is[3][sl:sl+ws])
 
-# =============================================================================
-# ax[0,0].set_title('S10')
-# ax[0,1].set_title('S40')
-# ax[1,0].set_title('F10')
-# ax[1,1].set_title('F40')
-# =============================================================================
-ax[0,0].plot(Iext100[sl:sl+ws], alpha=0.5)
-ax[0,1].plot(Iext400[sl:sl+ws], alpha=0.5)
-ax[1,0].plot(Iext101[sl:sl+ws], alpha=0.5)
-ax[1,1].plot(Iext401[sl:sl+ws], alpha=0.5)
+ax[0,0].set_title('F10')
+ax[0,1].set_title('F40')
+ax[1,0].set_title('S10')
+ax[1,1].set_title('S40')
+
+ax[0,0].plot(Iext101[sl:sl+ws], alpha=0.5)
+ax[0,1].plot(Iext401[sl:sl+ws], alpha=0.5)
+ax[1,0].plot(Iext100[sl:sl+ws], alpha=0.5)
+ax[1,1].plot(Iext400[sl:sl+ws], alpha=0.5)
 
 ax[0,0].set_xticks([])
 ax[0,1].set_xticks([])
@@ -3069,11 +3069,11 @@ plt.tight_layout()
 plt.show()
 #%% part 2 to prev
 
-idnum=0
-#        0     1
-vals=[(0,10, 6),(0,40,7),
-      (1,10,10),(1,40,11)]
-#        2     3
+idnum=3
+#         0        1
+vals=[(1,10, 6),(1,40,7),
+      (0,10,10),(0,40,11)]
+#         2        3
 
 r,f,dnum=vals[idnum]
 
@@ -3253,6 +3253,9 @@ rlist=np.linspace(0,1,100)
 
 # Run tests
 flist=[5, 10, 20, 40]
+# =============================================================================
+# flist=[25]
+# =============================================================================
 aps=[]
 for ind, f in enumerate(flist):
     print(ind, len(flist))
