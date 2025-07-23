@@ -2908,7 +2908,7 @@ def zform(z1,z2, f1,f2,f):
 
 def getiext(f, taui0,tauy0,kiy0,taui1,tauy1,kiy1,dt,r,m01,b01,m04,b04,m11,b11,m14,b14):
 
-    pretimes = [int(i/f/dt)+1000 for i in range(0,10)]
+    pretimes = [int(i/f/dt)+1002 for i in range(0,10)]
     extra=2000
     runtime = pretimes[-1]+extra
     # presizes = np.linspace(1, f*(1-r)*0.05+f*r*0.01+2, len(pretimes))
@@ -3011,7 +3011,7 @@ for num in [6,7,10,11]:
 m01=3.89 # S10
 b01=1
 m04=16.75 #S40
-b04=-1.179
+b04=-1.187
 m11=1.55 #F10
 b11=0.58
 m14=12.3 #F40
@@ -3022,11 +3022,11 @@ tauy = 0.00055
 kiy=650
 
 
-taui0 = 0.00155
+taui0 = 0.00155 # Slow
 tauy0 = 0.00027
 kiy0 = 1000
 
-taui1 = 0.0025
+taui1 = 0.0025 # Fast
 tauy1 = 0.0008
 kiy1 = 350
 
@@ -3035,36 +3035,47 @@ Iext400, _, _, _, _ =getiext(40, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, 0, m01,b
 Iext101, _, _, _, _ =getiext(10, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, 1, m01,b01,m04,b04,m11,b11,m14,b14)
 Iext401, _, _, _, _ =getiext(40, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, 1, m01,b01,m04,b04,m11,b11,m14,b14)
 
+fig, ax = plt.subplots(2,2)
+sl=1000
+ws=50
+ax[0,0].plot(Is[0][sl:sl+ws])
+ax[0,1].plot(Is[1][sl:sl+ws])
+ax[1,0].plot(Is[2][sl:sl+ws])
+ax[1,1].plot(Is[3][sl:sl+ws])
+
 # =============================================================================
-# fig, ax = plt.subplots(2,2)
-# sl=0
-# ws=10000
-# ax[0,0].plot(Is[0][sl:sl+ws])
-# ax[0,1].plot(Is[1][sl:sl+ws])
-# ax[1,0].plot(Is[2][sl:sl+ws])
-# ax[1,1].plot(Is[3][sl:sl+ws])
-# 
 # ax[0,0].set_title('S10')
 # ax[0,1].set_title('S40')
 # ax[1,0].set_title('F10')
 # ax[1,1].set_title('F40')
-# 
-# ax[0,0].plot(Iext100[sl:sl+ws], alpha=0.5)
-# ax[0,1].plot(Iext400[sl:sl+ws], alpha=0.5)
-# ax[1,0].plot(Iext101[sl:sl+ws], alpha=0.5)
-# ax[1,1].plot(Iext401[sl:sl+ws], alpha=0.5)
-# plt.tight_layout()
-# plt.show()
-# #%% part 2 to prev
 # =============================================================================
+ax[0,0].plot(Iext100[sl:sl+ws], alpha=0.5)
+ax[0,1].plot(Iext400[sl:sl+ws], alpha=0.5)
+ax[1,0].plot(Iext101[sl:sl+ws], alpha=0.5)
+ax[1,1].plot(Iext401[sl:sl+ws], alpha=0.5)
 
-idnum=3
+ax[0,0].set_xticks([])
+ax[0,1].set_xticks([])
+ax[1,0].set_xticks([])
+ax[1,1].set_xticks([])
+
+ax[0,0].set_yticks([])
+ax[0,1].set_yticks([])
+ax[1,0].set_yticks([])
+ax[1,1].set_yticks([])
+
+
+plt.tight_layout()
+plt.show()
+#%% part 2 to prev
+
+idnum=0
 #        0     1
-vals=[(0,10),(0,40),
-      (1,10),(1,40)]
+vals=[(0,10, 6),(0,40,7),
+      (1,10,10),(1,40,11)]
 #        2     3
 
-r,f=vals[idnum]
+r,f,dnum=vals[idnum]
 
 nnames=[6,7,10,11]
 
