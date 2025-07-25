@@ -1568,6 +1568,84 @@ rlist, foutlist, napslist = getstats(f)
 plt.plot(rlist, napslist)
 #%% Get the AP numbers
 
+def gettmean(r, Iext, g, vb, dnum, C, Cr):
+    v=np.zeros(len(Iext))
+    v[0]=vd[0]
+    apinds=[]
+    refper=40
+    aptimer=np.inf
+    posttimer=False
+    for i in range(1,len(Iext)):
+
+        if posttimer==False:
+            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/C[dnum]
+        if posttimer==True:
+            icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
+            dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
+
+        if aptimer != np.inf:
+            v[i] = v[i-1]
+        else:
+            v[i] = v[i-1]+dvdt*dt
+
+        if Iext[i]>Iext[i-1]:
+            posttimer=False
+
+        if aptimer != np.inf:
+            aptimer-=1
+        if v[i-1]>vth[dnum]:
+            v[i]=vbr[dnum] # vb[dnum]
+            apinds.append(i)
+            aptimer=refper
+            posttimer=True
+        if aptimer==0:
+            aptimer=np.inf
+# =============================================================================
+#     # Comment out
+#     fig,ax=plt.subplots(2,1)
+#     ax[0].plot(Iext)
+#     ax[1].plot(range(len(vd)), v)
+# =============================================================================
+    aptimes=np.array(apinds)*dt
+    naps=len(aptimes)
+    ssaptimes=aptimes[int(0.3*len(aptimes)):]
+    tmean = np.mean(np.diff(ssaptimes))
+    return v, tmean, naps, aptimes
+
+def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
+    
+    pretimes = [int(i/f/dt) for i in range(0,10)]
+    extra=100
+    runtime = pretimes[-1]+extra
+    # presizes = np.linspace(1, f*(1-r)*0.05+f*r*0.01+2, len(pretimes))
+    # presizes = np.linspace(1, f*(1-r)*a+f*r*b+c, len(pretimes))
+    slope = f*(1-r)*a1+r*b1#*f
+    presizes = slope*np.linspace(0, runtime*dt, runtime)+c1
+
+    # new thing
+# =============================================================================
+#     slope = (1-r)*a1+b1*r*f
+#     tarr=np.linspace(0, runtime*dt, runtime)
+#     # presizes = slope*tarr+c1
+#     presizes = interpolated_line(tarr, r, f, 10, 40, 0.2, 2, 1, 4, 2, 6)
+# =============================================================================
+
+    Iext = np.zeros(runtime)
+    y = np.zeros(runtime)
+    # Time evolution
+    for i in range(0, runtime):
+        if i in pretimes:
+            y[i-1] = presizes[i]  # reset just before update
+
+        dy = -y[i-1] / tauy
+        y[i] = y[i-1] + dy * dt
+
+        dIext = -Iext[i-1] / taui + kiy * y[i-1]
+        Iext[i] = Iext[i-1] + dIext * dt
+
+    return Iext, y, runtime, slope, presizes
+
 
 def getstats(f):
     # Fix fin plot
@@ -1665,6 +1743,7 @@ plt.show()
 # plt.tick_params(axis='both', labelsize=fs)
 # plt.show()
 # =============================================================================
+
 #%% fix r plot
 
 def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
@@ -1943,8 +2022,8 @@ vth=[-40, -40, -40, -40, -40, -40, -40, -40, -41, -40, -40, -39]
 # a=0.6
 # b=0.05
 
-a1=0.13 # slow slope coeff
-b1=0.1 # fast slope coeff
+a1=0.075 #0.13 # slow slope coeff
+b1=0.05 # fast slope coeff
 c1=2
 
 taui = 0.001
@@ -1953,25 +2032,23 @@ kiy=500
 
 rlist=np.linspace(0,1,100)
 
-# =============================================================================
-# r=0
-# f=40
-# fs=15
-# flist2 = [5, 10, 20, 40]
-# Iextlist=[]
-# for fi in flist2:
-#     Iext, _, _, _, runtime = getiext(fi, taui, tauy, kiy, dt, r, a1, b1, c1)
-#     Iextlist.append(Iext)
-# for i in range(len(Iextlist)):
-#     plt.plot(np.arange(len(Iextlist[i]))*dt, Iextlist[i], label='{} Hz'.format(flist2[i]))
-# plt.legend(loc='upper right')
-# plt.xlabel('Time', fontsize=fs)
-# plt.ylabel('Input current', fontsize=fs)
-# plt.tick_params(axis='both', labelsize=fs)
-# plt.title('10 current injections, r={}'.format(r), fontsize=fs)
-# plt.show()
-# #%%
-# =============================================================================
+r=0
+f=40
+fs=15
+flist2 = [5, 10, 20, 40]
+Iextlist=[]
+for fi in flist2:
+    Iext, _, _, _, runtime = getiext(fi, taui, tauy, kiy, dt, r, a1, b1, c1)
+    Iextlist.append(Iext)
+for i in range(len(Iextlist)):
+    plt.plot(np.arange(len(Iextlist[i]))*dt, Iextlist[i], label='{} Hz'.format(flist2[i]))
+plt.legend(loc='upper right')
+plt.xlabel('Time', fontsize=fs)
+plt.ylabel('Input current', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.title('10 current injections, r={}'.format(r), fontsize=fs)
+plt.show()
+#%%
 
 # Run tests
 flist=[5, 10, 20, 40]
@@ -1992,7 +2069,7 @@ plt.tick_params(axis='both', labelsize=fs)
 plt.title('Realistic injection', fontsize=fs)
 # plt.title('Spike injection', fontsize=fs)
 plt.show()
-#%% Fix r plot with new (proportional, fixed fast)
+#%% # of APs vs input frequency for fixed r values, NR (original method)
 import numpy as np
 
 def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
@@ -2018,8 +2095,9 @@ def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
         dIext = -Iext[i-1] / taui + kiy * y[i-1]
         Iext[i] = Iext[i-1] + dIext * dt
     return Iext, y, runtime, slope, presizes
-a1=0.13
-b1=0.01
+
+a1=0.075 #0.13
+b1=0.05
 c1=2
 
 taui = 0.001
@@ -2028,7 +2106,7 @@ kiy=500
 
 rlist2=[0, 0.25, 0.5, 0.75, 1]
 # rlist2=np.linspace(0.8, 1, 5)
-rlist2=[0]
+# rlist2=[0]
 flist=np.linspace(1,60,100)
 foutlist=[]
 napslist=[]
@@ -2359,7 +2437,7 @@ for j, r in enumerate(rlist):
        
 plt.subplot(3,1,3)
 plt.plot(rlist, np.array(napsmean)/tmax)
-plt.ylabel('Mean firing rate')
+plt.ylabel('Mean\nfiring rate')
 plt.xlabel('Proportion of fast synapses')
 plt.tight_layout()
 plt.show()
@@ -2399,8 +2477,7 @@ rlist=np.linspace(0,1,100)
 # plt.show()
 # #%%
 # =============================================================================
-
-# Run tests
+# Plot the # of APs vs the proprtion of fast synapses
 flist=[5, 10, 20, 40]
 aps=[]
 for ind, f in enumerate(flist):
@@ -2446,7 +2523,7 @@ def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
         Iext[i] = Iext[i-1] + dIext * dt
     return Iext, y, runtime, slope, presizes
 
-a1=0.13 # slow slope
+a1=0.075 #0.13 # slow slope
 b1=0.05 # fast slope
 c1=2 # constant
 
@@ -2465,11 +2542,10 @@ ax[0].plot(Iext)
 ax[1].plot(v)
 print(naps)
 
-
 #%%
 rlist2=[0, 0.25, 0.5, 0.75, 1]
 # rlist2=[1]
-flist=np.linspace(0.1,60,100)
+flist=np.linspace(1,60,100)
 foutlist=[]
 napslist=[]
 for i,r in enumerate(rlist2):
@@ -3128,7 +3204,7 @@ print(naps)
 
 #%% Plot of the currents for r and different f values
 r=1
-fsimlist=[10, 20, 30, 40, 50]
+fsimlist=[10, 20, 30, 40]
 iexts=[]
 for i,f in enumerate(fsimlist):
     Iext, _, _, _, _ = getiext(f, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, r, m01,b01,m04,b04,m11,b11,m14,b14)
