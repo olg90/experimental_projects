@@ -110,7 +110,7 @@ plt.show()
 # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
-dnum= 7 # <----------------------------------- neuron number
+dnum= 9 # <----------------------------------- neuron number
 dsize= 'z' # f full, z zoomed
 dsnum= 1 if dnum in [0, 2, 4,6,8,10] else 0
 dlens=[4000,12000]
@@ -2192,31 +2192,7 @@ for i, data in enumerate(napslist2):
     variances.append(vari)
     means.append(meani)
     cvs.append(vari/meani**2)
-#%%  Random inputs
-
-def getiext(f, taui, tauy, kiy, dt, r, a1, b1, c1):
-
-    pretimes = [int(i/f/dt) for i in range(0,10)]
-    extra=100
-    runtime = pretimes[-1]+extra
-    # presizes = np.linspace(1, f*(1-r)*0.05+f*r*0.01+2, len(pretimes))
-    # presizes = np.linspace(1, f*(1-r)*a+f*r*b+c, len(pretimes))
-    slope = f*(1-r)*a1+b1*r
-    presizes = slope*np.linspace(0, runtime*dt, runtime)+c1
-
-    Iext = np.zeros(runtime)
-    y = np.zeros(runtime)
-    # Time evolution
-    for i in range(0, runtime):
-        if i in pretimes:
-            y[i-1] = presizes[i]  # reset just before update
-
-        dy = -y[i-1] / tauy
-        y[i] = y[i-1] + dy * dt
-
-        dIext = -Iext[i-1] / taui + kiy * y[i-1]
-        Iext[i] = Iext[i-1] + dIext * dt
-    return Iext, y, runtime, slope, presizes
+#%%  Random inputs for (mean # of APs) vs (proportion of fast synapses) 
 
 def getstats(f):
     # Fix fin plot
@@ -2340,7 +2316,6 @@ def simulate(f, y0, taui, ki, tmax, delta_t):
             
         return tlist, ylist, Iextlist
     
-    
 def gettmean(r, Iext, g, vb, dnum, C, Cr):
     v=np.zeros(len(Iext))
     v[0]=vd[0]
@@ -2385,18 +2360,64 @@ def gettmean(r, Iext, g, vb, dnum, C, Cr):
     ssaptimes=aptimes[int(0.3*len(aptimes)):]
     tmean = np.mean(np.diff(ssaptimes))
     return v, tmean, naps, aptimes
+
+def simulate2(f, y0, taui0, tauy0, kiy0, taui1, tauy1, kiy1, tmax, delta_t):
     
-f=20 # input frequency
-y0=0.01 # value of y to jump to
-tauy=0.1 # time constant of y
-taui=0.005 # time constant of Iext
-ki=3200 # conversion of y to iext
-tmax=3
+        tlist=[]
+        ylist=[]
+        Iextlist=[]
+        
+        Iext=0
+        y=0
+        
+        tcurr=0
+        timer = delta_t
+        
+        while tcurr < tmax:
+            t0=np.random.exponential(1/f) # action potential
+            t1 = timer
+            
+            if t0 < t1:
+                y = y0
+                tmin=t0
+                timer-=tmin
+            else:
+                Iextlist.append(Iext)
+                ylist.append(y)
+                tlist.append(tcurr)
+                timer=delta_t
+                tmin=timer
+            
+            tcurr += tmin
+
+            # Update the continuous dynamics
+            
+            Iext += (-Iext/(taui0*(1-r)+taui1*r) + (kiy0*(1-r)+kiy1*r)*y)*tmin
+            y += (-y/(tauy0*(1-r)+tauy1*r))*tmin
+            
+            
+        return tlist, ylist, Iextlist
+    
+f=40 # input frequency
+y0=2.5 # value of y to jump to
+tmax=10 
 delta_t=0.001
+r=0 # goes at HERE
 
-r=1
+# y0=3 # value of y to jump to
+# tauy=0.1 # time constant of y
+# taui=0.005 # time constant of Iext
+# ki=3200 # conversion of y to iext
+# res=simulate(f, y0, taui, ki, tmax, delta_t)
 
-res=simulate(f, y0, taui, ki, tmax, delta_t)
+taui0 = 0.00265 # Slow
+tauy0 = 0.00075
+kiy0 = 360
+
+taui1 = 0.0014 # Fast
+tauy1 = 0.00034
+kiy1 = 860
+res=simulate2(f, y0, taui0, tauy0, kiy0, taui1, tauy1, kiy1, tmax, delta_t)
 
 # =============================================================================
 # plt.subplot(4,1,1)
@@ -2413,7 +2434,7 @@ plt.ylabel('Current')
 
 Iext=res[2]
 
-
+# HERE is where it goes
 v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr)
 plt.subplot(3,1,2)
 plt.plot(res[0], v)
@@ -2421,25 +2442,51 @@ plt.xlabel('Time (sec)')
 plt.ylabel('Membrane \npotential (mV)')
 
 navgs=50
-tmeanavg=[]
 rlist=np.linspace(0,1,10)
 napsmean=[]
 for j, r in enumerate(rlist):
-    tmeani=[]
     napsi=[]
     for i in range(navgs): 
         print(j, len(rlist), i, navgs)
         v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr)
-        tmeani.append(tmean)
         napsi.append(naps)
-    tmeanavg.append(np.mean(tmeani))
     napsmean.append(np.mean(napsi))
        
 plt.subplot(3,1,3)
-plt.plot(rlist, np.array(napsmean)/tmax)
-plt.ylabel('Mean\nfiring rate')
+plt.plot(rlist, napsmean)
+plt.ylabel('Mean # of APs')
 plt.xlabel('Proportion of fast synapses')
 plt.tight_layout()
+plt.show()
+
+#%% Random input (# APs vs f) for fixed r values
+
+rlist2=[0, 0.25, 0.5, 0.75, 1]
+# rlist2=np.linspace(0.8, 1, 5)
+flist=np.linspace(1, 100,10)
+foutlist=[]
+napslist=[]
+for i,r in enumerate(rlist2):
+    print(i, len(rlist2))
+    tlist=[]
+    napslisti=[]
+    for j, f in enumerate(flist):
+        print(i, len(rlist2), j, len(flist))
+        _, _, Iextlist = simulate2(f, y0, taui0, tauy0, kiy0, taui1, tauy1, kiy1, tmax, delta_t)
+        v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr)
+        tlist.append(tmean)
+        napslisti.append(naps)
+    fout=1/np.array(tlist)
+    foutlist.append(fout)
+    napslist.append(napslisti)
+
+for i,fout in enumerate(foutlist):
+    plt.plot(flist, napslist[i], label='r={}'.format(np.around(rlist2[i],2)), marker='o')
+
+plt.legend(fontsize=fs-3)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.ylabel('# of APs', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
 plt.show()
 
     #%%
@@ -2902,7 +2949,7 @@ plt.title('Realistic injection', fontsize=fs)
 plt.show()
 
 
-#%% Get the parameters which fit the current between 10 and 40 Hz linearly for NR
+#%% (NR) Fit the current between 10 and 40 Hz linearly
 
 def zform(z1,z2, f1,f2,f):
     return z1+(z2-z1)/(f2-f1)*(f-f1)
@@ -3005,8 +3052,6 @@ def gettmean(r, Iext, g, vb, dnum, C, Cr):
     tmean = np.mean(np.diff(ssaptimes))
     return v, tmean, naps, aptimes
 
-
-
 def geti(dnum):
 
     dsize= 'z' # f full, z zoomed
@@ -3023,7 +3068,6 @@ def geti(dnum):
     I = 25*I
     vd=50*vd
     return I, vd
-
 
 dtype=0
 if dtype==0:
@@ -3221,8 +3265,7 @@ plt.show()
 
 rlist=np.linspace(0,1,100)
 flist=[10, 15, 20, 25, 30, 35, 40]
-# flist=[10, 15, 20, 25, 30, 40, 50]
-# flist=[15, 20, 25, 30, 40, 50, 70]# Plot this one
+# flist=np.linspace(10,25, 12)
 aps=[]
 for ind, f in enumerate(flist):
     print(ind, len(flist))
@@ -3243,7 +3286,7 @@ plt.tick_params(axis='both', labelsize=fs)
 plt.title('Injections with fit parameters', fontsize=fs)
 # plt.title('Spike injection', fontsize=fs)
 plt.show()
-#%% # of APs vs input frequency (f) for fixed r values (data fit parameters)
+#%% (# of APs) vs (f) for fixed r values (data fit parameters)
 
 rlist2=[0, 0.25, 0.5, 0.75, 1]
 # rlist2=np.linspace(0.8, 1, 5)
