@@ -14,10 +14,10 @@ def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
         tlist=[]
         ylist=[]
         Iextlist=[]
-        
+
         Iext=0
         y=0
-        
+
         tcurr=0
         timer = delta_t
         e=1e-6
@@ -26,7 +26,7 @@ def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
             t1 = timer
             
             if t0 < t1:
-                y = y0
+                y += y0
                 tmin=t0
                 timer-=tmin
             else:
@@ -35,11 +35,10 @@ def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
                 tlist.append(tcurr)
                 timer=delta_t
                 tmin=timer
-            
+
             tcurr += tmin
 
             # Update the continuous dynamics
-            
             Iext += (-Iext/taui + ki*y)*tmin
             y += (-y/tauy)*tmin
             
@@ -77,12 +76,12 @@ def simulate(tlisti, tliste, iext, eext, vlen):
     for i in range(1, vlen):
         
         dVdt =  -(V[i-1]-vrest)/tauv+eext[i-1]-iext[i-1]
-        Vnext= V[i-1] + dVdt * delta_t # *(1-refblock)
+        Vnext= V[i-1] + dVdt*delta_t
         
         dwdt=-w[i-1]/tauw
-        w[i]=w[i-1]+dwdt*delta_t
+        w[i]=w[i-1] + dwdt*delta_t
         
-        dvthdt = - (vth[i-1]-vth0)/tauvth-kw*w[i-1]
+        dvthdt = -(vth[i-1]-vth0)/tauvth-kw*w[i-1]
         vth[i]= vth[i-1] + dvthdt*delta_t
 
         if Vnext>vth[i]:
@@ -91,8 +90,7 @@ def simulate(tlisti, tliste, iext, eext, vlen):
         else:
             V[i] = Vnext
         if V[i]<vrest:
-
-            dwdt = (wmax-w[i-1])/tauwmax
+            dwdt = -(w[i-1]-wmax)/tauwmax
             w[i]= w[i-1] + dwdt*delta_t
     return t, V, w, vth, aplist
 
@@ -107,6 +105,9 @@ def getstats(aplist):
     cv=var/tmean**2
     
     return tmean, var, cv
+
+def getaps(aplist):
+    return [apind*delta_t for apind in aplist if apind!=0]
 
 # Main code -------------------------------------------------------------------
 
@@ -140,46 +141,58 @@ d1=d.iloc[1:, -3:][7*excnum:7*(excnum+1)] # Mean sustained rate
 estrengths=[10,4,1]
 istrengths=[8,4,2]
 
-f=10
-fi=10
+f=5 # exc
+fi=10 # inh
 
-y0e=2.1 # synthetic spiking variable amplitude
-y0i=1.2
+y0e=0.8 # synthetic spiking variable amplitude
+y0i=0.22
 
 tauye=0.1 # decay rate of synthetic spiking variable
 tauyi=0.1
 
-tauie=0.12 # current decay rate
+tauie=0.01 # current decay rate
 tauii=0.01
 
-kie=15 #convert trom y to I
-kii=25
+kie=30 # convert trom y to I
+kii=10
 
 tauv=0.1
 vrest=0 # -70e-3
 
-vth0=0.2 # -50e-3
-tauvth=0.1
+vth0=0.03 # -50e-3
+tauvth=0.01
 
-kw=20 # threshold decrease strength
-w0=20
-tauw=0.1
-tauwmax=0.1
-wmax=0.4
+kw=200 # threshold decrease strength
+tauw=1
+tauwmax=0.05
+wmax=0.005
 
 tmax=100
 delta_t=0.001
-navgs=100
+navgs=50
 
-ptype=10 # 1 - Visual, 10 - model0
+ptype=100 # 1 - Visual, 10 - model0
 
 # =============================================================================
 # # Plot the excitatory and inhibitory current
+# tmax=1
+# fi=3
+# tlisti, tliste, iext, eext, yi, ye = getcurrents(f, fi, y0e, y0i, tauye, tauyi, 
+#                                          tauie, tauii, kie, kii, tmax, 
+#                                          delta_t)
+# fs=15
 # plt.subplot(2,1,1)
-# plt.plot(tlisti, iext)
+# plt.plot(np.linspace(0, len(yi), len(yi))*delta_t, yi)
+# plt.ylabel('Synthetic\nspikes\n({} Hz)'.format(fi), fontsize=fs)
+# plt.xticks([])
+# plt.tick_params(axis='both', labelsize=fs)
 # plt.subplot(2,1,2)
-# plt.plot(tliste, eext)
+# plt.plot(tlisti, iext)
+# plt.ylabel('Inhibitory\ncurrent'.format(fi), fontsize=fs)
+# plt.xlabel('Time (sec)', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
 # plt.show()
+# #%%
 # =============================================================================
 
 if ptype==1:
@@ -188,8 +201,8 @@ if ptype==1:
                                              tauie, tauii, kie, kii, tmax, 
                                              delta_t)
     vlen=len(tliste)
-    # t, V, w, vth, aplist = simulate(tlisti, tliste, iext, eext, vlen)
-    t, V, w, vth, aplist = simulate(tlisti, tliste, yi,ye, vlen)
+    t, V, w, vth, aplist = simulate(tlisti, tliste, iext, eext, vlen)
+    # t, V, w, vth, aplist = simulate(tlisti, tliste, yi, ye, vlen)
 
     fig, ax = plt.subplots(4, 1)
 
@@ -211,12 +224,10 @@ if ptype==1:
     ax[3].set_ylabel('w')
     ax[3].set_xlabel('Time (s)')
     plt.show()
+    print(len(getaps(aplist)))
 
 if ptype==10:
-    # Plot data
-    for i in range(3):
-        plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
-    plt.legend()
+
     filist=[0,50,100,150,200,250,300]
     # filist=np.linspace(0,40,5)
     tmeanavg=[]
@@ -234,14 +245,21 @@ if ptype==10:
             cvi.append(cv)
         tmeanavg.append(np.mean(tmeani))
         cvavg.append(np.mean(cvi))
+        
+    # Plot data   
+    for i in range(3):
+        plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
+    plt.legend()
     plt.plot(filist, 1/np.array(tmeanavg), marker='o', label='simulations', color='k')
     plt.legend()
+    plt.ylabel('Sustaining rate')
+    plt.xlabel('Inhibitory frequency')
     plt.show()
 
 if ptype==100:
     # Plot data
     # filist=[0,50,100,150,200,250,300]
-    filist=np.linspace(0,20,5)
+    filist=np.linspace(0,40,7)
     tmeanavg=[]
     cvavg=[]
     for i, fi in enumerate(filist):
@@ -259,4 +277,6 @@ if ptype==100:
         cvavg.append(np.mean(cvi))
     plt.plot(filist, 1/np.array(tmeanavg), marker='o', label='simulations', color='k')
     plt.legend()
+    plt.ylabel('Sustaining rate')
+    plt.xlabel('Inhibitory frequency')
     plt.show()
