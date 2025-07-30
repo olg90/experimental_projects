@@ -1,0 +1,198 @@
+#%% Define the functions for fitting
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+
+def simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs):
+    
+    tavgs=[]
+    cavgs=[]
+    
+    for _ in range(navgs):
+    
+        vlist=[]
+        wlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        e=1e-6
+        while tcurr < tmax:
+            t0=exponential(1/(f+e)) # action potential
+            t1=exponential(1/(fi+e))
+            t2 = timer
+
+            if t0 < t1 and t0 < t2: # AP occurrs
+                b = binomial(M, pr)
+                v=v+(c+w)*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2: # an inhibition event occurs
+            
+                bi = binomial(Mi, pri)
+                v=v-ci*bi
+                tmin = t1
+                timer-=tmin
+    
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    wlist.append(w)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+                
+            if v < 0:
+                w += -((w-wmax)/tauwmax)*tmin
+                
+            # Update the continuous dynamics
+    
+            v += (-v / tauv) * tmin
+            w += (-w/tauw)*tmin
+            
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, wlist, prelist, postlist, Tmean, CVT2
+
+# Load the entire Excel file
+file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"  # Change this to your actual path
+
+# Read all data into a dictionary
+data = pd.read_excel(file_path, sheet_name=None, header=None)
+
+# # Print all sheet names
+# print("data found:", list(data.keys()))
+
+# # Loop through data and preview first few rows
+# for sheet_name, df in data.items():
+#     print(f"\n--- Sheet: {sheet_name} ---")
+#     print(df.head())
+
+names = ['Summary', '240425_E4', '240425_E5', '240425_E6', 
+         '240426_E2', '240426_E3', '240426_E5', '240515_E2', 
+         '240516_E2', '240516_E7']
+
+d=data[names[0]]
+# rates = d.iloc[:, 0][:8]
+excnum=2 # #0=exc weight 10, #1=exc weight 4, #2=exc weight 1
+d1=d.iloc[1:, -3:][7*excnum:7*(excnum+1)] # Mean sustained rate
+# susrates=[d.iloc[1:, -3:][7*i:7*(i+1)] for i in range(3)]
+# plt.plot(rates, d1.iloc[:,2], marker='o') # 0 = 8 nS/input, 1 = 4 nS/input, 2 = 2 nS/input 
+
+# 0 = 8 nS/input, 1 = 4 nS/input, 2 = 2 nS/input 
+estrengths=[10,4,1]
+istrengths=[8,4,2]
+# =============================================================================
+# for i in range(3):
+#     plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
+# plt.legend()
+# plt.show()
+# #%%
+# =============================================================================
+
+f=10 #excitatory frequency
+fi=10
+pr=0.3
+pri=0.5
+M=100
+Mi=100
+c=0.001 # 0.0042
+ci=0.0022
+
+tauv=1
+
+kw=3 # rate of increase of w
+tauw=0.1 # decay rate of w
+wmax=1
+tauwmax=1
+
+vth=0.2 # Threshold value
+
+v=0
+w=0
+
+tmax = 10 # <-------------- TMAX
+delta_t = 0.001
+navgs = 20
+
+ptest=10
+
+filist100=np.linspace(0,300,12)
+
+if ptest==1:
+    
+    tlist, vlist, wlist, prelist, postlist, Tmean, CVT2 = simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+    plt.subplot(2,1,1)
+    plt.plot(tlist, vlist, label=r'$v_m$')
+    plt.plot(tlist, vth*np.ones(len(tlist)), label='vth', color='k')
+    plt.plot(tlist, 0*np.ones(len(tlist)), label='v0', color='gray', linestyle='--')
+    plt.legend(loc='upper right')
+    plt.ylabel('Volts')
+    plt.xticks([])
+    plt.subplot(2,1,2)
+    plt.plot(tlist, wlist, label='w')
+    plt.legend(loc='upper right')
+    plt.xlabel('Time')
+    plt.ylabel('Sodium channel\navailability')
+    plt.show()
+
+if ptest==10:
+    filist=[0,50,100,150,200,250,300]
+    ftlist=[]
+    for i,fi in enumerate(filist):
+        print(i, len(filist))
+        res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+        ftlist.append(res[5])
+    
+    tsim=np.array(ftlist)
+    res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+    
+    # plt.subplot(2,1,2)
+    for i in range(3):
+        plt.plot(filist, d1.iloc[:,i], marker='o', label='exc={}, inh={}'.format(estrengths[excnum], istrengths[i]))
+    fs=15
+    plt.plot(filist, 1/tsim, label='simulations', color='k', marker='o')
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.show()
+    
+if ptest==100:
+    filist=filist100
+    ftlist=[]
+    for i,fi in enumerate(filist):
+        print(i, len(filist))
+        res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+        ftlist.append(res[5])
+    
+    tsim=np.array(ftlist)
+    res=simulate(v, w, vth, c, ci, f, fi, pr, pri, M, Mi, wmax, tauwmax, tauv, tauw, tmax, delta_t, navgs)
+    
+    plt.plot(filist, 1/tsim, label='simulations', color='k', marker='o')
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.show()
+
