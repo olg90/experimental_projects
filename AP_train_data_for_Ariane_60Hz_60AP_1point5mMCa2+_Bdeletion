@@ -1,0 +1,114 @@
+#%%
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.signal import find_peaks
+
+# df = pd.read_excel(r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\other\AP_train_data_for_Ariane_60Hz_60AP_1point5mMCa2+_Bdeletion.xlsx')
+# data=(df.iloc[2:, 0:]).to_numpy()
+
+s=1700
+e=22050
+t=data[:, 0]
+x=data[:, 1:]
+xtrim=x[s:e, :]
+ttrim=t[s:e]
+
+# made the plot negative so that the current is going upwards
+# a positive current means positive ions are flowing from the inside to the
+# outside of the neuron but the measurement will be negative because we're 
+# measuring positive ions leaving the interior of the neuron and therefore
+# making it more negative, therefore to get the quantal content as a peak of each stimulus
+# number, I need to calcualte the peak values and then calcuate the 
+
+dnum=4 # 0-4
+plt.plot(ttrim, -xtrim[:, dnum]) 
+plt.show()
+
+dt=0.00005
+len(x[:, 0])*dt
+
+# Find peaks
+
+peaklist=[]
+for i in range(5):
+    peaks, _ = find_peaks(-xtrim[:, i], prominence=2000)  # Adjust 'prominence' as needed
+    peaklist.append(peaks)
+
+
+
+fig, axs = plt.subplots(5, 1, figsize=(10, 8), sharex=True)
+
+for i in range(5):
+    trace = -xtrim[:, i]  # invert to get positive peaks
+    peaks = peaklist[i]
+    
+    axs[i].plot(ttrim, trace, label=f'Trace {i}')
+    axs[i].plot(ttrim[peaks], trace[peaks], 'rx', label='Peaks')
+    axs[i].set_ylabel('Current (pA)')
+    axs[i].legend()
+    axs[i].set_title(f'Trace {i} with peaks')
+
+axs[-1].set_xlabel('Time (s)')
+plt.tight_layout()
+plt.show()
+
+#%% Plot the peaks vs stimulus number
+
+fs = 15
+animal_names = ['Animal 1', 'Animal 2', 'Animal 3', 'Animal 4', 'Animal 5']
+stim_numbers = np.arange(len(ttrim))
+
+fig, axs = plt.subplots(5, 1, figsize=(10, 12), sharex=True)
+
+for i in range(5):
+    trace = -xtrim[:, i]
+    peaks = peaklist[i]
+    
+    axs[i].plot(peaks, trace[peaks], marker='o', linestyle='', label=animal_names[i])
+    axs[i].set_ylabel('Peak current\namplitude (nA)', fontsize=fs)
+    axs[i].legend(loc='upper right', fontsize=fs)
+    axs[i].tick_params(axis='both', labelsize=fs)
+
+axs[-1].set_xlabel('Stimulus number', fontsize=fs)
+plt.tight_layout()
+plt.show()
+
+
+#%% One plot
+fs = 15
+animal_names = ['Animal 1', 'Animal 2', 'Animal 3', 'Animal 4', 'Animal 5']
+ms=['o', 'x', '^', 's', '*']
+stim_numbers = np.arange(len(ttrim))
+
+plt.figure(figsize=(10, 6))
+
+for i in range(5):
+    trace = -xtrim[:, i]
+    peaks = peaklist[i]
+    plt.plot(peaks, trace[peaks], label=animal_names[i], marker=ms[i])
+
+plt.xlabel('Stimulus number', fontsize=fs)
+plt.ylabel('Peak current amplitude (pA)', fontsize=fs)
+
+plt.title('Peak current amplitude for all animals', fontsize=fs+2)
+plt.legend(fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.tight_layout()
+plt.show()
+#%% Convert peaks back to excel file
+
+# Create a dictionary for peak values
+peak_data = {}
+for i in range(5):
+    trace = -xtrim[:, i]
+    peaks = peaklist[i]
+    peak_data[f'Animal {i+1}'] = trace[peaks]
+
+# Convert to DataFrame (pads with NaN if peak counts differ)
+peak_df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in peak_data.items()]))
+
+peak_df.to_excel(r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\other\peak_data.xlsx')
+
+
+
