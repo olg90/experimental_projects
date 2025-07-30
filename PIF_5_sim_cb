@@ -114,16 +114,16 @@ istrengths=[8,4,2]
 
 f=10 #excitatory frequency
 fi=10
-pr=0.3
+pr=0.4
 pri=0.5
 M=100
 Mi=100
 c=0.001 # 0.0042
-ci=0.0022
+ci=0.0022 # 0.0022 # increasing inh strength brings rightmost point leftwards
 
-tauv=1
+tauv=1.5
 
-kw=3 # rate of increase of w
+kw=1 # rate of increase of w
 tauw=0.1 # decay rate of w
 wmax=1
 tauwmax=1
@@ -133,13 +133,12 @@ vth=0.2 # Threshold value
 v=0
 w=0
 
-tmax = 10 # <-------------- TMAX
+tmax = 20 # <-------------- TMAX
 delta_t = 0.001
 navgs = 20
 
 ptest=10
 
-filist100=np.linspace(0,300,12)
 
 if ptest==1:
     
@@ -176,11 +175,12 @@ if ptest==10:
     plt.plot(filist, 1/tsim, label='simulations', color='k', marker='o')
     plt.ylabel('Steady state mean firing rate', fontsize=fs)
     plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
     plt.legend(fontsize=fs-3)
     plt.show()
     
 if ptest==100:
-    filist=filist100
+    filist=np.linspace(0,300,12)
     ftlist=[]
     for i,fi in enumerate(filist):
         print(i, len(filist))
