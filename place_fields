@@ -6,11 +6,11 @@ from scipy.io import loadmat
 from scipy.stats import nbinom
 from scipy.optimize import minimize
 
-# ========================= Load csumflat from .mat files =========================
+# ========================= Load data from .mat files =========================
 n = [] # number of place fields
 p = [] # neuron maps
 
-location=1
+location=0
 if location==0:
     dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
 if location==1:
@@ -155,8 +155,8 @@ for pi in pth:
 
 # Step 3: Flatten counts
 csum = np.sum(clist, axis=0)
-csumflat = csum.flatten()
-binarr = np.arange(np.min(csumflat) - 0.5, np.max(csumflat) + 1.5)
+data = csum.flatten()
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
 bin_centers = (binarr[:-1] + binarr[1:]) / 2
 fs = 20
 
@@ -165,8 +165,8 @@ def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
     w2 = 1 - w1
     return w1 * norm.pdf(x, mu1, sigma1) + w2 * norm.pdf(x, mu2, sigma2)
 
-hist_vals, _ = np.histogram(csumflat, bins=binarr, density=True)
-p0 = [0.5, np.mean(csumflat) - 1, 1, np.mean(csumflat) + 1, 1]
+hist_vals, _ = np.histogram(data, bins=binarr, density=True)
+p0 = [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]
 bounds = ([0, -np.inf, 1e-3, -np.inf, 1e-3],
           [1, np.inf, np.inf, np.inf, np.inf])
 
@@ -187,7 +187,7 @@ def neg_log_likelihood(params):
     a, b = params
     if a <= 0 or b <= 0:
         return np.inf
-    return -np.sum(betabinom.logpmf(csumflat, n=n_neurons, a=a, b=b))
+    return -np.sum(betabinom.logpmf(data, n=n_neurons, a=a, b=b))
 
 res = minimize(neg_log_likelihood, x0=[2, 2], method='L-BFGS-B',
                bounds=[(1e-5, None), (1e-5, None)])
@@ -202,7 +202,7 @@ var_bb = (n_neurons * alpha_fit * beta_fit * (n_neurons + alpha_fit + beta_fit))
 cv2_bb = var_bb / mean_bb ** 2
 
 # --- Binomial Fit (MLE) ---
-p_hat = np.mean(csumflat) / n_neurons
+p_hat = np.mean(data) / n_neurons
 pmf_binom = binom.pmf(x_discrete, n=n_neurons, p=p_hat)
 mean_binom = n_neurons * p_hat
 var_binom = n_neurons * p_hat * (1 - p_hat)
@@ -210,7 +210,7 @@ cv2_binom = var_binom / mean_binom ** 2 if mean_binom != 0 else np.nan
 
 # --- Plot All Fits ---
 plt.figure()
-plt.hist(csumflat, bins=binarr, density=False,
+plt.hist(data, bins=binarr, density=False,
          color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
 
 plt.plot(bin_centers, y_gmm, 'r-', lw=5,
@@ -266,9 +266,9 @@ plt.show()
 #     clist.append(counts)
 # 
 # csum=np.sum(clist, axis=0)
-# csumflat=csum.flatten()
-# binarr = np.arange(np.min(csumflat) - 0.5, np.max(csumflat) + 1.5)
-# binplot = np.arange(np.min(csumflat), np.max(csumflat) + 1)
+# data=csum.flatten()
+# binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+# binplot = np.arange(np.min(data), np.max(data) + 1)
 # fs=15
 # 
 # from scipy.stats import norm
@@ -282,20 +282,20 @@ plt.show()
 #     return w1 * norm.pdf(x, mu1, sigma1) + w2 * norm.pdf(x, mu2, sigma2)
 # 
 # # histogram
-# hist_vals, bin_edges = np.histogram(csumflat, bins=binarr, density=True)
+# hist_vals, bin_edges = np.histogram(data, bins=binarr, density=True)
 # bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 # 
 # # fit
-# p0 = [0.5, np.mean(csumflat)-1, 1, np.mean(csumflat)+1, 1]
+# p0 = [0.5, np.mean(data)-1, 1, np.mean(data)+1, 1]
 # params, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0, maxfev=10000)
 # 
 # # evaluate fit
-# x_fit = np.linspace(np.min(csumflat), np.max(csumflat), 1000)
+# x_fit = np.linspace(np.min(data), np.max(data), 1000)
 # y_fit = gaussian_mixture(x_fit, *params)
 # 
 # # plot
 # plt.figure()
-# plt.hist(csumflat, bins=binarr, density=True,
+# plt.hist(data, bins=binarr, density=True,
 #          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
 # plt.plot(x_fit, y_fit, 'r', label='Gaussian mixture fit')
 # plt.title('({},{})-grid'.format(grid[0], grid[1]), fontsize=fs)
@@ -308,8 +308,8 @@ plt.show()
 # from scipy.stats import betabinom
 # from scipy.optimize import minimize
 # 
-# # Step 1: Your `csumflat` already contains counts per region (number of neurons active)
-# csumflat = csum.flatten()
+# # Step 1: Your `data` already contains counts per region (number of neurons active)
+# data = csum.flatten()
 # 
 # # Step 2: Total number of neurons per grid patch = number of pthc arrays
 # n_neurons = len(pth)
@@ -319,7 +319,7 @@ plt.show()
 #     a, b = params
 #     if a <= 0 or b <= 0:
 #         return np.inf
-#     return -np.sum(betabinom.logpmf(csumflat, n=n_neurons, a=a, b=b))
+#     return -np.sum(betabinom.logpmf(data, n=n_neurons, a=a, b=b))
 # 
 # res = minimize(neg_log_likelihood, x0=[2, 2], method='L-BFGS-B', 
 #                bounds=[(1e-5, None), (1e-5, None)])
@@ -328,12 +328,12 @@ plt.show()
 # print(f"Fitted alpha: {alpha_fit:.3f}, beta: {beta_fit:.3f}")
 # 
 # # Step 4: Plot histogram with fitted beta-binomial PMF
-# binarr = np.arange(np.min(csumflat) - 0.5, np.max(csumflat) + 1.5)
-# binplot = np.arange(np.min(csumflat), np.max(csumflat) + 1)
+# binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+# binplot = np.arange(np.min(data), np.max(data) + 1)
 # 
 # fs = 15
 # plt.figure()
-# plt.hist(csumflat, bins=binarr, density=True, 
+# plt.hist(data, bins=binarr, density=True, 
 #          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
 # 
 # # Overlay beta-binomial fit
@@ -408,9 +408,9 @@ for pi in pthc:
     clist.append(counts)
 
 csum=np.sum(clist, axis=0)
-csumflat=csum.flatten()
-binarr = np.arange(np.min(csumflat) - 0.5, np.max(csumflat) + 1.5)
-binplot = np.arange(np.min(csumflat), np.max(csumflat) + 1)
+data=csum.flatten()
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+binplot = np.arange(np.min(data), np.max(data) + 1)
 fs=15
 # =============================================================================
 # pth3=[]
@@ -450,7 +450,7 @@ fs=15
 # =============================================================================
 # =============================================================================
 # plt.figure()
-# plt.hist(csumflat, bins=binarr, density=True, 
+# plt.hist(data, bins=binarr, density=True, 
 #          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
 # plt.title('({},{})-grid, counting all AP rates > {}'.format(
 #     grid[0], grid[1], th), fontsize=fs)
@@ -477,20 +477,20 @@ def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
     return w1 * norm.pdf(x, mu1, sigma1) + w2 * norm.pdf(x, mu2, sigma2)
 
 # histogram
-hist_vals, bin_edges = np.histogram(csumflat, bins=binarr, density=True)
+hist_vals, bin_edges = np.histogram(data, bins=binarr, density=True)
 bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
 # fit
-p0 = [0.5, np.mean(csumflat)-1, 1, np.mean(csumflat)+1, 1]
+p0 = [0.5, np.mean(data)-1, 1, np.mean(data)+1, 1]
 params, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0)
 
 # evaluate fit
-x_fit = np.linspace(np.min(csumflat), np.max(csumflat), 1000)
+x_fit = np.linspace(np.min(data), np.max(data), 1000)
 y_fit = gaussian_mixture(x_fit, *params)
 
 # plot
 plt.figure()
-plt.hist(csumflat, bins=binarr, density=True,
+plt.hist(data, bins=binarr, density=True,
          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
 plt.plot(x_fit, y_fit, 'r', label='Gaussian mixture fit')
 plt.title('({},{})-grid, counting all AP rates > {}'.format(grid[0], grid[1], th), fontsize=fs)
@@ -503,8 +503,8 @@ plt.show()
 from scipy.stats import betabinom
 from scipy.optimize import minimize
 
-# Step 1: Your `csumflat` already contains counts per region (number of neurons active)
-csumflat = csum.flatten()
+# Step 1: Your `data` already contains counts per region (number of neurons active)
+data = csum.flatten()
 
 # Step 2: Total number of neurons per grid patch = number of pthc arrays
 n_neurons = len(pthc)
@@ -514,7 +514,7 @@ def neg_log_likelihood(params):
     a, b = params
     if a <= 0 or b <= 0:
         return np.inf
-    return -np.sum(betabinom.logpmf(csumflat, n=n_neurons, a=a, b=b))
+    return -np.sum(betabinom.logpmf(data, n=n_neurons, a=a, b=b))
 
 res = minimize(neg_log_likelihood, x0=[2, 2], method='L-BFGS-B', bounds=[(1e-5, None), (1e-5, None)])
 alpha_fit, beta_fit = res.x
@@ -522,12 +522,12 @@ alpha_fit, beta_fit = res.x
 print(f"Fitted alpha: {alpha_fit:.3f}, beta: {beta_fit:.3f}")
 
 # Step 4: Plot histogram with fitted beta-binomial PMF
-binarr = np.arange(np.min(csumflat) - 0.5, np.max(csumflat) + 1.5)
-binplot = np.arange(np.min(csumflat), np.max(csumflat) + 1)
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+binplot = np.arange(np.min(data), np.max(data) + 1)
 
 fs = 15
 plt.figure()
-plt.hist(csumflat, bins=binarr, density=True, 
+plt.hist(data, bins=binarr, density=True, 
          color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
 
 # Overlay beta-binomial fit
@@ -560,7 +560,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Compute histogram
-plt.hist(per, bins=40, density=True, label='csumflat', edgecolor='k')
+plt.hist(per, bins=40, density=True, label='data', edgecolor='k')
 
 # Fit exponential distribution
 loc, scale = expon.fit(per, floc=0)  # force location = 0
@@ -580,7 +580,7 @@ import matplotlib.pyplot as plt
 plt.figure()
 
 # Histogram
-plt.hist(per, bins=45, density=True, label='csumflat', edgecolor='k')
+plt.hist(per, bins=45, density=True, label='data', edgecolor='k')
 
 # Fit gamma distribution
 shape, loc, scale = gamma.fit(per, floc=0)  # force location = 0
@@ -605,7 +605,7 @@ plt.ylabel('Density')
 # for r in possible_r:
 #     mean = np.mean(n)
 #     var = np.var(n)
-#     if var > mean:  # NB only defined for overdispersed csumflat
+#     if var > mean:  # NB only defined for overdispersed data
 #         p_hat = r / (r + mean)
 #         ll = np.sum(nbinom.logpmf(n, r, p_hat))
 #         if ll > best_ll:
@@ -617,11 +617,11 @@ plt.ylabel('Density')
 # 
 # =============================================================================
 # Original MLE estimation using continuous parameters
-def neg_log_likelihood(params, csumflat):
+def neg_log_likelihood(params, data):
     r, p = params
     if r <= 0 or not (0 < p < 1):
         return np.inf
-    return -np.sum(nbinom.logpmf(csumflat, r, p))
+    return -np.sum(nbinom.logpmf(data, r, p))
 
 initial_guess = [2.0, 0.1]
 result = minimize(neg_log_likelihood, initial_guess, args=(n,), bounds=[(1e-3, None), (1e-5, 1 - 1e-5)])
@@ -673,24 +673,24 @@ plt.colorbar()
 
 binarr = np.arange(np.min(pcountsum) - 0.5, np.max(pcountsum) + 1.5)
 binplot = np.arange(np.min(pcountsum), np.max(pcountsum) + 1)
-# Flatten csumflat for fitting
-csumflat_flat = pcountsum.flatten()
+# Flatten data for fitting
+data_flat = pcountsum.flatten()
 # Fit Normal distribution
-mu_norm, std_norm = norm.fit(csumflat_flat)
+mu_norm, std_norm = norm.fit(data_flat)
 
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
 
-# Flatten and bin csumflat
-csumflat = pcountsum.flatten()
-binarr = np.arange(np.min(csumflat) - 0.5, np.max(csumflat) + 1.5)
-binplot = np.arange(np.min(csumflat), np.max(csumflat) + 1)
+# Flatten and bin data
+data = pcountsum.flatten()
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+binplot = np.arange(np.min(data), np.max(data) + 1)
 
 # ======== Fit Skew-Normal ========
-a_skew, loc_skew, scale_skew = skewnorm.fit(csumflat)
-x_vals = np.linspace(np.min(csumflat), np.max(csumflat), 1000)
+a_skew, loc_skew, scale_skew = skewnorm.fit(data)
+x_vals = np.linspace(np.min(data), np.max(data), 1000)
 pdf_skew = skewnorm.pdf(x_vals, a_skew, loc=loc_skew, scale=scale_skew)
 
 # ======== Fit Gaussian Mixture (2 components) ========
@@ -698,10 +698,10 @@ def neg_log_likelihood(params):
     w, mu1, sigma1, mu2, sigma2 = params
     if not (0 < w < 1 and sigma1 > 0 and sigma2 > 0):
         return np.inf
-    pdf_vals = w * norm.pdf(csumflat, mu1, sigma1) + (1 - w) * norm.pdf(csumflat, mu2, sigma2)
+    pdf_vals = w * norm.pdf(data, mu1, sigma1) + (1 - w) * norm.pdf(data, mu2, sigma2)
     return -np.sum(np.log(pdf_vals + 1e-12))
 
-initial_guess = [0.5, np.percentile(csumflat, 25), 1.0, np.percentile(csumflat, 75), 1.0]
+initial_guess = [0.5, np.percentile(data, 25), 1.0, np.percentile(data, 75), 1.0]
 bounds = [(1e-3, 1 - 1e-3), (None, None), (1e-3, None), (None, None), (1e-3, None)]
 result = minimize(neg_log_likelihood, initial_guess, bounds=bounds)
 w, mu1, sigma1, mu2, sigma2 = result.x
@@ -711,7 +711,7 @@ pdf2 = (1 - w) * norm.pdf(x_vals, mu2, sigma2)
 
 # ======== Plot All Together ========
 plt.figure(figsize=(9, 4))
-plt.hist(csumflat, bins=binarr, density=True, color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
+plt.hist(data, bins=binarr, density=True, color='skyblue', edgecolor='black', alpha=0.7, label='Data histogram')
 # =============================================================================
 # plt.plot(x_vals, pdf_skew, 'g-', linewidth=2, label=f'Skew Normal (a={a_skew:.2f})')
 # =============================================================================
@@ -792,11 +792,11 @@ plt.xlabel('AP rate')
 plt.ylabel('# of neurons with this AP rate in their place map')
 plt.xticks(np.unique(all_unique_rates))
 
-def neg_log_likelihood(params, csumflat):
+def neg_log_likelihood(params, data):
     r, pp = params
     if r <= 0 or not (0 < pp < 1):
         return np.inf
-    return -np.sum(nbinom.logpmf(csumflat, r, pp))
+    return -np.sum(nbinom.logpmf(data, r, pp))
 
 initial_guess = [2.0, 0.1]
 result = minimize(neg_log_likelihood, initial_guess, args=(all_unique_rates,), 
@@ -861,35 +861,35 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.stats import nbinom, weibull_min
 
-csumflat = all_unique_rates
-csumflat = csumflat[csumflat > 0]
+data = all_unique_rates
+data = data[data > 0]
 
 # Histogram (density=True for PDF scale)
-bin_edges = np.arange(csumflat.min() - 0.5, csumflat.max() + 1.5, 1)
-hist_y, _ = np.histogram(csumflat, bins=bin_edges, density=True)
+bin_edges = np.arange(data.min() - 0.5, data.max() + 1.5, 1)
+hist_y, _ = np.histogram(data, bins=bin_edges, density=True)
 bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
 # --- Negative log likelihood for Negative Binomial ---
-def neg_log_likelihood(params, csumflat):
+def neg_log_likelihood(params, data):
     r, p = params
     if r <= 0 or not (0 < p < 1):
         return np.inf
-    return -np.sum(nbinom.logpmf(csumflat, r, p))
+    return -np.sum(nbinom.logpmf(data, r, p))
 
 # Fit Negative Binomial params
 initial_guess = [5, 0.5]
-result = minimize(neg_log_likelihood, initial_guess, args=(csumflat,), 
+result = minimize(neg_log_likelihood, initial_guess, args=(data,), 
                   bounds=[(1e-3, None), (1e-5, 1-1e-5)])
 r_hat, p_hat = result.x
 
-# Negative Binomial PMF over csumflat range
-x_plot = np.arange(csumflat.min(), csumflat.max() + 1)
+# Negative Binomial PMF over data range
+x_plot = np.arange(data.min(), data.max() + 1)
 pmf_fit = nbinom.pmf(x_plot, r_hat, p_hat)
 
 # --- Weibull Fit ---
 # Weibull is continuous, so we use MLE from scipy (force loc=0)
-c_wb, loc_wb, scale_wb = weibull_min.fit(csumflat, floc=0)
-x_wb = np.linspace(csumflat.min(), csumflat.max(), 1000)
+c_wb, loc_wb, scale_wb = weibull_min.fit(data, floc=0)
+x_wb = np.linspace(data.min(), data.max(), 1000)
 pdf_wb = weibull_min.pdf(x_wb, c_wb, loc=loc_wb, scale=scale_wb)
 
 # To compare Weibull PDF with histogram and NB PMF, scale PDF:
@@ -913,26 +913,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import weibull_min, invgamma, fisk  # fisk = log-logistic
 
-# Your positive csumflat
-csumflat = all_unique_rates
-csumflat = csumflat[csumflat > 0]
+# Your positive data
+data = all_unique_rates
+data = data[data > 0]
 
 # Histogram for visualization
-bin_edges = np.arange(csumflat.min() - 0.5, csumflat.max() + 1.5, 1)
-hist_y, _ = np.histogram(csumflat, bins=bin_edges, density=True)
+bin_edges = np.arange(data.min() - 0.5, data.max() + 1.5, 1)
+hist_y, _ = np.histogram(data, bins=bin_edges, density=True)
 bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
 # Fit Weibull (shape c), force loc=0
-c_wb, loc_wb, scale_wb = weibull_min.fit(csumflat, floc=0)
-x = np.linspace(csumflat.min(), csumflat.max(), 1000)
+c_wb, loc_wb, scale_wb = weibull_min.fit(data, floc=0)
+x = np.linspace(data.min(), data.max(), 1000)
 pdf_wb = weibull_min.pdf(x, c_wb, loc=loc_wb, scale=scale_wb)
 
 # Fit Inverse Gamma (shape a), force loc=0
-a_ig, loc_ig, scale_ig = invgamma.fit(csumflat, floc=0)
+a_ig, loc_ig, scale_ig = invgamma.fit(data, floc=0)
 pdf_ig = invgamma.pdf(x, a_ig, loc=loc_ig, scale=scale_ig)
 
 # Fit Log-Logistic (Fisk), force loc=0
-c_ll, loc_ll, scale_ll = fisk.fit(csumflat, floc=0)
+c_ll, loc_ll, scale_ll = fisk.fit(data, floc=0)
 pdf_ll = fisk.pdf(x, c_ll, loc=loc_ll, scale=scale_ll)
 
 # Function to find inflection points (zero crossings of second derivative)
@@ -1000,12 +1000,15 @@ pshape = pth[0].shape
 # Grid size for patching
 n = 4
 grid = (n, n)
+
 # Compute number of patches that fit in each dimension
 x1 = pshape[0] // grid[0]
 x2 = pshape[1] // grid[1]
+
 # Initialize storage for patches and counts
 plist = []
 clist = []
+
 # Divide each array into patches and count active neurons in each patch
 for pi in pth:
     patches = np.zeros((x1, x2), dtype=object)
@@ -1020,32 +1023,15 @@ for pi in pth:
             counts[i, j] = count
     plist.append(patches)
     clist.append(counts)
+
 # Sum counts across all neurons, flatten to 1D array
 csum = np.sum(clist, axis=0)
-csumflat = csum.flatten()
+data = csum.flatten()
+
 # Binning setup for histogram
-binarr = np.arange(np.min(csumflat) - 0.5, np.max(csumflat) + 1.5)
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
 bin_centers = (binarr[:-1] + binarr[1:]) / 2
 fs = 20  # Font size for plots
-#         w            mu1      s1             m2     s2
-ic_gmm=[[0.5, np.mean(csumflat), 1, np.mean(csumflat), 1],
-        [0.5, np.mean(csumflat), 1, np.mean(csumflat), 1],
-        [0.5, np.mean(csumflat), 1, np.mean(csumflat), 1]]
-#         w  a1 b1 a2 b2
-ic_bb=[[0.1, 1, 2, 5, 5],
-       [0.1, 1, 2, 5, 5],
-       [0.2, 10, 15, 10, 50]]
-#            w    p1   p2
-ics_bin=[[0.5, 0.1, 0.15],
-         [0.05, 0.1, 0.2],
-         [0.05, 0.1, 0.2]]
-def getics(ics, n):
-    if n == 1:
-        return ics[0]
-    if n==2:
-        return ics[1]
-    if n==4:
-        return ics[2]
 
 # --- Gaussian Mixture Model ---
 
@@ -1053,15 +1039,15 @@ def getics(ics, n):
 def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
     return w1 * norm.pdf(x, mu1, sigma1) + (1 - w1) * norm.pdf(x, mu2, sigma2)
 
-# Histogram of csumflat (used for fitting)
-hist_vals, _ = np.histogram(csumflat, bins=binarr, density=True)
+# Histogram of data (used for fitting)
+hist_vals, _ = np.histogram(data, bins=binarr, density=True)
 
 # Initial guess and bounds for fitting
-
+p0 = [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]
 bounds = ([0, -np.inf, 1e-3, -np.inf, 1e-3], [1, np.inf, np.inf, np.inf, np.inf])
 
 # Fit Gaussian mixture model to histogram
-params_gmm, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=getics(ic_gmm,n), bounds=bounds)
+params_gmm, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0, bounds=bounds)
 w1, mu1, sigma1, mu2, sigma2 = params_gmm
 y_gmm = gaussian_mixture(bin_centers, *params_gmm)
 
@@ -1080,13 +1066,13 @@ def pmf_bb_mix(x, w, a1, b1, a2, b2):
 # Negative log-likelihood for beta-binomial mixture
 def nll_bb_mix(params):
     w, a1, b1, a2, b2 = params
-    pmf = pmf_bb_mix(csumflat, w, a1, b1, a2, b2)
+    pmf = pmf_bb_mix(data, w, a1, b1, a2, b2)
     if 0 < w < 1 and all(x > 0 for x in [a1, b1, a2, b2]):
         return -np.sum(np.log(pmf + 1e-12))
     return np.inf
 
 # Minimize NLL to fit parameters    w  a1 b1 a2 b2
-res_bb_mix = minimize(nll_bb_mix, getics(ic_bb, n), bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
+res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
 w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
 
 # Generate PMF from fit
@@ -1111,13 +1097,13 @@ def pmf_binom_mix(x, w, p1, p2):
 # Negative log-likelihood for binomial mixture
 def nll_binom_mix(params):
     w, p1, p2 = params
-    pmf = pmf_binom_mix(csumflat, w, p1, p2)
+    pmf = pmf_binom_mix(data, w, p1, p2)
     if 0 < w < 1 and 0 < p1 < 1 and 0 < p2 < 1:
         return -np.sum(np.log(pmf + 1e-12))
     return np.inf
 
 # Minimize NLL to find best parameters
-res_binom_mix = minimize(nll_binom_mix, getics(ics_bin,n), bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
 w_bm, p1_bm, p2_bm = res_binom_mix.x
 pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
 
@@ -1133,9 +1119,9 @@ cv2_2_bm = var2_bm / mean2_bm ** 2
 # --- AIC Calculation ---
 
 # Compute log-likelihoods
-logL_gmm = np.sum(np.log(gaussian_mixture(csumflat, *params_gmm) + 1e-12))
-logL_bbmix = np.sum(np.log(pmf_bb_mix(csumflat, w_bb, a1_bb, b1_bb, a2_bb, b2_bb) + 1e-12))
-logL_binmix = np.sum(np.log(pmf_binom_mix(csumflat, w_bm, p1_bm, p2_bm) + 1e-12))
+logL_gmm = np.sum(np.log(gaussian_mixture(data, *params_gmm) + 1e-12))
+logL_bbmix = np.sum(np.log(pmf_bb_mix(data, w_bb, a1_bb, b1_bb, a2_bb, b2_bb) + 1e-12))
+logL_binmix = np.sum(np.log(pmf_binom_mix(data, w_bm, p1_bm, p2_bm) + 1e-12))
 
 # AIC = 2k - 2*logL where k = number of fitted parameters
 aic_gmm = 2 * 5 - 2 * logL_gmm
@@ -1153,89 +1139,138 @@ print(f"{'Binomial Mixture':30} {aic_binmix:10.2f}")
 # --- Plotting ---
 
 plt.figure(figsize=(10, 8))
-plt.hist(csumflat, bins=binarr, density=False,
+plt.hist(data, bins=binarr, density=False,
          color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
 
 # Plot Gaussian Mixture
-plt.plot(bin_centers, y_gmm * len(csumflat), 'r-', lw=5,
-         label=f'Gaussian mixture\nw={w1:.2f},\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f},\n'
+plt.plot(bin_centers, y_gmm * len(data), 'r-', lw=5,
+         label=f'Gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
                f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\nAIC={aic_gmm:.2f}')
 
 # Plot Beta-binomial Mixture
-plt.plot(x_discrete, pmf_bbmix * len(csumflat), 'g--', lw=5,
-         label=f'Beta-binomial mixture\nw={w_bb:.2f},\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f},\n'
+plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
+         label=f'Beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
                f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\nAIC={aic_bbmix:.2f}')
 
 # Plot Binomial Mixture
-plt.plot(x_discrete, pmf_binmix * len(csumflat), 'm-.', lw=5,
-         label=f'Binomial mixture\nn={n_neurons}, w={w_bm:.2f},\n'
-               f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}\n'
+plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
+         label=f'Binomial mixture\nn={n_neurons},\n'
+               f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
                f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nAIC={aic_binmix:.2f}')
 
 plt.title(f'({grid[0]},{grid[1]})-grid: Mixture Model Fits', fontsize=fs+6)
-plt.xlabel(f'# place fields in a ({grid[0]},{grid[1]}) grid', fontsize=fs)
+plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
 plt.ylabel('Count', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
-plt.legend(fontsize=fs - 1)
+plt.legend(fontsize=fs - 2)
 plt.tight_layout()
 plt.xlim([binarr[0]-1, binarr[-1]+1])
 plt.show()
 
-#%% Manual parameters
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import norm, betabinom, binom
+#%% Mixture Model Fits: Gaussian, Beta-binomial, Binomial Mixtures + AIC
 
-# === Prepare csumflat ===
-pth = [((pi[:, :-1] if pi.shape[1] == 117 else pi)[:-1, :] > 0).astype(int) for pi in p]
-x1, x2 = pth[0].shape[0] // n, pth[0].shape[1] // n
-csum = np.sum([[[np.any(pi[i*n:(i+1)*n, j*n:(j+1)*n])
-                 for j in range(x2)] for i in range(x1)] for pi in pth], axis=0)
-csumflat = csum.flatten()
+import numpy as np  # Numerical computing library
+import matplotlib.pyplot as plt  # Plotting library
+from scipy.stats import norm, betabinom, binom  # Probability distributions
+from scipy.optimize import curve_fit, minimize  # Optimization and fitting tools
 
+# Prepare data
+
+# Trim each array in 'p' if it has 117 columns (remove last column)
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+
+# Remove the last row from all matrices to match expected size
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+
+# Binarize: convert all values > 0 to 1 (active), 0 otherwise
+pth = [(pi > 0).astype(int) for pi in p_trimmed]
+
+# Extract the shape of the arrays (should all be same shape)
+pshape = pth[0].shape
+
+# Grid size for patching
 n = 4
-ic_gmm=[[0.5, np.mean(csumflat), 1, np.mean(csumflat), 1],
-        [0.5, 2.0, 1.0, 5.0, 1.5],
-        [0.5, 2.0, 1.0, 5.0, 1.5]]
-ic_bb=[[0.5, 3,10, 1, 5],
-       [0.5, 3,10, 1, 5],
-       [0.9,100,500,50,10]]
-ics_bin=[[0.83, 0.16, 0.11],
-         [0.83, 0.16, 0.11],
-         [0.83, 0.16, 0.11]]
-params_gmm=getics(ic_gmm, n)
-params_bb=getics(ic_bb, n)
-params_bin=getics(ics_bin, n)
+grid = (n, n)
 
-# === Mixture model definitions ===
-n_neurons = len(pth)
-binarr = np.arange(csumflat.min() - 0.5, csumflat.max() + 1.5)
+# Compute number of patches that fit in each dimension
+x1 = pshape[0] // grid[0]
+x2 = pshape[1] // grid[1]
+
+# Initialize storage for patches and counts
+plist = []
+clist = []
+
+# Divide each array into patches and count active neurons in each patch
+for pi in pth:
+    patches = np.zeros((x1, x2), dtype=object)
+    counts = np.zeros((x1, x2))
+    for i in range(x1):
+        for j in range(x2):
+            # Extract n x n patch
+            patch = pi[i * grid[0]:(i + 1) * grid[0], j * grid[1]:(j + 1) * grid[1]]
+            # Count if any neuron is active in this patch
+            count = 1 * np.any(patch > 0)
+            patches[i, j] = patch
+            counts[i, j] = count
+    plist.append(patches)
+    clist.append(counts)
+
+# Sum counts across all neurons, flatten to 1D array
+csum = np.sum(clist, axis=0)
+data = csum.flatten()
+
+# Binning setup for histogram
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
 bin_centers = (binarr[:-1] + binarr[1:]) / 2
-x_discrete = np.arange(0, n_neurons + 1)
+fs = 20  # Font size for plots
 
-def gaussian_mixture(x, w, mu1, s1, mu2, s2):
-    return w * norm.pdf(x, mu1, s1) + (1 - w) * norm.pdf(x, mu2, s2)
+# Gaussian mixture model
 
+# Define PDF of 2-component Gaussian mixture
+def gaussian_mixture(x, w1, mu1, sigma1, mu2, sigma2):
+    return w1 * norm.pdf(x, mu1, sigma1) + (1 - w1) * norm.pdf(x, mu2, sigma2)
+
+# Histogram of data (used for fitting)
+hist_vals, _ = np.histogram(data, bins=binarr, density=True)
+
+# Initial guess and bounds for fitting
+p0 = [0.5, np.mean(data) - 1, 1, np.mean(data) + 1, 1]
+bounds = ([0, -np.inf, 1e-3, -np.inf, 1e-3], [1, np.inf, np.inf, np.inf, np.inf])
+
+# Fit Gaussian mixture model to histogram
+params_gmm, _ = curve_fit(gaussian_mixture, bin_centers, hist_vals, p0=p0, bounds=bounds)
+w1, mu1, sigma1, mu2, sigma2 = params_gmm
+y_gmm = gaussian_mixture(bin_centers, *params_gmm)
+
+# Compute CV2 for both Gaussian components
+cv2_1 = (sigma1 ** 2) / mu1 ** 2 if mu1 != 0 else np.nan
+cv2_2 = (sigma2 ** 2) / mu2 ** 2 if mu2 != 0 else np.nan
+
+# Beta binomial mixture model
+
+n_neurons = len(pth)  # Number of neurons
+
+# Define 2-component beta-binomial mixture PMF
 def pmf_bb_mix(x, w, a1, b1, a2, b2):
     return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
 
-def pmf_binom_mix(x, w, p1, p2):
-    return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
+# Negative log-likelihood for beta-binomial mixture
+def nll_bb_mix(params):
+    w, a1, b1, a2, b2 = params
+    pmf = pmf_bb_mix(data, w, a1, b1, a2, b2)
+    if 0 < w < 1 and all(x > 0 for x in [a1, b1, a2, b2]):
+        return -np.sum(np.log(pmf + 1e-12))
+    return np.inf
 
-# === Evaluate Gaussian mixture ===
-w1, mu1, s1, mu2, s2 = params_gmm
-y_gmm = gaussian_mixture(bin_centers, *params_gmm)
-cv2_1 = (s1 / mu1)**2 if mu1 else np.nan
-cv2_2 = (s2 / mu2)**2 if mu2 else np.nan
-logL_gmm = np.sum(np.log(gaussian_mixture(csumflat, *params_gmm) + 1e-12))
-aic_gmm = 2 * 5 - 2 * logL_gmm
+# Minimize NLL to fit parameters    w  a1 b1 a2 b2
+res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
+w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
 
-# === Evaluate beta-binomial mixture ===
-w_bb, a1_bb, b1_bb, a2_bb, b2_bb = params_bb
-pmf_bbmix = pmf_bb_mix(x_discrete, *params_bb)
-logL_bbmix = np.sum(np.log(pmf_bb_mix(csumflat, *params_bb) + 1e-12))
-aic_bbmix = 2 * 5 - 2 * logL_bbmix
+# Generate PMF from fit
+x_discrete = np.arange(0, n_neurons + 1)
+pmf_bbmix = pmf_bb_mix(x_discrete, w_bb, a1_bb, b1_bb, a2_bb, b2_bb)
 
+# Compute mean, variance, CV² for each component
 mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
 var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
 cv2_1_bb = var1_bb / mean1_bb ** 2
@@ -1244,12 +1279,26 @@ mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
 var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
 cv2_2_bb = var2_bb / mean2_bb ** 2
 
-# === Evaluate binomial mixture ===
-w_bm, p1_bm, p2_bm = params_bin
-pmf_binmix = pmf_binom_mix(x_discrete, *params_bin)
-logL_binmix = np.sum(np.log(pmf_binom_mix(csumflat, *params_bin) + 1e-12))
-aic_binmix = 2 * 3 - 2 * logL_binmix
+# Binomial mixture model
 
+# Define 2-component binomial mixture PMF
+def pmf_binom_mix(x, w, p1, p2):
+    return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
+
+# Negative log-likelihood for binomial mixture
+def nll_binom_mix(params):
+    w, p1, p2 = params
+    pmf = pmf_binom_mix(data, w, p1, p2)
+    if 0 < w < 1 and 0 < p1 < 1 and 0 < p2 < 1:
+        return -np.sum(np.log(pmf + 1e-12))
+    return np.inf
+
+# Minimize NLL to find best parameters
+res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+w_bm, p1_bm, p2_bm = res_binom_mix.x
+pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
+
+# Compute means, variances, CV² for both binomial components
 mean1_bm = n_neurons * p1_bm
 var1_bm = n_neurons * p1_bm * (1 - p1_bm)
 cv2_1_bm = var1_bm / mean1_bm ** 2
@@ -1258,438 +1307,315 @@ mean2_bm = n_neurons * p2_bm
 var2_bm = n_neurons * p2_bm * (1 - p2_bm)
 cv2_2_bm = var2_bm / mean2_bm ** 2
 
-# === AIC Table ===
-print("\nMixture Model AIC Comparison:")
-print(f"{'Model':30} {'AIC':>10}")
-print("-" * 42)
-print(f"{'Gaussian Mixture':30} {aic_gmm:10.2f}")
-print(f"{'Beta-binomial Mixture':30} {aic_bbmix:10.2f}")
-print(f"{'Binomial Mixture':30} {aic_binmix:10.2f}")
+# Get AICs for each model
 
-# === Plotting ===
-fs = 20
+# Compute log-likelihoods
+logL_gmm = np.sum(np.log(gaussian_mixture(data, *params_gmm) + 1e-12))
+logL_bbmix = np.sum(np.log(pmf_bb_mix(data, w_bb, a1_bb, b1_bb, a2_bb, b2_bb) + 1e-12))
+logL_binmix = np.sum(np.log(pmf_binom_mix(data, w_bm, p1_bm, p2_bm) + 1e-12))
+
+# AIC = 2k - 2*logL where k = number of fitted parameter and L is the log likelihood
+aic_gmm = 2 * 5 - 2 * logL_gmm
+aic_bbmix = 2 * 5 - 2 * logL_bbmix
+aic_binmix = 2 * 3 - 2 * logL_binmix
+
+# Plotting
 plt.figure(figsize=(10, 8))
-plt.hist(csumflat, bins=binarr, density=False,
+plt.hist(data, bins=binarr, density=False,
          color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
 
-plt.plot(bin_centers, y_gmm * len(csumflat), 'r-', lw=5,
+# Plot Gaussian Mixture
+plt.plot(bin_centers, y_gmm * len(data), 'r-', lw=5,
          label=f'Gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
                f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\nAIC={aic_gmm:.2f}')
 
-plt.plot(x_discrete, pmf_bbmix * len(csumflat), 'g--', lw=5,
+# Plot Beta-binomial Mixture
+plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
          label=f'Beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
                f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\nAIC={aic_bbmix:.2f}')
 
-plt.plot(x_discrete, pmf_binmix * len(csumflat), 'm-.', lw=5,
+# Plot Binomial Mixture
+plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
          label=f'Binomial mixture\nn={n_neurons},\n'
                f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
                f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nAIC={aic_binmix:.2f}')
 
-plt.title(f'({n},{n})-grid: Mixture Model Fits', fontsize=fs + 6)
-plt.xlabel(f'# place fields per ({n},{n}) patch', fontsize=fs)
-plt.ylabel('# of neurons', fontsize=fs)
+plt.title(f'({grid[0]},{grid[1]})-grid: Mixture Model Fits', fontsize=fs+6)
+plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
+plt.ylabel('Count', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(fontsize=fs - 2)
 plt.tight_layout()
-plt.xlim([binarr[0] - 1, binarr[-1] + 1])
+plt.xlim([binarr[0]-1, binarr[-1]+1])
 plt.show()
-#%% Complexity
-import numpy as np
-import os
-import matplotlib.pyplot as plt
-from scipy.io import loadmat
-from scipy.stats import nbinom
-from scipy.optimize import minimize
 
-# ========================= Load csumflat from .mat files =========================
-n = [] # number of place fields
-p = [] # neuron maps
+# =============================================================================
+# #%% Manual parameters
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from scipy.stats import norm, betabinom, binom
+# 
+# # parameters 
+# params_gmm = [0.5, 2.0, 1.0, 5.0, 1.5] # w, mu1, sigma1, mu2, sigma2
+# params_bb  = [0.1, 1.0, 3.0, 5, 5]     # w, a1, b1, a2, b2
+# params_bin = [0.2, 0.1, 0.17]          # w, p1, p2
+# 
+# # prepare data
+# n = 4
+# pth = [((pi[:, :-1] if pi.shape[1] == 117 else pi)[:-1, :] > 0).astype(int) for pi in p]
+# x1, x2 = pth[0].shape[0] // n, pth[0].shape[1] // n
+# csum = np.sum([[[np.any(pi[i*n:(i+1)*n, j*n:(j+1)*n])
+#                  for j in range(x2)] for i in range(x1)] for pi in pth], axis=0)
+# data = csum.flatten()
+# 
+# # mixture model preparations
+# n_neurons = len(pth)
+# binarr = np.arange(data.min() - 0.5, data.max() + 1.5)
+# bin_centers = (binarr[:-1] + binarr[1:]) / 2
+# x_discrete = np.arange(0, n_neurons + 1)
+# 
+# def gaussian_mixture(x, w, mu1, s1, mu2, s2):
+#     return w * norm.pdf(x, mu1, s1) + (1 - w) * norm.pdf(x, mu2, s2)
+# 
+# def pmf_bb_mix(x, w, a1, b1, a2, b2):
+#     return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
+# 
+# def pmf_binom_mix(x, w, p1, p2):
+#     return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
+# 
+# # gaussian mixture model
+# w1, mu1, s1, mu2, s2 = params_gmm
+# y_gmm = gaussian_mixture(bin_centers, *params_gmm)
+# cv2_1 = (s1 / mu1)**2 if mu1 else np.nan
+# cv2_2 = (s2 / mu2)**2 if mu2 else np.nan
+# logL_gmm = np.sum(np.log(gaussian_mixture(data, *params_gmm) + 1e-12))
+# aic_gmm = 2 * 5 - 2 * logL_gmm
+# 
+# # beta mixture model
+# w_bb, a1_bb, b1_bb, a2_bb, b2_bb = params_bb
+# pmf_bbmix = pmf_bb_mix(x_discrete, *params_bb)
+# logL_bbmix = np.sum(np.log(pmf_bb_mix(data, *params_bb) + 1e-12))
+# aic_bbmix = 2 * 5 - 2 * logL_bbmix
+# 
+# mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
+# var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
+# cv2_1_bb = var1_bb / mean1_bb ** 2
+# 
+# mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
+# var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
+# cv2_2_bb = var2_bb / mean2_bb ** 2
+# 
+# # binomial mixture model
+# w_bm, p1_bm, p2_bm = params_bin
+# pmf_binmix = pmf_binom_mix(x_discrete, *params_bin)
+# logL_binmix = np.sum(np.log(pmf_binom_mix(data, *params_bin) + 1e-12))
+# aic_binmix = 2 * 3 - 2 * logL_binmix
+# 
+# mean1_bm = n_neurons * p1_bm
+# var1_bm = n_neurons * p1_bm * (1 - p1_bm)
+# cv2_1_bm = var1_bm / mean1_bm ** 2
+# 
+# mean2_bm = n_neurons * p2_bm
+# var2_bm = n_neurons * p2_bm * (1 - p2_bm)
+# cv2_2_bm = var2_bm / mean2_bm ** 2
+# 
+# # plot results
+# fs = 20
+# plt.figure(figsize=(10, 8))
+# plt.hist(data, bins=binarr, density=False,
+#          color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
+# 
+# plt.plot(bin_centers, y_gmm * len(data), 'r-', lw=5,
+#          label=f'Gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
+#                f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\nAIC={aic_gmm:.2f}')
+# 
+# plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
+#          label=f'Beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
+#                f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\nAIC={aic_bbmix:.2f}')
+# 
+# plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
+#          label=f'Binomial mixture\nn={n_neurons},\n'
+#                f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
+#                f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nAIC={aic_binmix:.2f}')
+# 
+# plt.title(f'({n},{n})-grid: Mixture Model Fits', fontsize=fs + 6)
+# plt.xlabel(f'# place fields per ({n},{n}) patch', fontsize=fs)
+# plt.ylabel('Count', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.legend(fontsize=fs - 2)
+# plt.tight_layout()
+# plt.xlim([binarr[0] - 1, binarr[-1] + 1])
+# plt.show()
+# 
+# =============================================================================
 
-location=1
-if location==0:
-    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
-if location==1:
-    dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
-os.chdir(dir1)
-dir2 = os.listdir(dir1)
+#%% Fit all three version 2
 
-for foldername in dir2:
-    dir3 = os.path.join(dir1, foldername)
-    os.chdir(dir3)
-    dirs3 = os.listdir()
-    dirs4 = [x for x in dirs3 if x[-7] == 'm']
-    for matname in dirs4:
-        dir5 = os.path.join(dir3, matname)
-        mat = loadmat(dir5)
-        n.append(mat['numFields'][0][0])
-        p.append(mat['pfields'])
-        
-# Main code
+import numpy as np  # numerical computing library
+import matplotlib.pyplot as plt  # plotting library
+from scipy.stats import norm, betabinom, binom  # probability distributions
+from scipy.optimize import minimize  # optimization for likelihood-based fits
+from sklearn.mixture import GaussianMixture  # gmm fitting to raw data
 
-import numpy as np
-import matplotlib.pyplot as plt
-from skimage.measure import label, regionprops, perimeter
-from scipy.ndimage import binary_fill_holes
-from skimage.morphology import convex_hull_image
+# prepare data
 
-def shape_complexity_metrics(binary_image):
-    labeled = label(binary_image)
-    if labeled.max() == 0:
-        # Empty shape edge case
-        return {
-            'area': 0,
-            'perimeter': 0,
-            'holes': 0,
-            'compactness': 0,
-            'convexity_defect': 0
-        }
-
-    props = regionprops(labeled)[0]  # assume largest shape or first shape
-
-    area = props.area
-    perim = perimeter(binary_image)
-    convex = convex_hull_image(binary_image)
-    convex_area = np.sum(convex)
-
-    filled = binary_fill_holes(binary_image)
-    holes = np.sum(filled) - area
-
-    compactness = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
-    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
-
-    return {
-        'area': area,
-        'perimeter': perim,
-        'holes': holes,
-        'compactness': compactness,
-        'convexity_defect': convexity_defect
-    }
-
-def complexity_score(metrics):
-    # New positive-weighted complexity score:
-    holes_score = metrics['holes'] * 0.5
-    perimeter_score = metrics['perimeter'] * 0.1
-    convexity_score = metrics['convexity_defect'] * 5.0
-    compactness_score = (1 - metrics['compactness']) * 3.0
-    score = holes_score + perimeter_score + convexity_score + compactness_score
-    return score
-
-
+# trim each array in 'p' if it has 117 columns (remove last column)
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+
+# remove the last row from all matrices to match expected size
 p_trimmed = [pi[:-1, :] for pi in p_trimmed]
 
-p0=p_trimmed[1]        
-pshape=p0.shape
-grid=(16,4)
+# binarize: convert all values > 0 to 1 (active), 0 otherwise
+pth = [(pi > 0).astype(int) for pi in p_trimmed]
 
-plt.figure(figsize=(10,4))
-plt.imshow(p0)
+# extract the shape of the arrays (should all be same shape)
+pshape = pth[0].shape
+
+# grid size for patching
+n = 1
+grid = (n, n)
+
+# compute number of patches that fit in each dimension
+x1 = pshape[0] // grid[0]
+x2 = pshape[1] // grid[1]
+
+# initialize storage for patches and counts
+plist = []
+clist = []
+
+# divide each array into patches and count active neurons in each patch
+for pi in pth:
+    patches = np.zeros((x1, x2), dtype=object)
+    counts = np.zeros((x1, x2))
+    for i in range(x1):
+        for j in range(x2):
+            # extract n x n patch
+            patch = pi[i * grid[0]:(i + 1) * grid[0], j * grid[1]:(j + 1) * grid[1]]
+            # count if any neuron is active in this patch
+            count = 1 * np.any(patch > 0)
+            patches[i, j] = patch
+            counts[i, j] = count
+    plist.append(patches)
+    clist.append(counts)
+
+# sum counts across all neurons, flatten to 1d array
+csum = np.sum(clist, axis=0)
+data = csum.flatten()
+
+# bin setup for plotting only
+binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+bin_centers = (binarr[:-1] + binarr[1:]) / 2
+fs = 20  # font size for plots
+
+# gaussian mixture model
+
+# fit gmm directly to raw data
+gmm = GaussianMixture(n_components=2, random_state=42)
+gmm.fit(data.reshape(-1, 1))
+logL_gmm = gmm.score(data.reshape(-1, 1)) * len(data)
+w1, w2 = gmm.weights_
+mu1, mu2 = gmm.means_.flatten()
+sigma1, sigma2 = np.sqrt(gmm.covariances_.flatten())
+
+# compute cv² for each gaussian component
+cv2_1 = (sigma1 ** 2) / mu1 ** 2 if mu1 != 0 else np.nan
+cv2_2 = (sigma2 ** 2) / mu2 ** 2 if mu2 != 0 else np.nan
+
+# beta-binomial mixture model
+
+n_neurons = len(pth)  # number of neurons (assumed number of trials per patch)
+
+# define 2-component beta-binomial mixture pmf
+def pmf_bb_mix(x, w, a1, b1, a2, b2):
+    return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
+
+# negative log-likelihood for beta-binomial mixture
+def nll_bb_mix(params):
+    w, a1, b1, a2, b2 = params
+    pmf = pmf_bb_mix(data, w, a1, b1, a2, b2)
+    if 0 < w < 1 and all(x > 0 for x in [a1, b1, a2, b2]):
+        return -np.sum(np.log(pmf + 1e-12))
+    return np.inf
+
+# fit parameters by minimizing nll
+res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
+w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
+logL_bbmix = -res_bb_mix.fun
+
+# compute mean, variance, cv² for both beta-binomial components
+mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
+var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
+cv2_1_bb = var1_bb / mean1_bb ** 2
+
+mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
+var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
+cv2_2_bb = var2_bb / mean2_bb ** 2
+
+# binomial mixture model
+
+# define 2-component binomial mixture pmf
+def pmf_binom_mix(x, w, p1, p2):
+    return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
+
+# negative log-likelihood for binomial mixture
+def nll_binom_mix(params):
+    w, p1, p2 = params
+    pmf = pmf_binom_mix(data, w, p1, p2)
+    if 0 < w < 1 and 0 < p1 < 1 and 0 < p2 < 1:
+        return -np.sum(np.log(pmf + 1e-12))
+    return np.inf
+
+# minimize nll to fit parameters
+res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+w_bm, p1_bm, p2_bm = res_binom_mix.x
+logL_binmix = -res_binom_mix.fun
+
+# compute means, variances, cv² for both binomial components
+mean1_bm = n_neurons * p1_bm
+var1_bm = n_neurons * p1_bm * (1 - p1_bm)
+cv2_1_bm = var1_bm / mean1_bm ** 2
+
+mean2_bm = n_neurons * p2_bm
+var2_bm = n_neurons * p2_bm * (1 - p2_bm)
+cv2_2_bm = var2_bm / mean2_bm ** 2
+
+# compute aic for all models
+aic_gmm = 2 * 5 - 2 * logL_gmm
+aic_bbmix = 2 * 5 - 2 * logL_bbmix
+aic_binmix = 2 * 3 - 2 * logL_binmix
+
+# prepare x axis for discrete models
+x_discrete = np.arange(0, n_neurons + 1)
+pmf_bbmix = pmf_bb_mix(x_discrete, w_bb, a1_bb, b1_bb, a2_bb, b2_bb)
+pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
+
+# plotting
+plt.figure(figsize=(10, 8))
+plt.hist(data, bins=binarr, density=False,
+         color='skyblue', edgecolor='black', alpha=0.6, label='histogram')
+
+# plot gmm
+gmm_pdf = w1 * norm.pdf(bin_centers, mu1, sigma1) + w2 * norm.pdf(bin_centers, mu2, sigma2)
+plt.plot(bin_centers, gmm_pdf * len(data), 'r-', lw=5,
+         label=f'gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f}, w={w1:.2f},\n'
+               f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\nAIC={aic_gmm:.2f}')
+
+# plot beta-binomial mixture
+plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
+         label=f'beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f}, w={w_bb:.2f},\n'
+               f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\nAIC={aic_bbmix:.2f}')
+
+# plot binomial mixture
+plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
+         label=f'binomial mixture\nn={n_neurons},\n'
+               f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f}, w={w_bm:.2f},\n'
+               f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nAIC={aic_binmix:.2f}')
+
+plt.title(f'({grid[0]},{grid[1]})-grid: mixture model fits', fontsize=fs+6)
+plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
+plt.ylabel('count', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs - 2)
+plt.tight_layout()
+plt.xlim([binarr[0]-1, binarr[-1]+1])
 plt.show()
-
-#%% Complexity 2 corrected
-import numpy as np
-import os
-import matplotlib.pyplot as plt
-from scipy.io import loadmat
-from skimage.measure import label, regionprops, perimeter
-from scipy.ndimage import binary_fill_holes
-from skimage.morphology import convex_hull_image
-from matplotlib.colors import BoundaryNorm
-
-# ========================= Load csumflat from .mat files =========================
-n = []  # number of place fields
-p = []  # neuron maps
-
-location = 1
-if location == 0:
-    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
-if location == 1:
-    dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
-os.chdir(dir1)
-dir2 = os.listdir(dir1)
-
-for foldername in dir2:
-    dir3 = os.path.join(dir1, foldername)
-    os.chdir(dir3)
-    dirs3 = os.listdir()
-    dirs4 = [x for x in dirs3 if x[-7] == 'm']
-    for matname in dirs4:
-        dir5 = os.path.join(dir3, matname)
-        mat = loadmat(dir5)
-        n.append(mat['numFields'][0][0])
-        p.append(mat['pfields'])
-
-# ========================= Complexity Analysis =========================
-
-def shape_complexity_metrics(binary_image):
-    if np.sum(binary_image) == 0:
-        return {
-            'area': 0,
-            'perimeter': 0,
-            'holes': 0,
-            'compactness': 0,
-            'convexity_defect': 0
-        }
-
-    # regionprops requires int label image of a single object
-    props = regionprops(binary_image.astype(int))[0]
-
-    area = props.area
-    perim = perimeter(binary_image)
-    convex = convex_hull_image(binary_image)
-    convex_area = np.sum(convex)
-
-    filled = binary_fill_holes(binary_image)
-    holes = np.sum(filled) - area
-
-    compactness_raw = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
-    compactness = min(1.0, compactness_raw)  # clamp compactness to max 1.0
-
-    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
-
-    return {
-        'area': area,
-        'perimeter': perim,
-        'holes': holes,
-        'compactness': compactness,
-        'convexity_defect': convexity_defect
-    }
-
-def complexity_score(metrics):
-    holes_score = metrics['holes'] * 0.5
-    perimeter_score = metrics['perimeter'] * 0.1
-    convexity_score = metrics['convexity_defect'] * 5.0
-    compactness_score = (1 - metrics['compactness']) * 3.0
-    score = holes_score + perimeter_score + convexity_score + compactness_score
-    return score
-
-# ========================= Preprocess and Analyze =========================
-
-p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
-p_trimmed = [pi[:-1, :]>0 for pi in p_trimmed]
-
-# Example field map, ensure binary mask
-p0 = p_trimmed[30]
-
-print("Unique values in p0:", np.unique(p0))  # Should be [0, 1]
-
-plt.figure(figsize=(10, 4))
-plt.imshow(p0, cmap='gray')
-plt.title("Original Binary Field Map")
-plt.axis('off')
-plt.show()
-
-# Label contiguous patches
-labeled_patches, num_patches = label(p0, return_num=True, connectivity=1)
-print("Number of patches:", num_patches)
-print("Unique labels in labeled_patches:", np.unique(labeled_patches))
-
-patch_metrics = []
-patch_scores = []
-
-for i in range(1, num_patches + 1):
-    patch_mask = (labeled_patches == i)
-    metrics = shape_complexity_metrics(patch_mask)
-    score = complexity_score(metrics)
-    patch_metrics.append(metrics)
-    patch_scores.append(score)
-
-print("=== Complexity Metrics Per Patch ===")
-for i, (m, s) in enumerate(zip(patch_metrics, patch_scores)):
-    print(f"Patch {i+1}: Score = {s:.3f}, Metrics = {m}")
-
-print("\nList of Scores:")
-print(patch_scores)
-
-# ========================= Discrete Labeled Plot with Score Overlay =========================
-
-cmap = plt.cm.get_cmap('tab20', num_patches)
-bounds = np.arange(0.5, num_patches + 1.5, 1)
-norm = BoundaryNorm(bounds, cmap.N)
-
-plt.figure(figsize=(10, 4))
-im = plt.imshow(labeled_patches, cmap=cmap, norm=norm)
-plt.title("Labeled Patches with Complexity Scores")
-cbar = plt.colorbar(im, ticks=np.arange(1, num_patches + 1))
-cbar.set_label('Patch Index')
-
-# Overlay scores at patch centroids
-props = regionprops(labeled_patches)
-for prop in props:
-    y, x = prop.centroid
-    label_id = prop.label
-    score = patch_scores[label_id - 1]
-    plt.text(x, y, f"{score:.1f}", color='black', ha='center', va='center',
-             fontsize=9, fontweight='bold')
-
-plt.axis('off')
-plt.show()
-
-#%% Complexity 2 for all images - compute all patch scores and per image scores
-import numpy as np
-import os
-import matplotlib.pyplot as plt
-from scipy.io import loadmat
-from skimage.measure import label, regionprops, perimeter
-from scipy.ndimage import binary_fill_holes
-from skimage.morphology import convex_hull_image
-from matplotlib.colors import BoundaryNorm
-
-# ========================= Load csumflat from .mat files =========================
-n = []  # number of place fields
-p = []  # neuron maps
-
-location = 1
-if location == 0:
-    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
-if location == 1:
-    dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
-os.chdir(dir1)
-dir2 = os.listdir(dir1)
-
-for foldername in dir2:
-    dir3 = os.path.join(dir1, foldername)
-    os.chdir(dir3)
-    dirs3 = os.listdir()
-    dirs4 = [x for x in dirs3 if x[-7] == 'm']
-    for matname in dirs4:
-        dir5 = os.path.join(dir3, matname)
-        mat = loadmat(dir5)
-        n.append(mat['numFields'][0][0])
-        p.append(mat['pfields'])
-
-# ========================= Complexity Analysis Functions =========================
-
-def shape_complexity_metrics(binary_image):
-    if np.sum(binary_image) == 0:
-        return {
-            'area': 0,
-            'perimeter': 0,
-            'holes': 0,
-            'compactness': 0,
-            'convexity_defect': 0
-        }
-
-    props = regionprops(binary_image.astype(int))[0]
-    area = props.area
-    perim = perimeter(binary_image)
-    convex = convex_hull_image(binary_image)
-    convex_area = np.sum(convex)
-    filled = binary_fill_holes(binary_image)
-    holes = np.sum(filled) - area
-
-    compactness_raw = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
-    compactness = min(1.0, compactness_raw)  # clamp compactness max 1.0
-
-    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
-
-    return {
-        'area': area,
-        'perimeter': perim,
-        'holes': holes,
-        'compactness': compactness,
-        'convexity_defect': convexity_defect
-    }
-
-def complexity_score(metrics):
-    holes_score = metrics['holes'] * 0.5
-    perimeter_score = metrics['perimeter'] * 0.1
-    convexity_score = metrics['convexity_defect'] * 5.0
-    compactness_score = (1 - metrics['compactness']) * 3.0
-    score = holes_score + perimeter_score + convexity_score + compactness_score
-    return score
-
-# ========================= Preprocess p_trimmed =========================
-
-p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
-p_trimmed = [(pi[:-1, :] > 0) for pi in p_trimmed]
-
-# ========================= Compute complexity scores for all images =========================
-
-all_patch_scores = []     # Flat list of all patch scores across images
-scores_per_image = []     # List of lists: each inner list = scores of patches in one image
-
-for idx, img in enumerate(p_trimmed):
-    labeled_patches, num_patches = label(img, return_num=True, connectivity=1)
-    
-    image_scores = []
-    for i in range(1, num_patches + 1):
-        patch_mask = (labeled_patches == i)
-        metrics = shape_complexity_metrics(patch_mask)
-        score = complexity_score(metrics)
-        image_scores.append(score)
-        all_patch_scores.append(score)
-    
-    scores_per_image.append(image_scores)
-
-# Example printout
-print(f"Total images processed: {len(p_trimmed)}")
-print(f"Total patches found: {len(all_patch_scores)}")
-print(f"Scores for image 0 (first image): {scores_per_image[0]}")
-
-# Optional: Plot the first image's labeled patches and scores (like before)
-if len(p_trimmed) > 0:
-    img = p_trimmed[0]
-    labeled_patches, num_patches = label(img, return_num=True, connectivity=1)
-    patch_scores = scores_per_image[0]
-
-    cmap = plt.cm.get_cmap('tab20', num_patches)
-    bounds = np.arange(0.5, num_patches + 1.5, 1)
-    norm = BoundaryNorm(bounds, cmap.N)
-
-    plt.figure(figsize=(10, 4))
-    im = plt.imshow(labeled_patches, cmap=cmap, norm=norm)
-    plt.title("First Image: Labeled Patches with Complexity Scores")
-    cbar = plt.colorbar(im, ticks=np.arange(1, num_patches + 1))
-    cbar.set_label('Patch Index')
-
-    props = regionprops(labeled_patches)
-    for prop in props:
-        y, x = prop.centroid
-        label_id = prop.label
-        if label_id > 0 and label_id <= len(patch_scores):
-            score = patch_scores[label_id - 1]
-            plt.text(x, y, f"{score:.1f}", color='black', ha='center', va='center',
-                     fontsize=9, fontweight='bold')
-    plt.axis('off')
-    plt.show()
-    
-plt.title('All patch scores sorted')
-plt.scatter(np.arange(len(all_patch_scores)),np.sort(all_patch_scores))
-plt.show()
-#%%
-# =============================================================================
-# plt.hist(all_patch_scores, bins=np.linspace(0,100,100))
-# plt.xlim([0, 20])
-# =============================================================================
-
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import gamma
-
-data = np.array(all_patch_scores)
-data = data[data > 0]
-
-bins = np.linspace(0, 100, 100)  # your original bins
-
-# Fit Gamma distribution with loc fixed at 0
-shape, loc, scale = gamma.fit(data, floc=0)
-
-x = np.linspace(data.min(), data.max(), 1000)
-pdf_fitted = gamma.pdf(x, shape, loc=loc, scale=scale)
-
-# Calculate bin widths for histogram scaling
-bin_width = bins[1] - bins[0]
-
-plt.hist(data, bins=bins, density=False, alpha=0.6, color='b', label='Data histogram')
-
-# Scale PDF by total count * bin width to match histogram counts
-plt.plot(x, pdf_fitted * len(data) * bin_width, 'r-', lw=2, label='Fitted Gamma PDF')
-
-plt.xlim([0, 20])
-plt.xlabel('Complexity Score')
-plt.ylabel('Count')
-plt.title('Gamma Fit to Complexity Scores')
-plt.legend()
-plt.show()
-
