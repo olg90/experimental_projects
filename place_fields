@@ -10,9 +10,15 @@ from scipy.optimize import minimize
 n = [] # number of place fields
 p = [] # neuron maps
 
+dnametype=5
+#              0                1              2
+dnames = ['BigroomData', 'CircleData', 'HalfroomData', 
+          'HexagonData', 'RectangleData', 'SquareData']
+#              3                4              5
+
 location=0
 if location==0:
-    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\space field\BigroomData'
+    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{}'.format(dnames[dnametype])
 if location==1:
     dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
 os.chdir(dir1)
@@ -28,6 +34,19 @@ for foldername in dir2:
         mat = loadmat(dir5)
         n.append(mat['numFields'][0][0])
         p.append(mat['pfields'])
+        
+#                0          1        2        3       4        5
+trimshapes=[(None, 117), (40,56), (60,60), (13,13), (None, None), (None, None)]
+    
+print(p[0].shape)
+plt.imshow(p[0])
+plt.show()
+
+pshapes = np.unique([p[i].shape for i in range(len(p))])
+print(pshapes)
+
+
+#%%
 
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
 p_trimmed = [pi[:-1, :] for pi in p_trimmed]
@@ -546,7 +565,7 @@ plt.show()
 
 #%% Percentage of filling of the space
 
-th=10
+th=0
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
 p_trimmed = [pi[:-1, :] for pi in p_trimmed]
 pth = [(pi>th)*pi for pi in p_trimmed]
@@ -571,7 +590,8 @@ pdf = expon.pdf(x, loc=loc, scale=scale)
 plt.plot(x, pdf, 'r', label='exponential fit', linewidth=4, alpha=1)
 plt.legend()
 plt.xlabel('Percentage of the rectangular room the neuron fires in')
-plt.ylabel('Density')
+plt.ylabel('Count')
+plt.show()
 
 from scipy.stats import gamma
 import numpy as np
@@ -591,7 +611,50 @@ pdf = gamma.pdf(x, a=shape, loc=loc, scale=scale)
 plt.plot(x, pdf, 'r', label='gamma fit', linewidth=3)
 plt.legend()
 plt.xlabel('Percentage of the rectangular room the neuron fires in')
-plt.ylabel('Density')
+plt.ylabel('Count')
+plt.show()
+#%% Percentage of the room filling space plotted together
+
+# prepare data
+th = 0
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+pth = [(pi > th) * pi for pi in p_trimmed]
+
+# compute percentage of active area per neuron
+per = [np.sum((pi > 0) * 1) / np.prod(pi.shape) for pi in p_trimmed]
+
+from scipy.stats import expon, gamma
+import numpy as np
+import matplotlib.pyplot as plt
+
+# create histogram
+plt.figure(figsize=(8, 6))
+plt.hist(per, bins=45, density=True, label='data', edgecolor='k', alpha=0.6)
+
+# define x-axis range for pdfs
+x = np.linspace(min(per), max(per), 1000)
+
+# fit exponential distribution
+loc_exp, scale_exp = expon.fit(per, floc=0)
+pdf_exp = expon.pdf(x, loc=loc_exp, scale=scale_exp)
+
+# fit gamma distribution
+shape_gamma, loc_gamma, scale_gamma = gamma.fit(per, floc=0)
+pdf_gamma = gamma.pdf(x, a=shape_gamma, loc=loc_gamma, scale=scale_gamma)
+
+# plot both pdfs
+plt.plot(x, pdf_exp, 'r-', linewidth=3, label='exponential fit')
+plt.plot(x, pdf_gamma, 'b--', linewidth=3, label='gamma fit')
+
+# finalize plot
+plt.xlabel('percentage of the rectangular room the neuron fires in')
+plt.ylabel('density')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
 #%%
 
 # =================== Fit NB with integer r using grid search ===================
