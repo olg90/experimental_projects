@@ -1617,6 +1617,5 @@ plt.ylabel('count', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(fontsize=fs - 2)
 plt.tight_layout()
-plt.xlim([binarr[0]-1, binarr[-1]+1])
+plt.xlim([binarr[0]-1, binarr[-1]+1]) # limit the plot to within the lower/upper bins
 plt.show()
- 
