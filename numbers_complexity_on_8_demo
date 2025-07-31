@@ -1,0 +1,105 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage.measure import label, find_contours, perimeter
+from scipy.ndimage import binary_fill_holes
+from skimage.morphology import convex_hull_image
+
+def render_digit_to_binary(digit, size=64, font_size=48):
+    fig, ax = plt.subplots(figsize=(1,1), dpi=size)
+    ax.text(0.5, 0.5, str(digit), fontsize=font_size, ha='center', va='center', family='monospace')
+    ax.axis('off')
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+    fig.canvas.draw()
+
+    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    image = image.reshape((size, size, 3))
+    plt.close(fig)
+
+    gray = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
+    binary = gray < 128
+    return binary
+
+def compute_complexity(binary_shape):
+    # Area
+    area = np.sum(binary_shape)
+
+    # Perimeter (skimage perimeter)
+    perim = perimeter(binary_shape)
+
+    # Convex hull and area
+    convex = convex_hull_image(binary_shape)
+    convex_area = np.sum(convex)
+
+    # Holes count by filling holes and subtracting shape area
+    filled = binary_fill_holes(binary_shape)
+    holes = np.sum(filled) - area
+
+    # Compactness: 4*pi*area / perimeter^2, guard zero perimeter
+    compactness = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
+
+    # Convexity defect: fraction of area missing from convex hull
+    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
+
+    # New complexity metric - all positive contributions
+    holes_score = holes * 0.5
+    perimeter_score = perim * 0.1
+    convexity_score = convexity_defect * 5.0
+    compactness_score = (1 - compactness) * 3.0
+
+    complexity = holes_score + perimeter_score + convexity_score + compactness_score
+    return complexity, holes, perim, convexity_defect, compactness
+
+# Binary digit '8'
+shape = render_digit_to_binary(8)
+
+# Compute complexity and components
+complexity, holes, perim, convexity_defect, compactness = compute_complexity(shape)
+print(f"Complexity score: {complexity:.3f}")
+print(f"Holes: {holes}, Perimeter: {perim:.1f}, Convexity Defect: {convexity_defect:.3f}, Compactness: {compactness:.3f}")
+
+# Create masks for visualization
+
+# Holes mask (1 inside holes, 0 elsewhere)
+filled = binary_fill_holes(shape)
+holes_mask = filled & (~shape)
+
+# Perimeter mask (1 on boundary pixels, 0 elsewhere)
+contours = find_contours(shape, 0.5)
+perimeter_mask = np.zeros_like(shape, dtype=bool)
+for contour in contours:
+    coords = contour.round().astype(int)
+    perimeter_mask[coords[:, 0], coords[:, 1]] = True
+
+# Convexity defect mask (1 where convex hull exceeds shape, else 0)
+convex = convex_hull_image(shape)
+convex_defect_mask = convex & (~shape)
+
+# Compactness context: show shape + perimeter combined (binary)
+compactness_context = shape.astype(int) + perimeter_mask.astype(int)
+compactness_context[compactness_context > 1] = 1
+
+# Plot masks and original shape
+fig, axs = plt.subplots(1, 5, figsize=(15, 3))
+
+axs[0].imshow(shape, cmap='gray')
+axs[0].set_title('Original Shape ("8")')
+axs[0].axis('off')
+
+axs[1].imshow(holes_mask, cmap='gray')
+axs[1].set_title('Holes (1=hole)')
+axs[1].axis('off')
+
+axs[2].imshow(perimeter_mask, cmap='gray')
+axs[2].set_title('Perimeter (1=boundary)')
+axs[2].axis('off')
+
+axs[3].imshow(convex_defect_mask, cmap='gray')
+axs[3].set_title('Convexity Defect (1=defect)')
+axs[3].axis('off')
+
+axs[4].imshow(compactness_context, cmap='gray')
+axs[4].set_title('Compactness Context')
+axs[4].axis('off')
+
+plt.tight_layout()
+plt.show()
