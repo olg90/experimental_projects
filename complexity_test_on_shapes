@@ -1,0 +1,145 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage.measure import label, regionprops, perimeter
+from scipy.ndimage import binary_fill_holes
+from skimage.morphology import convex_hull_image
+
+def shape_complexity_metrics(binary_image):
+    labeled = label(binary_image)
+    if labeled.max() == 0:
+        return {
+            'area': 0,
+            'perimeter': 0,
+            'holes': 0,
+            'compactness': 0,
+            'convexity_defect': 0
+        }
+
+    props = regionprops(labeled)[0]
+    area = props.area
+    perim = perimeter(binary_image)
+    convex = convex_hull_image(binary_image)
+    convex_area = np.sum(convex)
+
+    filled = binary_fill_holes(binary_image)
+    holes = np.sum(filled) - area
+
+    compactness = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
+    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
+
+    return {
+        'area': area,
+        'perimeter': perim,
+        'holes': holes,
+        'compactness': compactness,
+        'convexity_defect': convexity_defect
+    }
+
+def complexity_score(metrics):
+    holes_score = min(metrics['holes'], 10) * 2.0
+    convexity_score = metrics['convexity_defect'] * 10.0
+    compactness_score = (1.0 - metrics['compactness']) * 10.0
+    perimeter_score = np.log1p(metrics['perimeter']) * 1
+    return holes_score + convexity_score + compactness_score + perimeter_score
+
+def analyze_connected_components(binary_array):
+    labeled = label(binary_array)
+    num_regions = labeled.max()
+    results = []
+    for i in range(1, num_regions + 1):
+        patch_mask = (labeled == i)
+        metrics = shape_complexity_metrics(patch_mask)
+        score = complexity_score(metrics)
+        results.append({
+            'label': i,
+            'mask': patch_mask,
+            'metrics': metrics,
+            'score': score
+        })
+    return results
+
+# Create 10 different test shapes
+shapes = []
+canvas = np.zeros((64, 64), dtype=int)
+
+# Simple square
+s1 = np.zeros_like(canvas)
+s1[10:30, 10:30] = 1
+shapes.append(s1)
+
+# Square with hole
+s2 = np.copy(s1)
+s2[16:24, 16:24] = 0
+shapes.append(s2)
+
+# L shape
+s3 = np.zeros_like(canvas)
+s3[10:30, 10:15] = 1
+s3[25:30, 10:30] = 1
+shapes.append(s3)
+
+# Cross
+s4 = np.zeros_like(canvas)
+s4[20:44, 30:34] = 1
+s4[30:34, 20:44] = 1
+shapes.append(s4)
+
+# Circle approximation
+s5 = np.zeros_like(canvas)
+cx, cy = 32, 32
+for y in range(64):
+    for x in range(64):
+        if (x - cx)**2 + (y - cy)**2 < 300:
+            s5[y, x] = 1
+shapes.append(s5)
+
+# Rectangle
+s6 = np.zeros_like(canvas)
+s6[20:40, 10:50] = 1
+shapes.append(s6)
+
+# Donut
+s7 = np.copy(s5)
+for y in range(64):
+    for x in range(64):
+        if (x - cx)**2 + (y - cy)**2 < 100:
+            s7[y, x] = 0
+shapes.append(s7)
+
+# U shape
+s8 = np.zeros_like(canvas)
+s8[10:40, 10:15] = 1
+s8[10:40, 30:35] = 1
+s8[35:40, 10:35] = 1
+shapes.append(s8)
+
+# T shape
+s9 = np.zeros_like(canvas)
+s9[10:15, 10:50] = 1
+s9[10:40, 28:32] = 1
+shapes.append(s9)
+
+# Complex star
+s10 = np.zeros_like(canvas)
+coords = [(32, 10), (38, 26), (55, 26), (42, 38),
+          (48, 55), (32, 46), (16, 55), (22, 38),
+          (9, 26), (26, 26)]
+for y in range(64):
+    for x in range(64):
+        if any(np.hypot(x - cx, y - cy) < 5 for cx, cy in coords):
+            s10[y, x] = 1
+shapes.append(s10)
+
+# Analyze and visualize
+results = [analyze_connected_components(s)[0] for s in shapes]
+
+import matplotlib.pyplot as plt
+fig, axs = plt.subplots(2, 5, figsize=(20, 8))
+axs = axs.flatten()
+for i, (res, ax) in enumerate(zip(results, axs)):
+    ax.imshow(res['mask'], cmap='gray')
+    ax.set_title(f"Shape {i+1}\nScore: {res['score']:.2f}")
+    ax.axis('off')
+plt.tight_layout()
+plt.show()
+
