@@ -1,0 +1,88 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage.measure import label, regionprops, perimeter
+from scipy.ndimage import binary_fill_holes
+from skimage.morphology import convex_hull_image
+
+def shape_complexity_metrics(binary_image):
+    labeled = label(binary_image)
+    if labeled.max() == 0:
+        # Empty shape edge case
+        return {
+            'area': 0,
+            'perimeter': 0,
+            'holes': 0,
+            'compactness': 0,
+            'convexity_defect': 0
+        }
+
+    props = regionprops(labeled)[0]  # assume largest shape or first shape
+
+    area = props.area
+    perim = perimeter(binary_image)
+    convex = convex_hull_image(binary_image)
+    convex_area = np.sum(convex)
+
+    filled = binary_fill_holes(binary_image)
+    holes = np.sum(filled) - area
+
+    compactness = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
+    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
+
+    return {
+        'area': area,
+        'perimeter': perim,
+        'holes': holes,
+        'compactness': compactness,
+        'convexity_defect': convexity_defect
+    }
+
+def complexity_score(metrics):
+    # New positive-weighted complexity score:
+    holes_score = metrics['holes'] * 0.5
+    perimeter_score = metrics['perimeter'] * 0.1
+    convexity_score = metrics['convexity_defect'] * 5.0
+    compactness_score = (1 - metrics['compactness']) * 3.0
+    score = holes_score + perimeter_score + convexity_score + compactness_score
+    return score
+
+def render_digit_to_binary(digit, size=64, font_size=48):
+    fig, ax = plt.subplots(figsize=(1,1), dpi=size)
+    ax.text(0.5, 0.5, str(digit), fontsize=font_size, ha='center', va='center', family='monospace')
+    ax.axis('off')
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+    fig.canvas.draw()
+
+    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    image = image.reshape((size, size, 3))
+    plt.close(fig)
+
+    gray = np.dot(image[..., :3], [0.2989, 0.5870, 0.1140])
+    binary = gray < 128
+    return binary
+
+# Compute complexity for digits 0-9
+digits = list(range(10))
+complexity_results = {}
+
+for d in digits:
+    bin_img = render_digit_to_binary(d)
+    metrics = shape_complexity_metrics(bin_img)
+    score = complexity_score(metrics)
+    complexity_results[d] = {'metrics': metrics, 'score': score}
+
+# Print results nicely
+for d in digits:
+    m = complexity_results[d]['metrics']
+    s = complexity_results[d]['score']
+    print(f"Digit {d}: Score={s:.2f}, Holes={m['holes']}, Perimeter={m['perimeter']:.1f}, Convexity defect={m['convexity_defect']:.3f}, Compactness={m['compactness']:.3f}")
+
+# Show digits and their scores visually
+fig, axes = plt.subplots(2, 5, figsize=(10, 5))
+axes = axes.flatten()
+for i, d in enumerate(digits):
+    axes[i].imshow(render_digit_to_binary(d), cmap='gray')
+    axes[i].set_title(f"{d}\nScore={complexity_results[d]['score']:.1f}")
+    axes[i].axis('off')
+plt.tight_layout()
+plt.show()
