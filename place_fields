@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 n = [] # number of place fields
 p = [] # neuron maps
 
-dnametype=5
+dnametype=0 # 0-5
 #              0                1              2
 dnames = ['BigroomData', 'CircleData', 'HalfroomData', 
           'HexagonData', 'RectangleData', 'SquareData']
@@ -34,20 +34,74 @@ for foldername in dir2:
         mat = loadmat(dir5)
         n.append(mat['numFields'][0][0])
         p.append(mat['pfields'])
-        
-#                0          1        2        3       4        5
-trimshapes=[(None, 117), (40,56), (60,60), (13,13), (None, None), (None, None)]
-    
-print(p[0].shape)
+
+
 plt.imshow(p[0])
 plt.show()
 
-pshapes = np.unique([p[i].shape for i in range(len(p))])
+pshapes = [(p[i].shape[0], p[i].shape[1]) for i in range(len(p))]
+pshapes = list(set(pshapes))
 print(pshapes)
 
+extensions = [(68, 120), # 0
+              (44, 60), # 1
+              (64, 60), # 2
+              (16,16),  # 3
+              (32, 40), # 4
+              (20,20)] # 5
+
+# =============================================================================
+# for x in p:
+#     plt.imshow(x)
+#     plt.show()
+# 
+# =============================================================================
+
+# =============================================================================
+# shapeslist = [[(65, 116), (65, 117)],
+#               [(43, 53), (43, 50), (43, 57)],
+#               [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],
+#               [(12, 12), (13, 13)],
+#               [(24, 36), (31, 40)],
+#               [(20, 20)]]
+# =============================================================================
+
+# =============================================================================
+# extensions = [(68, 120), # 0 
+#               (44, 60), # 1
+#               (64, 60), # 2 
+#               (16,16),  #[(12, 12), (13, 13)],
+#               (32, 40), #[(24, 36), (31, 40)],
+#               (20,20)] #[(20, 20)]]
+# =============================================================================
 
 #%%
+p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
+p_trimmed = [pi[:-1, :] for pi in p_trimmed]
+#%%
+p1=[(pi>0)*1 for pi in p]
 
+n = 1  # 1,2,4
+grid = (n, n)
+
+plist = []
+clist = []
+for pi in p1:
+    pshape = pi.shape
+    x1 = pshape[0] // grid[0]
+    x2 = pshape[1] // grid[1]
+    patches = np.zeros((x1, x2), dtype=object)
+    counts = np.zeros((x1, x2))
+    for i in range(x1):
+        for j in range(x2):
+            patch = pi[i * grid[0]:(i + 1) * grid[0], j * grid[1]:(j + 1) * grid[1]]
+            count = 1 * np.any(patch > 0)
+            patches[i, j] = patch
+            counts[i, j] = count
+    plist.append(patches)
+    clist.append(counts)
+
+#%%
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
 p_trimmed = [pi[:-1, :] for pi in p_trimmed]
 
@@ -249,7 +303,6 @@ plt.tick_params(axis='both', labelsize=fs+10)
 plt.legend(fontsize=fs+5)
 plt.tight_layout()
 plt.show()
-
 
 #%% Binomial and negative binomial compare
 # =============================================================================
@@ -1682,3 +1735,249 @@ plt.legend(fontsize=fs - 2)
 plt.tight_layout()
 plt.xlim([binarr[0]-1, binarr[-1]+1]) # limit the plot to within the lower/upper bins
 plt.show()
+
+#%% The different room shapes third meeting plots, histograms
+
+def plotresults(data, binnarr, bin_centers, n_neurons, i, dnames, gn):
+    # gaussian mixture model
+    
+    # fit gmm directly to raw data
+    gmm = GaussianMixture(n_components=2, random_state=42)
+    gmm.fit(data.reshape(-1, 1))
+    logL_gmm = gmm.score(data.reshape(-1, 1)) * len(data)
+    w1, w2 = gmm.weights_
+    mu1, mu2 = gmm.means_.flatten()
+    sigma1, sigma2 = np.sqrt(gmm.covariances_.flatten())
+    
+    # compute cv² for each gaussian component
+    cv2_1 = (sigma1 ** 2) / mu1 ** 2 if mu1 != 0 else np.nan
+    cv2_2 = (sigma2 ** 2) / mu2 ** 2 if mu2 != 0 else np.nan
+    
+    # beta-binomial mixture model
+    
+    # define 2-component beta-binomial mixture pmf
+    def pmf_bb_mix(x, w, a1, b1, a2, b2):
+        return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
+    
+    # negative log-likelihood for beta-binomial mixture
+    def nll_bb_mix(params):
+        w, a1, b1, a2, b2 = params
+        pmf = pmf_bb_mix(data, w, a1, b1, a2, b2)
+        if 0 < w < 1 and all(x > 0 for x in [a1, b1, a2, b2]):
+            return -np.sum(np.log(pmf + 1e-12))
+        return np.inf
+    
+    # fit parameters by minimizing nll
+    res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
+    w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
+    logL_bbmix = -res_bb_mix.fun
+    
+    # compute mean, variance, cv² for both beta-binomial components
+    mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
+    var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
+    cv2_1_bb = var1_bb / mean1_bb ** 2
+    
+    mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
+    var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
+    cv2_2_bb = var2_bb / mean2_bb ** 2
+    # binomial mixture model
+    
+    # define 2-component binomial mixture pmf
+    def pmf_binom_mix(x, w, p1, p2):
+        return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
+    
+    # negative log-likelihood for binomial mixture
+    def nll_binom_mix(params):
+        w, p1, p2 = params
+        pmf = pmf_binom_mix(data, w, p1, p2)
+        if 0 < w < 1 and 0 < p1 < 1 and 0 < p2 < 1:
+            return -np.sum(np.log(pmf + 1e-12))
+        return np.inf
+    
+    # minimize nll to fit parameters
+    res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+    w_bm, p1_bm, p2_bm = res_binom_mix.x
+    logL_binmix = -res_binom_mix.fun
+    
+    # compute means, variances, cv² for both binomial components
+    mean1_bm = n_neurons * p1_bm
+    var1_bm = n_neurons * p1_bm * (1 - p1_bm)
+    cv2_1_bm = var1_bm / mean1_bm ** 2
+    
+    mean2_bm = n_neurons * p2_bm
+    var2_bm = n_neurons * p2_bm * (1 - p2_bm)
+    cv2_2_bm = var2_bm / mean2_bm ** 2
+    
+    # compute aic for all models
+    aic_gmm = 2 * 5 - 2 * logL_gmm
+    aic_bbmix = 2 * 5 - 2 * logL_bbmix
+    aic_binmix = 2 * 3 - 2 * logL_binmix
+    
+    # prepare x axis for discrete models
+    x_discrete = np.arange(0, n_neurons + 1)
+    pmf_bbmix = pmf_bb_mix(x_discrete, w_bb, a1_bb, b1_bb, a2_bb, b2_bb)
+    pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
+
+    # plotting
+    fs=15
+    plt.figure(figsize=(10, 8))
+    plt.hist(data, bins=binarr, density=False,
+             color='skyblue', edgecolor='black', alpha=0.6, label='histogram')
+    
+    # plot gmm
+    gmm_pdf = w1 * norm.pdf(bin_centers, mu1, sigma1) + w2 * norm.pdf(bin_centers, mu2, sigma2)
+    plt.plot(bin_centers, gmm_pdf * len(data), 'r-', lw=5,
+             label=f'gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f},\n'
+                   f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\n w={w1:.2f}, AIC={aic_gmm:.2f}')
+
+    # plot beta-binomial mixture
+    plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
+             label=f'beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f},\n'
+                   f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\n w={w_bb:.2f}, AIC={aic_bbmix:.2f}')
+
+    # plot binomial mixture
+    plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
+             label=f'binomial mixture\nn={n_neurons},\n'
+                   f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f},\n'
+                   f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nw={w_bm:.2f},AIC={aic_binmix:.2f}')
+
+    plt.title('{}, ({},{})-grid'.format(dnames[i], gn, gn), fontsize=fs+6)
+    plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
+    plt.ylabel('count', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.legend(fontsize=fs - 2)
+    plt.tight_layout()
+    plt.xlim([binarr[0]-1, binarr[-1]+1]) # limit the plot to within the lower/upper bins
+    plt.show()
+
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+
+import numpy as np  # numerical computing library
+import matplotlib.pyplot as plt  # plotting library
+from scipy.stats import norm, betabinom, binom  # probability distributions
+from scipy.optimize import minimize  # optimization for likelihood-based fits
+from sklearn.mixture import GaussianMixture  # gmm fitting to raw data
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+extensions = [(68, 120), # 0
+              (44, 60),  # 1
+              (64, 60),  # 2
+              (16, 16),  # 3
+              (32, 40),  # 4
+              (20, 20)]  # 5
+
+location = 0  # Change if needed
+
+# =================== Collect and pad all data ===================
+p_extended = [[] for _ in range(6)]  # One list per dnametype
+plist=[]
+nlist=[]
+
+for dnametype in range(6):
+    p = []
+    n = []
+
+    # Set data directory
+    if location == 0:
+        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+    elif location == 1:
+        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+    
+    dir2 = os.listdir(dir1)
+
+    for foldername in dir2:
+        dir3 = os.path.join(dir1, foldername)
+        if not os.path.isdir(dir3): continue
+        dirs3 = os.listdir(dir3)
+        dirs4 = [x for x in dirs3 if x[-7] == 'm']
+        for matname in dirs4:
+            mat = loadmat(os.path.join(dir3, matname))
+            n.append(mat['numFields'][0][0])
+            p.append(mat['pfields'])
+
+    # Pad each p matrix to the shape in extensions[dnametype]
+    target_shape = extensions[dnametype]
+    padded_list = []
+    for pi in p:
+        h, w = pi.shape
+        H, W = target_shape
+        pad_bottom = H - h
+        pad_right = W - w
+        padded = np.pad(pi, ((0, pad_bottom), (0, pad_right)), mode='constant')
+        padded_list.append(padded)
+
+    p_extended[dnametype] = padded_list  # Store for this dnametype
+    nlist.append(n)
+    plist.append(p)
+
+i=5
+plt.imshow(plist[i][0])  # Show first from CircleData
+plt.title('{}'.format(dnames[i]))
+plt.show()
+
+plt.imshow(p_extended[i][0])  # Show first from CircleData
+plt.title('{} extended'.format(dnames[i]))
+plt.show()
+
+
+
+
+#%%
+p1 = [[(p_extended[i][j]>0)*1 for j in range(len(p_extended[i]))] for i in range(len(p_extended))]
+
+#%% Get the counts and the patches
+gn = 4  # 1,2,4
+grid = (gn, gn)
+plist=[]
+clist=[]
+for z, pi in enumerate(p1): # for each list of rooms in each room list
+    pshape = pi[0].shape
+    x1 = pshape[0] // grid[0]
+    x2 = pshape[1] // grid[1]
+    plisti = []
+    clisti = []
+    for q, pii in enumerate(pi):
+        patches = np.zeros((x1, x2), dtype=object)
+        counts = np.zeros((x1, x2))
+        for i in range(x1):
+            for j in range(x2):
+                print(i, x1, j, x1, q, z)
+                patch = pii[i * grid[0]:(i + 1) * grid[0], j * grid[1]:(j + 1) * grid[1]]
+                count = 1 * np.any(patch > 0)
+                patches[i, j] = patch
+                counts[i, j] = count
+        plisti.append(patches)
+        clisti.append(counts)
+    plist.append(plisti)
+    clist.append(clisti)
+#%%
+
+csumlist=[np.sum(c, axis = 0) for c in clist]
+datalist=[c.flatten() for c in csumlist]
+# Remove zeros from flattened data
+datalist = [c.flatten()[c.flatten() != 0] for c in csumlist] 
+binnlist=[np.arange(np.min(data) - 0.5, np.max(data) + 1.5) for data in datalist]
+bin_centerslist = [(binarr[:-1] + binarr[1:]) / 2 for binarr in binnlist]
+
+i=5
+data=datalist[i]
+binarr=binnlist[i]
+bin_centers=bin_centerslist[i]
+n_neurons = len(p_extended[i])
+
+# =============================================================================
+# plt.hist(data, bins=binarr, density=False,
+#          color='skyblue', edgecolor='black', alpha=0.6, label='Histogram')
+# plt.xlabel('# of neurons firing APs in an ({},{})-grid'.format(n,n))
+# plt.ylabel('Counts')
+# plt.title('{}, ({},{})-grid'.format(dnames[i], n, n))
+# plt.show()
+# =============================================================================
+
+plotresults(data, binarr, bin_centers, n_neurons, i, dnames, gn)
