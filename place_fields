@@ -1926,7 +1926,7 @@ plt.title('{} extended'.format(dnames[i]))
 plt.show()
 
 
-#s
+#%% Plot all the histograms of # of place fields
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import nbinom
@@ -1966,11 +1966,6 @@ plt.xticks(binplot)
 plt.tick_params(axis='both', labelsize=fs-5)
 plt.legend(fontsize=fs)
 plt.show()
-
-#e
-
-
-
 # =============================================================================
 # #%%
 # 
@@ -1987,9 +1982,9 @@ plt.show()
 #     
 # #%%
 # =============================================================================
-p1 = [[(p_extended[i][j]>0)*1 for j in range(len(p_extended[i]))] for i in range(len(p_extended))]
 
 #%% Get the counts and the patches
+p1 = [[(p_extended[i][j]>0)*1 for j in range(len(p_extended[i]))] for i in range(len(p_extended))]
 gn = 4  # 1,2,4
 grid = (gn, gn)
 plist=[]
@@ -2039,3 +2034,158 @@ n_neurons = len(p_extended[i])
 # =============================================================================
 
 plotresults(data, binarr, bin_centers, n_neurons, i, dnames, gn)
+
+#%% Get complexity scores
+
+from scipy.ndimage import label
+import numpy as np
+from skimage.measure import perimeter
+from scipy.ndimage import binary_fill_holes
+from skimage.morphology import convex_hull_image
+def extract_shapes_from_plist(plist):
+    
+    all_shapes = []  # shape[pi][pii] = list of 2D arrays (one per shape)
+
+    for pi in plist:
+        pi_shapes = []
+        for pii in pi:
+            unique_vals = np.unique(pii)
+            shapes_for_pii = []
+
+            for val in unique_vals:
+                if val == 0:
+                    continue  # skip background if zero
+
+                binary_mask = (pii == val)
+                labeled_array, num_features = label(binary_mask, structure=np.ones((3, 3)))
+
+                for i in range(1, num_features + 1):
+                    shape_mask = (labeled_array == i)
+                    shapes_for_pii.append(shape_mask.astype(np.uint8))
+
+            pi_shapes.append(shapes_for_pii)
+        all_shapes.append(pi_shapes)
+
+    return all_shapes
+
+def get_shape_score_single_shape(binary_image):
+    area = np.sum(binary_image)
+    perim = perimeter(binary_image)
+    convex = convex_hull_image(binary_image)
+    convex_area = np.sum(convex)
+    filled = binary_fill_holes(binary_image)
+    holes = np.sum(filled) - area
+
+    compactness = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
+    convexity_defect = 1 - (area / convex_area) if convex_area > 0 else 0
+
+    holes_score = holes * 2.0
+    convexity_score = convexity_defect * 10.0
+    compactness_score = compactness_score = max(0, (1.0 - compactness)) * 10.0
+
+    perimeter_score = perim
+
+    score = holes_score + convexity_score + compactness_score + perimeter_score
+    return score
+
+
+pshapes = extract_shapes_from_plist(plist)
+ptest = pshapes[0][0][0]
+pscores=[[[get_shape_score_single_shape(x) for x in pineurons] for pineurons in pshapelist] for pshapelist in pshapes]
+
+#%% Look at the histogram of scores
+
+psflat=[]
+for pi in pscores:
+    uu=[]
+    for x in pi:
+        for y in x:
+            uu.append(y)
+    psflat.append(uu)
+    
+#%%
+
+i=0
+plt.hist(psflat[i], bins=200)
+plt.title('{}'.format(dnames[i]), fontsize=fs)
+plt.xlabel('complexity score', fontsize=fs)
+plt.ylabel('Counts', fontsize=fs)
+plt.show()
+
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+
+# Function to find best-fitting distribution
+def fit_best_distribution(data):
+    distributions = [
+        stats.norm,
+        stats.lognorm,
+        stats.expon,
+        stats.gamma,
+        stats.beta
+    ]
+
+    best_fit = None
+    best_params = None
+    best_negloglik = np.inf
+
+    for dist in distributions:
+        try:
+            params = dist.fit(data)
+            loglik = np.sum(dist.logpdf(data, *params))
+            negloglik = -loglik
+
+            if negloglik < best_negloglik:
+                best_negloglik = negloglik
+                best_fit = dist
+                best_params = params
+        except Exception:
+            continue
+
+    return best_fit, best_params
+
+# === Example Usage ===
+i = 0  # Change as needed
+data = np.array(psflat[i])
+
+# Fit the best distribution
+best_dist, best_params = fit_best_distribution(data)
+
+# === Plot histogram with counts ===
+counts, bins, _ = plt.hist(data, bins=30, density=False,
+                           alpha=0.6, color='skyblue', 
+                           edgecolor='black', label='data')
+
+# Midpoints for plotting
+x = np.linspace(min(data), max(data), 1000)
+pdf = best_dist.pdf(x, *best_params)
+
+# Scale PDF to match histogram
+bin_width = bins[1] - bins[0]
+pdf_scaled = pdf * len(data) * bin_width
+
+# Compute mean and CV^2 from fitted distribution
+mean = best_dist.mean(*best_params)
+std = best_dist.std(*best_params)
+cv2 = (std / mean) ** 2 if mean != 0 else np.inf
+
+# Plot scaled PDF
+label_text = f'{best_dist.name} fit\nmean = {mean:.2f}, CV² = {cv2:.2f}'
+plt.plot(x, pdf_scaled, 'r-', lw=2, label=label_text)
+
+# Final plot styling
+plt.title(f"{dnames[i]} - Best Fit: {best_dist.name}", fontsize=fs)
+plt.xlabel("Complexity Score", fontsize=fs)
+plt.ylabel("Counts", fontsize=fs)
+plt.legend(fontsize=fs-5)
+plt.tight_layout()
+plt.ylim([0, np.max(counts)+25])
+# plt.ylim([0, 50])
+plt.show()
+
+
+
+            
