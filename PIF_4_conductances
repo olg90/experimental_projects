@@ -9,7 +9,7 @@ from numpy import log as Log
 import pandas as pd
 from numba import jit
 
-def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
+def getiext(f, y0, tauy, taui, ki, tmax, dt):
     
         tlist=[]
         ylist=[]
@@ -19,7 +19,7 @@ def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
         y=0
 
         tcurr=0
-        timer = delta_t
+        timer = dt
         e=1e-6
         while tcurr < tmax:
             t0=np.random.exponential(1/(f+e)) # action potential
@@ -33,9 +33,8 @@ def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
                 Iextlist.append(Iext)
                 ylist.append(y)
                 tlist.append(tcurr)
-                timer=delta_t
+                timer=dt
                 tmin=timer
-
             tcurr += tmin
 
             # Update the continuous dynamics
@@ -44,10 +43,10 @@ def getiext(f, y0, tauy, taui, ki, tmax, delta_t):
             
         return np.array(tlist), np.array(ylist), np.array(Iextlist)
 
-def getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, delta_t):
+def getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, dt):
     # Get the currents
-    tlisti, yi, iext = getiext(fi, y0i, tauyi, tauii, kii, tmax, delta_t)
-    tliste, ye, eext = getiext(f, y0e, tauye, tauie, kie, tmax, delta_t)
+    tlisti, yi, iext = getiext(fi, y0i, tauyi, tauii, kii, tmax, dt)
+    tliste, ye, eext = getiext(f, y0e, tauye, tauie, kie, tmax, dt)
     # Make them the same size
     llist=[len(tlisti), len(tliste)]
     largmin=np.argmin(llist)
@@ -58,6 +57,37 @@ def getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, del
         tlisti = tlisti[:llist[largmin]]
         iext = iext[:llist[largmin]]
     return tlisti, tliste, iext, eext, yi, ye
+
+def getstats(aplist):
+
+    aps = [apind*dt for apind in aplist if apind!=0]
+    
+    tdiffs=np.diff(aps)
+    
+    tmean=np.mean(tdiffs)
+    var=np.var(tdiffs)
+    cv=var/tmean**2
+    
+    return tmean, var, cv
+
+def getaps(aplist, dt):
+    return np.where(aplist!=0)[0]*dt
+
+@jit(nopython=True)
+def thetainf(vm, vi, vt, at):
+    if vm < vi:
+        return vt
+    else:
+        return at*(vm-vi)+vt
+    
+def gspikes(Gexc, Ginh, args):
+    for x in args:
+        if x[3]==1:
+            Gexc[x[0]:x[0]+x[1]]=x[2]
+        if x[3]==-1:
+            Ginh[x[0]:x[0]+x[1]]=x[2]
+    return Gexc, Ginh
+
 
 @jit(nopython=True)
 def rinf(V):
@@ -90,7 +120,7 @@ def taur(V): #10**5  237            60    12    17             60    14         
 
 @jit(nopython=True)
 def simulate(vlen, V0, w0, z0, r0, Gexc, Ginh, gLT, gh, VK, Vh, q10, dt,
-             vi, vt, at, vr, glk, Vlk):
+             vi, vt, at, vr, glk, Vlk, rf):
 
     # Time vector
     t = np.linspace(0, vlen, vlen)
@@ -119,26 +149,21 @@ def simulate(vlen, V0, w0, z0, r0, Gexc, Ginh, gLT, gh, VK, Vh, q10, dt,
     r[0] = r0 # Leak current
     theta1[0]=vt
     theta[0]=vt
-
+    
+    rfon=False
+    rftimer = np.inf
+    
     for i in range(1, vlen):
-        # print(i/len(Vdata))
-
         # Get all the current and voltage values and update the voltage
         i_LT = gLT * w[i-1]**4 * z[i-1] * (V[i-1] - VK)
         i_h = gh * r[i-1] * (V[i-1] - Vh)  # something weird
         i_lk = glk * (V[i-1] - Vlk)
-
-        # # Get all the current and voltage values and update the voltage
-        # i_LT = gLT * w[i-1]*w[i-1]*w[i-1]*w[i-1]*z[i-1] * (V[i-1] - VK)
-        # i_h = gh * r[i-1] * (V[i-1] - Vh)
-        # i_lk = glk * (V[i-1] - Vlk)
-
         i_exc = Gexc[i-1]*V[i-1]
         i_inh = Ginh[i-1]*V[i-1]
 
-        # dVdt = -(1 / C_m) * (i_LT + i_h + i_lk +i_exc-i_inh)
-        dVdt = -(1 / C_m) * (i_LT + i_h +i_exc-i_inh)
-        V[i] = V[i-1] + dVdt * dt
+        dVdt = -(1 / C_m) * (i_LT + i_h + i_lk +i_exc-i_inh)
+        # dVdt = -(1 / C_m) * (i_LT + i_h +i_exc-i_inh)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
 
         # Add all the current values to a list for plotting
         iLT[i] = i_LT
@@ -149,84 +174,69 @@ def simulate(vlen, V0, w0, z0, r0, Gexc, Ginh, gLT, gh, VK, Vh, q10, dt,
 
         # Add the current value of each gating variable to a list containing
         # all the previous values, for plotting
-
         vprev = V[i-1] * 1e3
-
         w[i] = w[i-1] + ((winf(vprev) - w[i-1]) / tauw(vprev)) * dt * q10
         z[i] = z[i-1] + ((zinf(vprev) - z[i-1]) / tauz(vprev)) * dt * q10
         r[i] = r[i-1] + ((rinf(vprev) - r[i-1]) / taur(vprev)) * dt * q10
         
+        # Thresholds
         dtheta1dt = 1/tautheta1*(-theta1[i-1] + thetainf(V[i-1], vi, vt, at))
         theta1[i] = theta1[i-1] + dtheta1dt*dt
-        
         dtheta2dt=1/tautheta2*(-theta2[i-1])
         theta2[i]=theta2[i-1]+dtheta2dt*dt
-        
         theta[i] = theta1[i]+theta2[i]
         
-# =============================================================================
-#         if V[i]>theta[i]:
-#             theta2[i]+=alpha
-#             V[i]=vr
-#             aplist[i]=i*dt
-# =============================================================================
+        if rftimer!=np.inf:
+            rftimer-=dt
+            
+        if rftimer<=0:
+            rftimer=np.inf
+            rfon=False
+        
+        if V[i]>theta[i]:
+            theta2[i]+=alpha
+            V[i]=vr
+            aplist[i]=i*dt
+            rfon=True
+            rftimer=rf
+            
     return V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist
 
 
-def getstats(aplist):
-
-    aps = [apind*delta_t for apind in aplist if apind!=0]
-    
-    tdiffs=np.diff(aps)
-    
-    tmean=np.mean(tdiffs)
-    var=np.var(tdiffs)
-    cv=var/tmean**2
-    
-    return tmean, var, cv
-
-def getaps(aplist):
-    return [apind*delta_t for apind in aplist if apind!=0]
-
-@jit(nopython=True)
-def thetainf(vm, vi, vt, at):
-    if vm < vi:
-        return vt
-    else:
-        return at*(vm-vi)+vt
 
 
 # Main code -------------------------------------------------------------------
 
 # Conductance generation
-f=10 # exc
-fi=10 # inh
-y0e=0.8 # synthetic spiking variable amplitude
-y0i=0.22
+f=20 # exc
+fi=20 # inh
+y0e=1 # synthetic spiking variable amplitude
+y0i=1
 tauye=0.1 # decay rate of synthetic spiking variable
 tauyi=0.1
 tauie=0.01 # current decay rate
 tauii=0.01
-kie=0.000001 # convert trom y to I
-kii=0.000001
+kie=3e-6 # convert trom y to I
+kii=1e-6
 
 # Threshold Lubejko parameters
-tautheta1=37e-3
-tautheta2=3.7e-3
+tautheta1=25e-3
+tautheta2=50e-3
 vr=-62e-3
-vi=-55e-3
+vi=-45e-3
 vt=-31e-3
 at=0.8
-alpha=5e-3
+alpha=50e-3
+rf=100e-3
 
 # Conductance model parameters
 gLT = 50e-9 # 50e-9 # X <---------------- #200e-9
-gh = 1000e-9  # 100e-9 # X <---------------- # 20e-9, 11e-9
-glk = 2e-9  # Leakage conductance
-VK = -0.08  # potassium reverse potential
-Vh = -0.043  # hyperpolarizing reverse potential
-Vlk = -0.065  # leakage reverse potential
-V0 = -0.06  # initial membrane potential (mV)
+gh = 100e-9  # 100e-9 # X <---------------- # 20e-9, 11e-9
+glk = 5e-9  # Leakage conductance
+VK = -80e-3  # potassium reverse potential
+Vh = -43e-3  # hyperpolarizing reverse potential
+Vlk = -65e-3  # leakage reverse potential
+V0 = -60e-3  # initial membrane potential (mV)
 w0 = 0.594  # Low-threshold K+ current
 z0 = 0.608  # Low-threshold K+ current
 r0 = 0.063  # Hyperpolarization current
@@ -236,55 +246,59 @@ q10=(3**((37-22)/10)) # heat parameter
 # Simulation parameters
 tmax=6
 dt=1e-5
-delta_t=0.001
 
 tlisti, tliste, Ginh, Gexc, yi, ye = getcurrents(f, fi, y0e, y0i, tauye, tauyi, 
                                          tauie, tauii, kie, kii, tmax, 
-                                         delta_t)
-# Testing currents
-def gspikes(Gexc, Ginh, args):
-    for x in args:
-        if x[3]==1:
-            Gexc[x[0]:x[0]+x[1]]=x[2]
-        if x[3]==-1:
-            Ginh[x[0]:x[0]+x[1]]=x[2]
-    return Gexc, Ginh
-Ginh=0*Ginh
-Gexc=0*Gexc
-# Gexc[500:1200]=30e-9#*np.linspace(0,(end-st)*dt, end-st)
-Gexc, Ginh =gspikes(Gexc, Ginh, [
-                         [500,700,30e-9,1], 
-                         [1500,500,10e-9,-1],
-                         [2500,500,30e-9,1],
-                         [2500,500,30e-9,1],
-                         [3500,500,10e-9,-1],
-                         [4050,500,30e-9,1]])
+                                         dt)
+# =============================================================================
+# # Testing currents
+# Ginh=0*Ginh
+# Gexc=0*Gexc
+# # Gexc[500:1200]=30e-9#*np.linspace(0,(end-st)*dt, end-st)
+# Gexc, Ginh =gspikes(Gexc, Ginh, [
+#                          [500,700,30e-9,1], 
+#                          [1500,500,10e-9,-1],
+#                          [2500,500,30e-9,1],
+#                          [2500,500,30e-9,1],
+#                          [3500,500,10e-9,-1],
+#                          [4050,500,30e-9,1]])
+# =============================================================================
 
 vlen=len(tliste)
 V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist\
     =simulate(vlen, V0, w0, z0, r0, Gexc, Ginh, gLT, gh, 
-              VK, Vh, q10, dt, vi, vt, at, vr, glk, Vlk)
-aps=getaps(aplist)
+              VK, Vh, q10, dt, vi, vt, at, vr, glk, Vlk, rf)
+aps=getaps(aplist, dt)
 
-fig, ax = plt.subplots(3, 1)
-ax[0].plot(tliste, Gexc, label='Ge')
-ax[0].plot(tliste, Ginh, label='Gi')
-ax[0].set_ylabel('Gexc\n{} Hz'.format(f))
-ax[0].set_xticks([])
-ax[0].legend(loc='upper right')
-ax[1].plot(tlisti, iLT, label='iLT')
-ax[1].plot(tlisti, ih, label='iH')
-# ax[1].plot(tlisti, ilk, label='iLK')
-ax[1].set_ylabel('current')
-ax[1].legend(loc='upper right')
-ax[2].plot(t * delta_t, V * 1000, label='V')
-ax[2].plot(t * delta_t, vr * 1000 * np.ones(len(t)), 
-           linestyle='-', color='gray', alpha=0.5, label='vr')
-ax[2].plot(t * delta_t, vi * 1000 * np.ones(len(t)), 
-           linestyle='--', color='gray', alpha=0.5, label='vi')
-ax[2].plot(t * delta_t, theta * 1000 * np.ones(len(t)), 
-           linestyle='-', color='k', alpha=1, label='vth')
-ax[2].set_ylabel('Membrane\npotential\n(mV)')
-ax[2].set_xlabel('Time (sec)')
-ax[2].legend(loc='upper right')
+fs = 15
+plt.subplot(3, 1, 1)
+plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
+plt.plot(tliste, Ginh, label='Gi {} Hz'.format(fi))
+plt.ylabel('Conductance', fontsize=fs)
+plt.xticks([], fontsize=fs)
+plt.yticks(fontsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+
+plt.subplot(3, 1, 2)
+plt.plot(tlisti, iLT, label='iLT')
+plt.plot(tlisti, ih, label='iH')
+plt.plot(tlisti, ilk, label='iLK')
+plt.ylabel('Current', fontsize=fs)
+plt.xticks([], fontsize=fs)
+plt.yticks(fontsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+
+plt.subplot(3, 1, 3)
+plt.plot(t * dt, V * 1000, label='V')
+plt.plot(t * dt, vr * 1000 * np.ones(len(t)), linestyle='-', color='gray', alpha=0.5, label='vr')
+plt.plot(t * dt, vi * 1000 * np.ones(len(t)), linestyle='--', color='gray', alpha=0.5, label='vi')
+plt.plot(t * dt, theta * 1000 * np.ones(len(t)), linestyle='-', color='k', alpha=1, label='vth')
+plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.yticks(fontsize=fs)
+plt.xticks(fontsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+for x in aps:
+    plt.axvline(x, color='r', alpha=0.6)
 plt.show()
+
