@@ -164,13 +164,12 @@ def simulate(vlen, V0, w0, z0, r0, Gexc, Ginh, gLT, gh, VK, Vh, q10, dt,
         
         theta[i] = theta1[i]+theta2[i]
         
-
-        if V[i]>theta[i]:
-            theta2[i]+=alpha
-            V[i]=vr
-            aplist[i]=i*dt
-        
-        
+# =============================================================================
+#         if V[i]>theta[i]:
+#             theta2[i]+=alpha
+#             V[i]=vr
+#             aplist[i]=i*dt
+# =============================================================================
     return V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist
 
 
@@ -217,12 +216,12 @@ tautheta2=3.7e-3
 vr=-62e-3
 vi=-55e-3
 vt=-31e-3
-at=1
+at=0.8
 alpha=5e-3
 
 # Conductance model parameters
 gLT = 50e-9 # 50e-9 # X <---------------- #200e-9
-gh = 100e-9  # 100e-9 # X <---------------- # 20e-9, 11e-9
+gh = 1000e-9  # 100e-9 # X <---------------- # 20e-9, 11e-9
 glk = 2e-9  # Leakage conductance
 VK = -0.08  # potassium reverse potential
 Vh = -0.043  # hyperpolarizing reverse potential
@@ -235,7 +234,7 @@ C_m = 12e-12  # membrane capacitance (uF/cm^2)
 q10=(3**((37-22)/10)) # heat parameter
 
 # Simulation parameters
-tmax=4
+tmax=6
 dt=1e-5
 delta_t=0.001
 
@@ -243,14 +242,23 @@ tlisti, tliste, Ginh, Gexc, yi, ye = getcurrents(f, fi, y0e, y0i, tauye, tauyi,
                                          tauie, tauii, kie, kii, tmax, 
                                          delta_t)
 # Testing currents
+def gspikes(Gexc, Ginh, args):
+    for x in args:
+        if x[3]==1:
+            Gexc[x[0]:x[0]+x[1]]=x[2]
+        if x[3]==-1:
+            Ginh[x[0]:x[0]+x[1]]=x[2]
+    return Gexc, Ginh
 Ginh=0*Ginh
 Gexc=0*Gexc
-se=500
-ee=1200
-Gexc[se:ee]=50e-9#*np.linspace(0,(end-st)*dt, end-st)
-si=2000
-ei=3000
-Ginh[si:ei]=1e-9#*np.linspace(0,(end-st)*dt, end-st)
+# Gexc[500:1200]=30e-9#*np.linspace(0,(end-st)*dt, end-st)
+Gexc, Ginh =gspikes(Gexc, Ginh, [
+                         [500,700,30e-9,1], 
+                         [1500,500,10e-9,-1],
+                         [2500,500,30e-9,1],
+                         [2500,500,30e-9,1],
+                         [3500,500,10e-9,-1],
+                         [4050,500,30e-9,1]])
 
 vlen=len(tliste)
 V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist\
@@ -263,12 +271,12 @@ ax[0].plot(tliste, Gexc, label='Ge')
 ax[0].plot(tliste, Ginh, label='Gi')
 ax[0].set_ylabel('Gexc\n{} Hz'.format(f))
 ax[0].set_xticks([])
-ax[0].legend()
+ax[0].legend(loc='upper right')
 ax[1].plot(tlisti, iLT, label='iLT')
 ax[1].plot(tlisti, ih, label='iH')
-ax[1].plot(tlisti, ilk, label='iLK')
+# ax[1].plot(tlisti, ilk, label='iLK')
 ax[1].set_ylabel('current')
-ax[1].legend()
+ax[1].legend(loc='upper right')
 ax[2].plot(t * delta_t, V * 1000, label='V')
 ax[2].plot(t * delta_t, vr * 1000 * np.ones(len(t)), 
            linestyle='-', color='gray', alpha=0.5, label='vr')
