@@ -3455,27 +3455,31 @@ def count_states_over_time(cs):
     return np.array(all_times), np.array(counts0), np.array(counts1), np.array(counts2)
 
 # Parameters
-fexc = 10
-fa = 10
-fr = 1
-pbind = 0.2
-tmax = 10
+fexc = 0.3
+fa = 0.5
+fr = 0.2
+pbind = 0.5
+tmax = 20
 nc=100 # num channels
 
 # Generate spike times
 ftimes = getftimes(fexc, tmax)
 # Simulate
 t, s = gethist(ftimes, fa, fr, pbind, tmax)
-
 # =============================================================================
+# #%%
 # # Plot
-# plt.step(t, s, where='post')
+# fs=15
+# plt.step(t, s, where='post', linewidth=3)
 # for x in ftimes:
 #     if x <= tmax:
-#         plt.axvline(x, color='r', alpha=0.4)
+#         plt.axvline(x, color='r', alpha=0.2)
+# plt.xlabel('Time', fontsize=fs)
+# plt.ylabel('AMPA receptor state', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
 # plt.show()
+# #%%
 # =============================================================================
-
 # generate the n channel behaviors based on the nc channels and ftimes
 cs = [gethist(ftimes, fa, fr, pbind, tmax) for _ in range(nc)] # channels
 csa=[] # channels active
@@ -3491,14 +3495,15 @@ csa=[] # channels active
 times, n0, n1, n2 = count_states_over_time(cs)
 
 # Plot
+fs=20
 plt.figure(figsize=(10,5))
-plt.step(times, n0, label='Available (0)', where='post')
-plt.step(times, n1, label='Active (1)', where='post')
-plt.step(times, n2, label='Repair (2)', where='post')
-plt.xlabel('Time')
-plt.ylabel('Number of Channels')
-plt.title('Channels in Each State Over Time')
-plt.legend()
+plt.step(times, n0, label='Available', where='post')
+plt.step(times, n1, label='Open', where='post')
+plt.step(times, n2, label='Repair', where='post')
+plt.xlabel('Time', fontsize=fs)
+plt.ylabel('# of receptors in each state', fontsize=fs)
+plt.legend(fontsize=fs-5)
+plt.tick_params(axis='both', labelsize=fs)
 plt.show()
 
 #%% Plot the LIF model and the channel history
@@ -3547,7 +3552,7 @@ def getftimes(fexc, tmax):
     return np.array(ftimes)
 
 # Parameters for channels and LIF simulation
-fexc = 100
+fexc = 10
 fa = 1
 fr = 1
 pbind = 0.3
@@ -3620,34 +3625,32 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# =============================================================================
-# # Channel states over time plot
-# import matplotlib.colors as mcolors
-# # Build the state matrix: shape (nc, len(time_grid))
-# state_matrix = np.zeros((nc, len(time_grid)), dtype=int)
-# for ch_i, (t_arr, s_arr) in enumerate(cs):
-#     # For each channel, find state at each time in time_grid
-#     idxs = np.searchsorted(t_arr, time_grid, side='right') - 1
-#     states = s_arr[idxs]
-#     state_matrix[ch_i, :] = states
-# # Define discrete colormap for 3 states
-# cmap = mcolors.ListedColormap(['green', 'red', 'black'])
-# bounds = [-0.5, 0.5, 1.5, 2.5]  # boundaries between states
-# norm = mcolors.BoundaryNorm(bounds, cmap.N)
-# # plot
-# plt.figure(figsize=(12, 6))
-# im = plt.imshow(state_matrix, aspect='auto', interpolation='nearest', 
-#                 extent=[0, tmax, 0, nc], cmap=cmap, norm=norm)
-# cbar = plt.colorbar(im, ticks=[0, 1, 2])
-# cbar.ax.set_yticklabels(['Available (0)', 'Active (1)', 'Repair (2)'])
-# fs=15
-# plt.xlabel('Time (s)', fontsize=fs)
-# plt.ylabel('Channel #', fontsize=fs)
-# plt.title('Channel States Over Time', fontsize=fs)
-# plt.tick_params(axis='both', labelsize=fs)
-# plt.show()
-# 
-# =============================================================================
+# Channel states over time plot
+import matplotlib.colors as mcolors
+# Build the state matrix: shape (nc, len(time_grid))
+state_matrix = np.zeros((nc, len(time_grid)), dtype=int)
+for ch_i, (t_arr, s_arr) in enumerate(cs):
+    # For each channel, find state at each time in time_grid
+    idxs = np.searchsorted(t_arr, time_grid, side='right') - 1
+    states = s_arr[idxs]
+    state_matrix[ch_i, :] = states
+# Define discrete colormap for 3 states
+cmap = mcolors.ListedColormap(['green', 'red', 'black'])
+bounds = [-0.5, 0.5, 1.5, 2.5]  # boundaries between states
+norm = mcolors.BoundaryNorm(bounds, cmap.N)
+# plot
+plt.figure(figsize=(12, 6))
+im = plt.imshow(state_matrix, aspect='auto', interpolation='nearest', 
+                extent=[0, tmax, 0, nc], cmap=cmap, norm=norm)
+cbar = plt.colorbar(im, ticks=[0, 1, 2])
+cbar.ax.set_yticklabels(['Available', 'Open', 'Repair'])
+fs=20
+plt.xlabel('Time (s)', fontsize=fs)
+plt.ylabel('Channel #', fontsize=fs)
+plt.title('Channel States Over Time', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
 #%% Paired pulse depression
 import numpy as np
 import matplotlib.pyplot as plt
@@ -3693,16 +3696,17 @@ def get_discrete_ftimes(na, IPI, deltaap=0.0):
     return np.array([deltaap] + [deltaap + IPI * i for i in range(1, na)])
 
 # Parameters
-na = 10 # number of aps
-IPI = 1
-deltaap = 0.01
-fa = 20
+IPI = 50
+fa = 10
 fr = 0.1
-pbind = 0.3
+pbind = 0.5
+na = 10 # number of aps
+
+deltaap = 0.01
 tmax = na * IPI + 0.1
-nc = 100
-dt = 0.001
+nc = 100 #number of channels
 n_trials = 30
+dt = 0.001
 
 # Generate AP times with delay
 ftimes = get_discrete_ftimes(na, IPI, deltaap)
@@ -3742,13 +3746,14 @@ for ap_time in ftimes:
         peak_val = np.nan  # no peak found
     peak_heights.append(peak_val)
 
+fs=15
 # Plot mean summed current trace
 plt.figure(figsize=(10,4))
 plt.plot(time_grid, mean_Iext_sum, label=f'$f_{{active}}$={fa} Hz,'\
          f' $f_{{repair}}$={fr} Hz, $p_{{bind}}={pbind}$\n $N_{{channels}}$={nc}', 
          linewidth=3)
 plt.xlabel('Time (s)', fontsize=fs)
-plt.ylabel('Mean # active AMPAR channels ',fontsize=fs)
+plt.ylabel('Mean # active AMPA receptors ',fontsize=fs)
 plt.title(f'{na} action potentials over {n_trials} trials with IPI = {IPI} sec',
           fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
