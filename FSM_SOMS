@@ -3244,6 +3244,7 @@ _, _, napslist = getstats(f, taui0, tauy0, kiy0, taui1, tauy1, kiy1,
 plt.ylabel('Membrane \npotential (mV)', fontsize=fs)
 plt.xlabel('Time (sec)', fontsize=fs)
 plt.legend(fontsize=fs, handlelength=-0.7)
+plt.show()
 print(naps)
 
 #%% Plot of the currents for r and different f values
@@ -3377,3 +3378,380 @@ for i, data in enumerate(napslist2):
     variances.append(vari)
     means.append(meani)
     cvs.append(vari/meani**2)
+    
+#%% AMPAR receptors - counts over time
+import numpy as np
+import matplotlib.pyplot as plt
+
+def gethist(ftimes, fa, fr, pbind, tmax):
+    inext = 0
+    s = [0]
+    t = [0]
+    for i in range(len(ftimes)):
+        # Skip spikes after tmax but keep checking later ones
+        if ftimes[i] > tmax:
+            continue
+
+        if i == inext:
+            on = np.random.rand() < pbind
+            if on:
+                if ftimes[i] <= tmax:
+                    s.append(1)
+                    t.append(ftimes[i])
+
+                t1 = np.random.exponential(1/(fa+1e-6))
+                if ftimes[i] + t1 <= tmax:
+                    s.append(2)
+                    t.append(ftimes[i] + t1)
+
+                t2 = np.random.exponential(1/(fr+1e-6))
+                if ftimes[i] + t1 + t2 <= tmax:
+                    s.append(0)
+                    t.append(ftimes[i] + t1 + t2)
+
+                tnext = ftimes[i] + t1 + t2
+
+                # find the next closest fire time
+                idxs = np.where(ftimes > tnext)[0]
+                inext = (idxs[np.argmin(ftimes[idxs])] if idxs.size > 0 else None)
+                if inext is None:
+                    continue  # don't stop loop early
+            else:
+                inext += 1
+        else:
+            continue
+
+    # ensure the recording extends to exactly tmax
+    if t[-1] < tmax:
+        t.append(tmax)
+        s.append(s[-1])
+
+    return t, s
+
+
+def getftimes(fexc, tmax):
+    ftimes = [np.random.exponential(1/(fexc+1e-6))]
+    while ftimes[-1] < tmax:
+        ftimes.append(ftimes[-1] + np.random.exponential(1/(fexc+1e-6)))
+    return np.array(ftimes)
+
+def count_states_over_time(cs):
+    all_times = sorted(set(np.concatenate([c[0] for c in cs])))
+    counts0, counts1, counts2 = [], [], []
+    for tpoint in all_times:
+        c0 = c1 = c2 = 0
+        for t_arr, s_arr in cs:
+            idx = np.searchsorted(t_arr, tpoint, side='right') - 1
+            state = s_arr[idx]
+            if state == 0:
+                c0 += 1
+            elif state == 1:
+                c1 += 1
+            else:
+                c2 += 1
+        counts0.append(c0)
+        counts1.append(c1)
+        counts2.append(c2)
+    return np.array(all_times), np.array(counts0), np.array(counts1), np.array(counts2)
+
+# Parameters
+fexc = 10
+fa = 10
+fr = 1
+pbind = 0.2
+tmax = 10
+nc=100 # num channels
+
+# Generate spike times
+ftimes = getftimes(fexc, tmax)
+# Simulate
+t, s = gethist(ftimes, fa, fr, pbind, tmax)
+
+# =============================================================================
+# # Plot
+# plt.step(t, s, where='post')
+# for x in ftimes:
+#     if x <= tmax:
+#         plt.axvline(x, color='r', alpha=0.4)
+# plt.show()
+# =============================================================================
+
+# generate the n channel behaviors based on the nc channels and ftimes
+cs = [gethist(ftimes, fa, fr, pbind, tmax) for _ in range(nc)] # channels
+csa=[] # channels active
+# =============================================================================
+# for i in range(len(cs)):
+#     csa.append([cs[i][0],list(map(lambda x: x%2, cs[i][1]))])
+# plt.step(csa[1][0], csa[1][1])
+# plt.show()
+# =============================================================================
+
+
+# Count how many channels are in each state over time
+times, n0, n1, n2 = count_states_over_time(cs)
+
+# Plot
+plt.figure(figsize=(10,5))
+plt.step(times, n0, label='Available (0)', where='post')
+plt.step(times, n1, label='Active (1)', where='post')
+plt.step(times, n2, label='Repair (2)', where='post')
+plt.xlabel('Time')
+plt.ylabel('Number of Channels')
+plt.title('Channels in Each State Over Time')
+plt.legend()
+plt.show()
+
+#%% Plot the LIF model and the channel history
+import numpy as np
+import matplotlib.pyplot as plt
+
+def gethist(ftimes, fa, fr, pbind, tmax):
+    inext = 0
+    s = [0]
+    t = [0]
+    for i in range(len(ftimes)):
+        if ftimes[i] > tmax:
+            continue
+        if i == inext:
+            on = np.random.rand() < pbind
+            if on:
+                if ftimes[i] <= tmax:
+                    s.append(1)
+                    t.append(ftimes[i])
+                t1 = np.random.exponential(1/(fa+1e-6))
+                if ftimes[i] + t1 <= tmax:
+                    s.append(2)
+                    t.append(ftimes[i] + t1)
+                t2 = np.random.exponential(1/(fr+1e-6))
+                if ftimes[i] + t1 + t2 <= tmax:
+                    s.append(0)
+                    t.append(ftimes[i] + t1 + t2)
+                tnext = ftimes[i] + t1 + t2
+                idxs = np.where(ftimes > tnext)[0]
+                inext = (idxs[np.argmin(ftimes[idxs])] if idxs.size > 0 else None)
+                if inext is None:
+                    continue
+            else:
+                inext += 1
+        else:
+            continue
+    if t[-1] < tmax:
+        t.append(tmax)
+        s.append(s[-1])
+    return np.array(t), np.array(s)
+
+def getftimes(fexc, tmax):
+    ftimes = [np.random.exponential(1/(fexc+1e-6))]
+    while ftimes[-1] < tmax:
+        ftimes.append(ftimes[-1] + np.random.exponential(1/(fexc+1e-6)))
+    return np.array(ftimes)
+
+# Parameters for channels and LIF simulation
+fexc = 100
+fa = 1
+fr = 1
+pbind = 0.3
+tmax = 10
+nc = 100
+tauv = 0.01  # membrane time constant (seconds)
+A = 10       # input current scaling factor
+dt = 1e-3   # integration timestep (seconds)
+vth = 0.2   # spike threshold
+vreset = 0  # reset voltage after spike
+rf_time = 0.001  # refractory period duration in seconds (5 ms)
+
+# Generate spike times
+ftimes = getftimes(fexc, tmax)
+
+# Simulate nc channels
+cs = [gethist(ftimes, fa, fr, pbind, tmax) for _ in range(nc)]
+
+# Convert channel states to binary active current traces (1 when active, 0 else)
+csa = []
+for t_arr, s_arr in cs:
+    Iext = np.array([1 if state == 1 else 0 for state in s_arr])
+    csa.append((t_arr, Iext))
+
+# Create a common fine time vector for integration
+time_grid = np.arange(0, tmax + dt, dt)
+
+# Sum currents from all channels at each time in time_grid
+Iext_sum = np.zeros_like(time_grid)
+for t_arr, Iext in csa:
+    idxs = np.searchsorted(t_arr, time_grid, side='right') - 1
+    current_trace = Iext[idxs]
+    Iext_sum += current_trace
+
+# Normalize input current by number of channels
+Iext_sum = Iext_sum / nc
+
+# Initialize LIF membrane voltage and refractory timer
+v = np.zeros_like(time_grid)
+v[0] = 0.0
+refractory_timer = 0
+
+# Euler integration with threshold and refractory period
+for i in range(1, len(time_grid)):
+    if refractory_timer > 0:
+        v[i] = vreset
+        refractory_timer -= dt
+    else:
+        dv = (-v[i-1] / tauv + A * Iext_sum[i-1]) * dt
+        v[i] = v[i-1] + dv
+        if v[i] >= vth:
+            v[i] = vreset
+            refractory_timer = rf_time
+
+# Plotting
+plt.figure(figsize=(10, 5))
+
+plt.subplot(2,1,1)
+plt.plot(time_grid, Iext_sum, label='Sum of channel currents (normalized)')
+plt.ylabel('Input Current')
+plt.legend()
+
+plt.subplot(2,1,2)
+plt.plot(time_grid, v, label='LIF Membrane Voltage')
+plt.axhline(vth, color='r', linestyle='--', label='Threshold')
+plt.xlabel('Time (s)')
+plt.ylabel('Voltage')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+# =============================================================================
+# # Channel states over time plot
+# import matplotlib.colors as mcolors
+# # Build the state matrix: shape (nc, len(time_grid))
+# state_matrix = np.zeros((nc, len(time_grid)), dtype=int)
+# for ch_i, (t_arr, s_arr) in enumerate(cs):
+#     # For each channel, find state at each time in time_grid
+#     idxs = np.searchsorted(t_arr, time_grid, side='right') - 1
+#     states = s_arr[idxs]
+#     state_matrix[ch_i, :] = states
+# # Define discrete colormap for 3 states
+# cmap = mcolors.ListedColormap(['green', 'red', 'black'])
+# bounds = [-0.5, 0.5, 1.5, 2.5]  # boundaries between states
+# norm = mcolors.BoundaryNorm(bounds, cmap.N)
+# # plot
+# plt.figure(figsize=(12, 6))
+# im = plt.imshow(state_matrix, aspect='auto', interpolation='nearest', 
+#                 extent=[0, tmax, 0, nc], cmap=cmap, norm=norm)
+# cbar = plt.colorbar(im, ticks=[0, 1, 2])
+# cbar.ax.set_yticklabels(['Available (0)', 'Active (1)', 'Repair (2)'])
+# fs=15
+# plt.xlabel('Time (s)', fontsize=fs)
+# plt.ylabel('Channel #', fontsize=fs)
+# plt.title('Channel States Over Time', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.show()
+# 
+# =============================================================================
+#%% Paired pulse depression
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
+
+def gethist(ftimes, fa, fr, pbind, tmax):
+    inext = 0
+    s = [0]
+    t = [0]
+    for i in range(len(ftimes)):
+        if ftimes[i] > tmax:
+            continue
+        if i == inext:
+            on = np.random.rand() < pbind
+            if on:
+                if ftimes[i] <= tmax:
+                    s.append(1)
+                    t.append(ftimes[i])
+                t1 = np.random.exponential(1/(fa+1e-6))
+                if ftimes[i] + t1 <= tmax:
+                    s.append(2)
+                    t.append(ftimes[i] + t1)
+                t2 = np.random.exponential(1/(fr+1e-6))
+                if ftimes[i] + t1 + t2 <= tmax:
+                    s.append(0)
+                    t.append(ftimes[i] + t1 + t2)
+                tnext = ftimes[i] + t1 + t2
+                idxs = np.where(ftimes > tnext)[0]
+                inext = (idxs[np.argmin(ftimes[idxs])] if idxs.size > 0 else None)
+                if inext is None:
+                    continue
+            else:
+                inext += 1
+        else:
+            continue
+    if t[-1] < tmax:
+        t.append(tmax)
+        s.append(s[-1])
+    return np.array(t), np.array(s)
+
+def get_discrete_ftimes(na, IPI, deltaap=0.0):
+    # Delay first AP by deltaap, subsequent APs spaced by IPI
+    return np.array([deltaap] + [deltaap + IPI * i for i in range(1, na)])
+
+# Parameters
+na = 10 # number of aps
+IPI = 1
+deltaap = 0.01
+fa = 20
+fr = 0.1
+pbind = 0.3
+tmax = na * IPI + 0.1
+nc = 100
+dt = 0.001
+n_trials = 30
+
+# Generate AP times with delay
+ftimes = get_discrete_ftimes(na, IPI, deltaap)
+time_grid = np.arange(0, tmax + dt, dt)
+
+all_trials_Iext_sum = []
+
+for trial in range(n_trials):
+    cs = [gethist(ftimes, fa, fr, pbind, tmax) for _ in range(nc)]
+    Iext_sum = np.zeros_like(time_grid)
+    for t_arr, s_arr in cs:
+        I = np.array([1 if state == 1 else 0 for state in s_arr])
+        idxs = np.searchsorted(t_arr, time_grid, side='right') - 1
+        current_trace = I[idxs]
+        Iext_sum += current_trace
+    all_trials_Iext_sum.append(Iext_sum)
+
+all_trials_Iext_sum = np.array(all_trials_Iext_sum)
+mean_Iext_sum = np.mean(all_trials_Iext_sum, axis=0)
+
+# Calculate peak heights precisely using scipy find_peaks around each AP
+peak_heights = []
+peak_window = 0.02  # 20 ms window after each AP to search peaks
+
+for ap_time in ftimes:
+    # Find indices within window after AP
+    inds = np.where((time_grid >= ap_time) & (time_grid <= ap_time + peak_window))[0]
+    segment = mean_Iext_sum[inds]
+
+    # Use find_peaks to detect peaks in this segment
+    peaks, properties = find_peaks(segment)
+    if len(peaks) > 0:
+        # Take the highest peak in the window
+        max_peak_idx = peaks[np.argmax(segment[peaks])]
+        peak_val = segment[max_peak_idx]
+    else:
+        peak_val = np.nan  # no peak found
+    peak_heights.append(peak_val)
+
+# Plot mean summed current trace
+plt.figure(figsize=(10,4))
+plt.plot(time_grid, mean_Iext_sum, label=f'$f_{{active}}$={fa} Hz,'\
+         f' $f_{{repair}}$={fr} Hz, $p_{{bind}}={pbind}$\n $N_{{channels}}$={nc}', 
+         linewidth=3)
+plt.xlabel('Time (s)', fontsize=fs)
+plt.ylabel('Mean # active AMPAR channels ',fontsize=fs)
+plt.title(f'{na} action potentials over {n_trials} trials with IPI = {IPI} sec',
+          fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs, handlelength=0)
+plt.show()
+
