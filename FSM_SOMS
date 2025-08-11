@@ -3695,17 +3695,19 @@ def get_discrete_ftimes(na, IPI, deltaap=0.0):
     # Delay first AP by deltaap, subsequent APs spaced by IPI
     return np.array([deltaap] + [deltaap + IPI * i for i in range(1, na)])
 
-# Parameters
-IPI = 50
-fa = 10
-fr = 0.1
-pbind = 0.5
-na = 10 # number of aps
+# parameters
+IPI = 1
+fa = 15
+fr = 15
+pbind = 0.4
+na = 2 # number of aps
+nc = 100 #number of channels
+n_trials = 30
+
 
 deltaap = 0.01
 tmax = na * IPI + 0.1
-nc = 100 #number of channels
-n_trials = 30
+
 dt = 0.001
 
 # Generate AP times with delay
