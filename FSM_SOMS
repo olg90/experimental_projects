@@ -465,7 +465,7 @@ plt.title(names[dnum], fontsize=fs)
 plt.legend(loc='upper left', fontsize=fs, bbox_to_anchor=(0.01,0.95))
 plt.tick_params(axis='both', labelsize=fs)
 plt.show()
-#%% 6th method - FPT tests, period version
+#%% 6th method - FPT tests, period version - Full model
 # 0-DF1, 1-DF4, 2-DM1, 3-DM4, 4-DS1, 5-DS4, 
 # 6-NF1, 7-NF4, 8-NM1, 9-NM4, 10-NS1, 11-NS4
 
@@ -1400,6 +1400,7 @@ Iext, y, runtime, slope, presizes = getiext(f, taui, tauy, kiy, dt,r, a1, b1, c1
 # Iext, y, m, b, runtime = getiext3(f, taui, tauy, dt, r, a, b)
 
 plt.plot(np.linspace(0,len(y), len(y)), y)
+plt.show()
 #%% Integration current check
 
 # Parameters
@@ -1441,6 +1442,7 @@ plt.xlabel('Time (sec)', fontsize=fs)
 plt.ylabel('Charge (Integral of current)', fontsize=fs)
 plt.plot([], [], ' ', label='Input frequency = {}'.format(f))
 plt.legend(fontsize=fs)
+plt.show()
 
 #%%
 
@@ -1548,6 +1550,8 @@ ax[1].legend(loc='upper left', handlelength=1, fontsize=fs-3)
 ax[1].set_ylim([-67, -26])
 # ax[2].text(0.225, -35, 'AP', fontsize=fs)
 ax[1].set_xlabel('Time (sec)', fontsize=fs)
+
+plt.show()
 
 #%%
 
@@ -2951,6 +2955,12 @@ plt.show()
 
 #%% (NR) Fit the current between 10 and 40 Hz linearly
 
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+from scipy.signal import find_peaks
+
 def zform(z1,z2, f1,f2,f):
     return z1+(z2-z1)/(f2-f1)*(f-f1)
 
@@ -3007,7 +3017,7 @@ def getstats(f, taui0, tauy0, kiy0, taui1, tauy1, kiy1, dt, r,
     foutlist=1/np.array(tlist)
     return rlist, foutlist, napslist
 
-def gettmean(r, Iext, g, vb, dnum, C, Cr):
+def gettmean(r, Iext, g, vb, dnum, C, Cr, vd):
     v=np.zeros(len(Iext))
     v[0]=vd[0]
     apinds=[]
@@ -3016,11 +3026,21 @@ def gettmean(r, Iext, g, vb, dnum, C, Cr):
     posttimer=False
     for i in range(1,len(Iext)):
 
+# =============================================================================
+#         if posttimer==False:
+#             icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+#             dvdt=((-icurr+Iext[i-1]))/C[dnum]
+#         if posttimer==True:
+#             icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
+#             dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
+# =============================================================================
+        # NEW STUFF HERE QQQQQQQQ
+        vbfix=
         if posttimer==False:
-            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
+            icurr = r*g[7]*(v[i-1]-vbfix)+(1-r)*g[11]*(v[i-1]-vbfix)
             dvdt=((-icurr+Iext[i-1]))/C[dnum]
         if posttimer==True:
-            icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
+            icurr = r*gr[7]*(v[i-1]-vbfix)+(1-r)*gr[11]*(v[i-1]-vbfix)
             dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
 
         if aptimer != np.inf:
@@ -3083,7 +3103,7 @@ names = {
     0: 'DE-F-10 Hz', 1: 'DE-F-40 Hz',
     2: 'DE-M-10 Hz', 3: 'DE-M-40 Hz',
     4: 'DE-S-10 Hz', 5: 'DE-S-40 Hz',
-    
+
     6: 'NR-F-10 Hz', 7: 'NR-F-40 Hz',
     8: 'NR-M-10 Hz', 9: 'NR-M-40 Hz',
     10: 'NR-S-10 Hz', 11: 'NR-S-40 Hz'
@@ -3097,7 +3117,6 @@ dt=0.1e-3                                # 8 is (6,10) and 9 is (7,11)
 #                0   1   2   3   4    5     6      7    8   9  10  11
 vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-64,-65.5,-64,-63.8])
 #                0   1   2   3   4    5     6       7    8   9     10    11
-vbr=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-50,-50,-47,-64,-50])
 #    0        1           2          3        4         5
 C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
    0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.000111]
@@ -3187,6 +3206,7 @@ ax[1,0].set_xlabel('Time (sec)')
 ax[1,1].set_xlabel('Time (sec)')
 ax[0,0].set_ylabel('Current')
 ax[1,0].set_ylabel('Current')
+plt.show()
 
 # =============================================================================
 # plt.title('S40')
@@ -3201,7 +3221,7 @@ ax[1,0].set_ylabel('Current')
 # #%% part 2 to prev
 # =============================================================================
 
-idnum=1
+idnum=3
 #         0        1
 vals=[(1,10, 6),(1,40,7),  # fast
       (0,10,10),(0,40,11)] # slow
@@ -3211,16 +3231,39 @@ r,f,dnum=vals[idnum]
 
 nnames=[6,7,10,11]
 
-Iext, _, _, _, _ = getiext(f, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, r, m01,b01,m04,b04,m11,b11,m14,b14)
-v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr)
-plt.subplot(2,1,1)
-plt.plot(Is[idnum], label='data')
-plt.title(names[nnames[idnum]])
-plt.plot(Iext, alpha=0.5, label='simulation')
-plt.legend()
-plt.subplot(2,1,2)
-plt.plot(vs[idnum])
-plt.plot(v, alpha=0.8)
+# =============================================================================
+# Iext, _, _, _, _ = getiext(f, taui0,tauy0,kiy0,taui1,tauy1,kiy1, dt, r, m01,b01,m04,b04,m11,b11,m14,b14)
+# v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr, vd)
+# plt.subplot(2,1,1)
+# plt.plot(Is[idnum], label='data')
+# plt.title(names[nnames[idnum]])
+# plt.plot(Iext, alpha=0.5, label='simulation')
+# plt.legend()
+# plt.subplot(2,1,2)
+# plt.plot(vs[idnum])
+# plt.plot(v, alpha=0.8)
+# plt.show()
+# =============================================================================
+
+
+fig = plt.figure(figsize=(16, 8))
+
+for idnum in range(4):
+    r, f, dnum = vals[idnum]
+    Iext, _, _, _, _ = getiext(f, taui0, tauy0, kiy0, taui1, tauy1, kiy1, dt, r, m01, b01, m04, b04, m11, b11, m14, b14)
+    v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr, vd)
+    
+    plt.subplot(2, 4, idnum + 1)
+    plt.plot(Is[idnum], label='data')
+    plt.plot(Iext, alpha=0.5, label='simulation')
+    plt.title(names[nnames[idnum]])
+    plt.legend()
+    
+    plt.subplot(2, 4, idnum + 5)
+    plt.plot(vs[idnum])
+    plt.plot(v, alpha=0.8)
+
+plt.tight_layout()
 plt.show()
 
 #%% v vs t for r and f for new parameters
@@ -3761,4 +3804,693 @@ plt.title(f'{na} action potentials over {n_trials} trials with IPI = {IPI} sec',
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(fontsize=fs, handlelength=0)
 plt.show()
+
+#%% AMPA DEQ
+
+def sim(v, z, a, vth, f, pr, M, tauv, tauA, kav, kza, tauz, cz, tmax, delta_t, navgs):
+    
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        vlist=[]
+        zlist=[]
+        alist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        
+        
+        tcurr=0
+        ratio = 0.3 # 0.3
+        timer = delta_t
+        e=1e-6
+        while tcurr < tmax:
+            t0=np.random.exponential(1/(f+e)) # action potential
+            t1 = timer
+
+            if t0 < t1: # AP occurrs
+                b = np.random.binomial(M, pr)
+                v=v+kav*a
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+
+            else:
+                tmin=t1
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    vlist.append(v)
+                    zlist.append(z)
+                    alist.append(a)
+                    tlist.append(tcurr)
+                    
+            tcurr += tmin
+            if v>=vth and  tcurr >= ratio*tmax:
+                postlist.append(tcurr)
+                v=0
+
+            # Update the continuous dynamics
+
+            v += (-v / tauv+kav*a) * tmin
+            z += (-z/tauz)*tmin
+            a += (-a/taua+kza*z)
+    
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, vlist, zlist, alist, prelist, postlist, Tmean, CVT2
+
+
+v=0
+z=0
+a=0
+vth=0.2
+f=10
+pr=0.1
+M=100
+
+kav=0.05 # increases v
+kza=0.001 # increases a
+cz=10
+
+tauv=0.1
+taua=100
+tauz=0.01
+
+tmax=200
+delta_t=0.001
+navgs=20
+
+# =============================================================================
+# tlist, vlist, zlist, alist, prelist, postlist, Tmean, CVT2=\
+#     sim(v, z, a, vth, f, pr, M, tauv, taua, kav, kza, tauz, cz, 
+#             tmax, delta_t, navgs)
+# =============================================================================
+    
+# =============================================================================
+# 
+# plt.plot(tlist,alist)
+# plt.show()
+# =============================================================================
+# =============================================================================
+# plt.plot(tlist,vlist)
+# for x in postlist:
+#     plt.axvline(x, alpha=0.3, color='r')
+# plt.show()
+# =============================================================================
+
+
+
+tmeanlist=[]
+cv2=[]
+xlist=np.linspace(0,100,10)
+for i, x in enumerate(xlist):
+    f=x
+    print(i, len(xlist))
+    tlist, vlist, zlist, alist, prelist, postlist, Tmean, CVT2=\
+        sim(v, z, a, vth, f, pr, M, tauv, taua, kav, kza, tauz, cz, 
+                tmax, delta_t, navgs)
+    tmeanlist.append(Tmean)
+    cv2.append(CVT2)
+
+# plt.plot(xlist, 1/np.array(tmeanlist))
+plt.plot(xlist, cv2)
+plt.show()
+    
+
+
+
+#%% AMPA 2 simulations
+
+def sim2(F, A, R, f, fa, fr, pb, tmax, delta_t):
+    for _ in range(navgs):
+        Flist=[]
+        Alist=[]
+        Rlist=[]
+        tlist=[]
+        tcurr=0
+        ratio = 0 # 0.3
+        timer = delta_t
+        e=1e-6
+        while tcurr < tmax:
+            t0=np.random.exponential(1/(f+e)) # action potential
+            t1=np.random.exponential(1/(fa*A+e))
+            t2=np.random.exponential(1/(fr*R+e))
+            t3 = timer
+            if t0 < t1 and t0<t2 and t0<t3: # AP occurrs
+                b = np.random.binomial(M, pb)
+                F=F-b
+                A=A+b
+                tmin = t0
+                timer-=tmin
+            if t1 < t0 and t1<t2 and t1<t3: # AP occurrs
+                A=A-1
+                R=R+1
+                tmin = t1
+                timer-=tmin
+            if t2 < t0 and t2<t1 and t2<t3: # AP occurrs
+                R=R-1
+                F=F+1
+                tmin = t2
+                timer-=tmin
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    Flist.append(F)
+                    Alist.append(A)
+                    Rlist.append(R)
+                    tlist.append(tcurr)
+            tcurr += tmin
+    return tlist, Flist, Alist, Rlist
+
+
+f=1
+fa=20
+fr=10
+pb=0.1
+M=100
+
+F=M
+A=0
+R=0
+
+tmax=10
+delta_t=0.001
+
+tlist, Flist, Alist, Rlist=sim2(F, A, R, f, fa, fr, pb, tmax, delta_t)
+
+plt.subplot(3,1,1)
+plt.plot(tlist, Flist)
+plt.subplot(3,1,2)
+plt.plot(tlist, Alist)
+plt.subplot(3,1,3)
+plt.plot(tlist, Rlist)
+
+plt.show()
+
+
+
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def sim2(F, A, R, ISI, fa, fr, pb, n_APs, delay, delta_t, navgs):
+    
+    aav=[]
+    for _ in range(navgs):
+        Flist = []
+        Alist = []
+        Rlist = []
+        tlist = []
+    
+        tcurr = 0.0
+        e = 1e-6
+    
+        # Precompute AP times: delay + evenly spaced events using ISI
+        ap_times = delay + np.arange(n_APs) * ISI
+        ap_index = 0  # which AP we're on
+        next_ap_time = ap_times[ap_index] if ap_index < len(ap_times) else np.inf
+    
+        timer = delta_t  # measurement timer
+    
+        while ap_index < len(ap_times):
+            t1 = np.random.exponential(1/(fa*A+e))  # A→R
+            t2 = np.random.exponential(1/(fr*R+e))  # R→F
+            t3 = timer
+    
+            # Time until next AP
+            t0 = next_ap_time - tcurr
+    
+            # Choose smallest event time
+            if t0 < t1 and t0 < t2 and t0 < t3:
+                # AP occurs
+                b = np.random.binomial(F, pb)
+                F -= b
+                A += b
+                tmin = t0
+                timer -= tmin
+                ap_index += 1
+                next_ap_time = ap_times[ap_index] if ap_index < len(ap_times) else np.inf
+    
+            elif t1 < t0 and t1 < t2 and t1 < t3:
+                A -= 1
+                R += 1
+                tmin = t1
+                timer -= tmin
+    
+            elif t2 < t0 and t2 < t1 and t2 < t3:
+                R -= 1
+                F += 1
+                tmin = t2
+                timer -= tmin
+    
+            else:
+                tmin = t3
+                timer = delta_t
+                Flist.append(F)
+                Alist.append(A)
+                Rlist.append(R)
+                tlist.append(tcurr)
+            
+    
+            tcurr += tmin
+        aav.append(Alist)
+    aav=np.mean(np.array(aav), axis=0)
+    return tlist, Flist, Alist, Rlist, aav
+
+
+# Parameters
+ISI = 1   # seconds between APs
+fa = 20
+fr = 10
+pb = 0.1
+M = 100
+F = 100
+A = 0
+R = 0
+
+n_APs = 2     # number of APs
+delay = 1   # seconds before first AP
+delta_t = 0.001
+navgs=10
+
+tlist, Flist, Alist, Rlist, aav = sim2(F, A, R, ISI, fa, fr, pb, n_APs, delay, delta_t, navgs)
+
+plt.subplot(3,1,1)
+plt.plot(tlist, Flist)
+plt.ylabel('F')
+plt.subplot(3,1,2)
+plt.plot(tlist, Alist)
+plt.ylabel('A')
+plt.subplot(3,1,3)
+plt.plot(tlist, Rlist)
+plt.ylabel('R')
+plt.xlabel('Time (s)')
+plt.show()
+
+
+plt.plot(tlist, aav)
+plt.show()
+
+
+
+#%% Receptors free active desensitized SHS random APs
+import numpy as np
+from matplotlib import pyplot as plt
+
+def simfad(v,F,A,D,kin,f,pbind,ka,kd,kout,ks, kva, tmax, navgs):
+    fav=[]
+    aav=[]
+    dav=[]
+    vav=[]
+    e = 1e-6
+    ratio=0
+    for _ in range(navgs):
+        Fhist = []
+        Ahist = []
+        Dhist = []
+        thist = []
+        vhist = []
+        tcurr = 0.0
+        timer = delta_t  # measurement timer
+        while tcurr<tmax:
+            t0=np.random.exponential(1/(kin+e)) # arrival of F
+            t1=np.random.exponential(1/(f+e)) # AP arrives
+            t2=np.random.exponential(1/(ka*A+e)) # AP arrives
+            t3=np.random.exponential(1/(kd*D+e)) # AP arrives
+            t4=np.random.exponential(1/(kout*F+e)) # AP arrives
+            t5=np.random.exponential(1/(ks*D+e)) # AP arrives
+            t6 = timer
+            if t0<t1 and t0<t2 and t0<t3 and t0<t4 and t0<t5 and t0<t6:
+                F=F+1
+                tmin = t0
+                timer -= tmin
+            elif t1<t0 and t1<t2 and t1<t3 and t1<t4 and t1<t5 and t1<t6:
+                b=np.random.binomial(F,pbind)
+                F=F-b
+                A=A+b
+                tmin = t1
+                timer -= tmin
+            elif t2<t0 and t2<t1 and t2<t3 and t2<t4 and t2<t5 and t2<t6:
+                A=A-1
+                D=D+1
+                tmin = t2
+                timer -= tmin
+            elif t3<t0 and t3<t1 and t3<t2 and t3<t4 and t3<t5 and t3<t6:
+                D=D-1
+                F=F+1
+                tmin = t3
+                timer -= tmin
+            elif t4<t0 and t4<t1 and t4<t2 and t4<t3 and t4<t5 and t4<t6:
+                F=F-1
+                tmin = t4
+                timer -= tmin
+            elif t5<t0 and t5<t1 and t5<t2 and t5<t3 and t5<t4 and t5<t6:
+                D=D-1
+                F=F+1
+                tmin = t5
+                timer -= tmin
+            else:  # t6 is smallest
+                tmin = t6
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    Fhist.append(F)
+                    Ahist.append(A)
+                    Dhist.append(D)
+                    thist.append(tcurr)
+                    vhist.append(v)
+            tcurr += tmin
+            v=v+(-v/tauv+kva*A)*tmin # evolve dynamics
+        fav.append(Fhist)
+        aav.append(Ahist)
+        dav.append(Dhist)
+    fav=np.mean(np.array(fav), axis=0)
+    aav=np.mean(np.array(aav), axis=0)
+    dav=np.mean(np.array(dav), axis=0)
+    return thist, vhist, Fhist, Ahist, Dhist, fav,aav,dav,vav
+
+def simdet(v,F,A,D,kin,ISI,pbind,ka,kd,kout,ks, kva, naps, navgs):
+    fav=[]
+    aav=[]
+    dav=[]
+    vav=[]
+    e = 1e-6
+    ratio=0
+    for _ in range(navgs):
+        Fhist = []
+        Ahist = []
+        Dhist = []
+        thist = []
+        vhist = []
+        tcurr = 0.0
+        timer = delta_t  # measurement timer
+        timerisi=ISI
+        apnum=0
+        while apnum<naps+1:
+            t0=np.random.exponential(1/(kin+e)) # arrival of F
+            t1=timerisi
+            t2=np.random.exponential(1/(ka*A+e)) # AP arrives
+            t3=np.random.exponential(1/(kd*D+e)) # AP arrives
+            t4=np.random.exponential(1/(kout*F+e)) # AP arrives
+            t5=np.random.exponential(1/(ks*D+e)) # AP arrives
+            t6 = timer
+            if t0<t1 and t0<t2 and t0<t3 and t0<t4 and t0<t5 and t0<t6:
+                F=F+1
+                tmin = t0
+                timer -= tmin
+                timerisi-=tmin
+            elif t1<t0 and t1<t2 and t1<t3 and t1<t4 and t1<t5 and t1<t6:
+                b=np.random.binomial(F,pbind)
+                F=F-b
+                A=A+b
+                tmin = t1
+                timer -= tmin
+                timerisi=ISI
+                apnum+=1
+            elif t2<t0 and t2<t1 and t2<t3 and t2<t4 and t2<t5 and t2<t6:
+                A=A-1
+                D=D+1
+                tmin = t2
+                timer -= tmin
+                timerisi-=tmin
+            elif t3<t0 and t3<t1 and t3<t2 and t3<t4 and t3<t5 and t3<t6:
+                D=D-1
+                F=F+1
+                tmin = t3
+                timer -= tmin
+                timerisi-=tmin
+            elif t4<t0 and t4<t1 and t4<t2 and t4<t3 and t4<t5 and t4<t6:
+                F=F-1
+                tmin = t4
+                timer -= tmin
+                timerisi-=tmin
+            elif t5<t0 and t5<t1 and t5<t2 and t5<t3 and t5<t4 and t5<t6:
+                D=D-1
+                F=F+1
+                tmin = t5
+                timer -= tmin
+                timerisi-=tmin
+            else:  # t6 is smallest
+                tmin = t6
+                timer = delta_t
+                timerisi-=tmin
+                if tcurr >= ratio*tmax:
+                    Fhist.append(F)
+                    Ahist.append(A)
+                    Dhist.append(D)
+                    thist.append(tcurr)
+                    vhist.append(v)
+            tcurr += tmin
+            v=v+(-v/tauv+kva*A)*tmin # evolve dynamics
+        fav.append(Fhist)
+        aav.append(Ahist)
+        dav.append(Dhist)
+    fav=np.mean(np.array(fav), axis=0)
+    aav=np.mean(np.array(aav), axis=0)
+    dav=np.mean(np.array(dav), axis=0)
+    return thist, vhist, Fhist, Ahist, Dhist, fav,aav,dav,vav
+
+# Run simulation
+kin=10
+f=1
+pbind=0.5
+ka=100
+kd=0.1
+kout=1
+ks=3
+
+kva=1
+tauv=0.1
+tmax=10
+delta_t=0.001
+navgs=1
+
+F=0
+A=0
+D=0
+v=0
+
+# Assuming simfad returns hist variables
+thist, vhist, Fhist, Ahist, Dhist, fav, aav, dav, vav = \
+    simfad(v, F, A, D, kin, f, pbind, ka, kd, kout, ks, kva, tmax, navgs)
+
+
+plt.subplot(2, 1, 1)
+plt.plot(thist, Fhist, label='Fhist')
+plt.plot(thist, Ahist, label='Ahist')
+plt.plot(thist, Dhist, label='Dhist')
+plt.xlabel('Time')
+plt.ylabel('Values')
+plt.legend()
+
+plt.subplot(2, 1, 2)
+plt.plot(thist, vhist, label='vhist')
+plt.xlabel('Time')
+plt.ylabel('v')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+#%% Receptors free active desensitized - deterministic APs
+
+import numpy as np
+from matplotlib import pyplot as plt
+
+def simdet(F0, A0, D0, v0, kin,ISI,pbind,ka,kd,kout,ks, kva, naps, navgs):
+    fav=[]
+    aav=[]
+    dav=[]
+    vav=[]
+    e = 1e-6
+    for i in range(navgs):
+        print(i, navgs)
+        Fhist = []
+        Ahist = []
+        Dhist = []
+        thist = []
+        vhist = []
+        tcurr = 0.0
+        timer = delta_t  # measurement timer
+        timerisi=ISI
+        apnum=0
+        F=F0
+        A=A0
+        D=D0
+        v=v0
+        while apnum<naps+1:
+            t0=np.random.exponential(1/(kin+e)) # arrival of F
+            t1=timerisi
+            t2=np.random.exponential(1/(ka*A+e)) # active to desensitized
+            t3=np.random.exponential(1/(kd*D+e)) # desensitized to free
+            t4=np.random.exponential(1/(kout*F+e)) # AP arrives
+            t5=np.random.exponential(1/(ks*D+e)) # AP arrives
+            t6 = timer
+            if t0<t1 and t0<t2 and t0<t3 and t0<t4 and t0<t5 and t0<t6:
+                F=F+1
+                tmin = t0
+                timer -= tmin
+                timerisi-=tmin
+            elif t1<t0 and t1<t2 and t1<t3 and t1<t4 and t1<t5 and t1<t6:
+                b=np.random.binomial(F,pbind)
+                F=F-b
+                A=A+b
+                tmin = t1
+                timer -= tmin
+                timerisi=ISI
+                apnum+=1
+            elif t2<t0 and t2<t1 and t2<t3 and t2<t4 and t2<t5 and t2<t6:
+                A=A-1
+                D=D+1
+                tmin = t2
+                timer -= tmin
+                timerisi-=tmin
+            elif t3<t0 and t3<t1 and t3<t2 and t3<t4 and t3<t5 and t3<t6:
+                D=D-1
+                F=F+1
+                tmin = t3
+                timer -= tmin
+                timerisi-=tmin
+            elif t4<t0 and t4<t1 and t4<t2 and t4<t3 and t4<t5 and t4<t6:
+                F=F-1
+                tmin = t4
+                timer -= tmin
+                timerisi-=tmin
+            elif t5<t0 and t5<t1 and t5<t2 and t5<t3 and t5<t4 and t5<t6:
+                D=D-1
+                F=F+1
+                tmin = t5
+                timer -= tmin
+                timerisi-=tmin
+            else:  # t6 is smallest
+                tmin = t6
+                timer = delta_t
+                timerisi-=tmin
+                Fhist.append(F)
+                Ahist.append(A)
+                Dhist.append(D)
+                thist.append(tcurr)
+                vhist.append(v)
+            tcurr += tmin
+            v=v+(-v/tauv+kva*A)*tmin # evolve dynamics
+        fav.append(Fhist)
+        aav.append(Ahist)
+        dav.append(Dhist)
+        vav.append(vhist)
+
+    # Find minimum length across all trials for each list type
+    min_len = min(min(len(lst) for lst in fav),
+                  min(len(lst) for lst in aav),
+                  min(len(lst) for lst in dav),
+                  min(len(lst) for lst in vav))
+
+    # Truncate all lists to min_len
+    fav_trunc = [lst[:min_len] for lst in fav]
+    aav_trunc = [lst[:min_len] for lst in aav]
+    dav_trunc = [lst[:min_len] for lst in dav]
+    vav_trunc = [lst[:min_len] for lst in vav]
+
+    # Convert to arrays and average
+    fav_mean = np.mean(np.array(fav_trunc), axis=0)
+    aav_mean = np.mean(np.array(aav_trunc), axis=0)
+    dav_mean = np.mean(np.array(dav_trunc), axis=0)
+    vav_mean = np.mean(np.array(vav_trunc), axis=0)
+
+    # Also truncate thist and vhist from last trial for plotting consistency
+    thist = thist[:min_len]
+    vhist = vhist[:min_len]
+
+    return thist, vhist, Fhist, Ahist, Dhist, fav_mean, aav_mean, dav_mean, vav_mean
+
+
+# Run simulation
+kin=1000
+ISI=1/40
+naps=20 # number of APs to test
+pbind=0.05
+ka=200 # rate of leaving active
+kd=10 # rate of leaving desensitized
+kout=0.1
+ks=100 # rate of switching from desensitized to free
+
+kva=0.1
+tauv=0.01
+delta_t=0.001
+navgs=100
+
+ttype=10 # 1 test, 10 average
+
+F0=50 # Mean number of AMPAR receptors on average = 100
+A0=0
+D0=50
+v0=0
+
+thist, vhist, Fhist, Ahist, Dhist, fav, aav, dav, vav = \
+    simdet(F0, A0, D0, v0, kin, ISI, pbind, ka, kd, kout, ks, kva, naps, navgs)
+
+if ttype == 1:
+    # Top plot: F, A, D from first trial
+    plt.subplot(3, 1, 1)
+    plt.plot(thist, Fhist, label='Fhist')
+    plt.plot(thist, Ahist, label='Ahist')
+    plt.plot(thist, Dhist, label='Dhist')
+    plt.xlabel('Time')
+    plt.ylabel('Values')
+    plt.xticks([])
+    plt.legend()
+
+    # Middle plot: Ahist (first trial) and average aav
+    plt.subplot(3, 1, 2)
+    plt.plot(thist, Ahist, label='Ahist (trial)', color='orange')
+    plt.ylabel('Mean # of \nactive receptors')
+    plt.xticks([])
+
+    # Bottom plot: voltage trace vhist (first trial)
+    plt.subplot(3, 1, 3)
+    plt.plot(thist, vhist, label='vhist')
+    plt.xlabel('Time')
+    plt.ylabel('Voltage (v)')
+
+    plt.tight_layout()
+    plt.show()
+
+elif ttype == 10:
+
+    # Top plot: averaged F, A, D
+    plt.subplot(3, 1, 1)
+    plt.plot(thist, fav, label='closed')
+    plt.plot(thist, aav, label='open')
+    plt.plot(thist, dav, label='deactivated')
+    plt.xlabel('Time')
+    plt.ylabel('Mean # of\nreceptors')
+    plt.legend()
+    plt.xticks([])
+
+    # Middle plot: just average A (redundant but consistent)
+    plt.subplot(3, 1, 2)
+    plt.plot(thist, aav, label='aav (average)', color='orange')
+    plt.xlabel('Time')
+    plt.ylabel('Mean # of\nopen receptors')
+    plt.xticks([])
+    
+    # Bottom plot: averaged voltage
+    plt.subplot(3, 1, 3)
+    plt.plot(thist, vav, label='vhist (avg)')
+    plt.xlabel('Time')
+    plt.ylabel('Voltage (v)')
+
+    plt.tight_layout()
+    plt.show()
+
+
 
