@@ -3017,6 +3017,7 @@ def getstats(f, taui0, tauy0, kiy0, taui1, tauy1, kiy1, dt, r,
     foutlist=1/np.array(tlist)
     return rlist, foutlist, napslist
 
+# old function
 def gettmean(r, Iext, g, vb, dnum, C, Cr, vd):
     v=np.zeros(len(Iext))
     v[0]=vd[0]
@@ -3026,21 +3027,11 @@ def gettmean(r, Iext, g, vb, dnum, C, Cr, vd):
     posttimer=False
     for i in range(1,len(Iext)):
 
-# =============================================================================
-#         if posttimer==False:
-#             icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
-#             dvdt=((-icurr+Iext[i-1]))/C[dnum]
-#         if posttimer==True:
-#             icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
-#             dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
-# =============================================================================
-        # NEW STUFF HERE QQQQQQQQ
-        vbfix=
         if posttimer==False:
-            icurr = r*g[7]*(v[i-1]-vbfix)+(1-r)*g[11]*(v[i-1]-vbfix)
+            icurr = r*g[7]*(v[i-1]-vb[dnum])+(1-r)*g[11]*(v[i-1]-vb[dnum])
             dvdt=((-icurr+Iext[i-1]))/C[dnum]
         if posttimer==True:
-            icurr = r*gr[7]*(v[i-1]-vbfix)+(1-r)*gr[11]*(v[i-1]-vbfix)
+            icurr = r*gr[7]*(v[i-1]-vb[dnum])+(1-r)*gr[11]*(v[i-1]-vb[dnum])
             dvdt=((-icurr+Iext[i-1]))/Cr[dnum]
 
         if aptimer != np.inf:
@@ -3071,6 +3062,70 @@ def gettmean(r, Iext, g, vb, dnum, C, Cr, vd):
     ssaptimes=aptimes[int(0.3*len(aptimes)):]
     tmean = np.mean(np.diff(ssaptimes))
     return v, tmean, naps, aptimes
+
+# New function
+def gettmean(r, Iext, g, vb, dnum, C, Cr, vd):
+    v=np.zeros(len(Iext))
+    v[0]=vd[0]
+    apinds=[]
+    refper=40
+    aptimer=np.inf
+    posttimer=False
+    for i in range(1,len(Iext)):
+
+        if posttimer==False:
+            gfast=zform(g[6], g[7], 10, 40, f)
+            gslow=zform(g[10], g[11], 10, 40, f)
+            gfast2=zform(gr[6], gr[7], 10, 40, f)
+            gslow2=zform(gr[10], gr[11], 10, 40, f)
+            vbslow=zform(vb[10], vb[11], 10, 40, f)
+            vbfast=zform(vb[6], vb[7], 10, 40, f)
+            C1=linfun(C[10], C[11], C[6], C[7], f, r)
+            C2=linfun(Cr[10], Cr[11], Cr[6], Cr[7], f, r)
+            icurr = \
+                    r*gfast*(v[i-1]-vbfast)+\
+                (1-r)*gslow*(v[i-1]-vbslow)
+            dvdt=((-icurr+Iext[i-1]))/C1
+        if posttimer==True:
+            icurr = r*gfast2*(v[i-1]-vbfast)+(1-r)*gslow2*(v[i-1]-vbslow)
+            dvdt=((-icurr+Iext[i-1]))/C2
+            
+
+        if aptimer != np.inf:
+            v[i] = v[i-1]
+        else:
+            v[i] = v[i-1]+dvdt*dt
+
+        if Iext[i]>Iext[i-1]:
+            posttimer=False
+
+        if aptimer != np.inf:
+            aptimer-=1
+# =============================================================================
+#         if v[i-1]>vth[dnum]:
+#             v[i]=vbr[dnum] # vb[dnum]
+# =============================================================================
+        if v[i-1]>linfun(vth[10], vth[11], vth[6], vth[7], f, r):
+            v[i]=linfun(vbr[10], vbr[11], vbr[6], vbr[7], f, r)
+            apinds.append(i)
+            aptimer=refper
+            posttimer=True
+        if aptimer==0:
+            aptimer=np.inf
+# =============================================================================
+#     # Comment out
+#     fig,ax=plt.subplots(2,1)
+#     ax[0].plot(Iext)
+#     ax[1].plot(range(len(vd)), v)
+# =============================================================================
+    aptimes=np.array(apinds)*dt
+    naps=len(aptimes)
+    ssaptimes=aptimes[int(0.3*len(aptimes)):]
+    tmean = np.mean(np.diff(ssaptimes))
+    return v, tmean, naps, aptimes
+
+def linfun(s1,s4,fast1,fast4,f,r):
+    return zform(s1,s4, 10,40,f)*(1-r)+zform(fast1,fast4, 10,40,f)*r
 
 def geti(dnum):
 
@@ -3117,6 +3172,7 @@ dt=0.1e-3                                # 8 is (6,10) and 9 is (7,11)
 #                0   1   2   3   4    5     6      7    8   9  10  11
 vb=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-63,-64,-65.5,-64,-63.8])
 #                0   1   2   3   4    5     6       7    8   9     10    11
+vbr=np.array([-60.5,-60,-60,-60,-64.2,-64.2,-61.75,-50,-50,-47,-64,-50])
 #    0        1           2          3        4         5
 C=[0.00011,  0.00011,  0.00011,  0.00011,  0.00011,  0.00011,
    0.00009, 0.0001,  0.00011,  0.00011,  0.00011, 0.000111]
@@ -3245,11 +3301,11 @@ nnames=[6,7,10,11]
 # plt.show()
 # =============================================================================
 
-
 fig = plt.figure(figsize=(16, 8))
 
 for idnum in range(4):
     r, f, dnum = vals[idnum]
+    I, vd = geti(dnum)
     Iext, _, _, _, _ = getiext(f, taui0, tauy0, kiy0, taui1, tauy1, kiy1, dt, r, m01, b01, m04, b04, m11, b11, m14, b14)
     v, tmean, naps, aptimes = gettmean(r, Iext, g, vb, dnum, C, Cr, vd)
     
@@ -3262,6 +3318,7 @@ for idnum in range(4):
     plt.subplot(2, 4, idnum + 5)
     plt.plot(vs[idnum])
     plt.plot(v, alpha=0.8)
+    
 
 plt.tight_layout()
 plt.show()
@@ -4414,25 +4471,25 @@ def simdet(F0, A0, D0, v0, kin,ISI,pbind,ka,kd,kout,ks, kva, naps, navgs):
 
 
 # Run simulation
-kin=1000
+kin=20
 ISI=1/40
-naps=20 # number of APs to test
-pbind=0.05
-ka=200 # rate of leaving active
+naps=10 # number of APs to test
+pbind=0.1
+ka=500 # rate of leaving active
 kd=10 # rate of leaving desensitized
-kout=0.1
-ks=100 # rate of switching from desensitized to free
+kout=1 # rate of free channels leaving the PSD
+ks=0 # rate of switching from desensitized to free
 
 kva=0.1
 tauv=0.01
 delta_t=0.001
-navgs=100
+navgs=1000
 
 ttype=10 # 1 test, 10 average
 
-F0=50 # Mean number of AMPAR receptors on average = 100
+F0=100 # Mean number of AMPAR receptors on average = 100
 A0=0
-D0=50
+D0=100
 v0=0
 
 thist, vhist, Fhist, Ahist, Dhist, fav, aav, dav, vav = \
