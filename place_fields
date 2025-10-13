@@ -2725,6 +2725,7 @@ for pi in pscores:
 #%%
 
 i=0
+fs=15
 plt.hist(psflat[i], bins=200)
 plt.title('{}'.format(dnames[i]), fontsize=fs)
 plt.xlabel('complexity score', fontsize=fs)
@@ -2841,7 +2842,7 @@ def plot_scores_on_original(int_array):
 
 plot_scores_on_original(p[0])
 
-#%% Centroid stuff (meeting 5)
+#%% Centroid stuff (Meeting 5)
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -3543,4 +3544,679 @@ plt.title('Beta Distribution (from mean and CV²)')
 plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
+
+
+#%% Sizes histogram
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label
+from scipy import stats
+
+# =================== Get BigroomData ===================
+bigroom_maps = plist[0]  # BigroomData is index 0
+
+# Use 8-connectivity
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# =================== Collect sizes of all place fields ===================
+all_sizes = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    for label_id in range(1, num_features + 1):
+        size = np.sum(labeled_array == label_id)
+        all_sizes.append(size)
+
+all_sizes = np.array(all_sizes)
+
+# =================== Apply threshold ===================
+size_threshold = 0   # change threshold if desired
+filtered_sizes = all_sizes[all_sizes > size_threshold]
+
+print(f"Total fields before threshold: {len(all_sizes)}")
+print(f"After threshold ({size_threshold}): {len(filtered_sizes)}")
+
+# =================== Fit discrete distributions ===================
+fit_results = {}
+
+# Poisson
+lambda_hat = np.mean(filtered_sizes)
+poisson_loglik = np.sum(stats.poisson.logpmf(filtered_sizes, mu=lambda_hat))
+fit_results["Poisson"] = (stats.poisson, (lambda_hat,), poisson_loglik)
+
+# Negative Binomial (r, p)
+mean_ = np.mean(filtered_sizes)
+var_ = np.var(filtered_sizes)
+if var_ > mean_:  # NB only valid when variance > mean
+    r_hat = mean_**2 / (var_ - mean_)
+    p_hat = r_hat / (r_hat + mean_)
+    nb_loglik = np.sum(stats.nbinom.logpmf(filtered_sizes, n=r_hat, p=p_hat))
+    fit_results["NegBinom"] = (stats.nbinom, (r_hat, p_hat), nb_loglik)
+
+# Geometric
+p_geom = 1 / (1 + np.mean(filtered_sizes))
+geom_loglik = np.sum(stats.geom.logpmf(filtered_sizes, p=p_geom))
+fit_results["Geometric"] = (stats.geom, (p_geom,), geom_loglik)
+
+# =================== Pick best fit by log-likelihood ===================
+best_name, (best_dist, best_params, best_ll) = max(fit_results.items(), key=lambda x: x[1][2])
+
+print(f"\nBest discrete fit: {best_name}")
+print(f"Parameters: {best_params}")
+print(f"Log-likelihood: {best_ll:.2f}")
+
+# =================== Plot histogram + best-fit PMF ===================
+plt.figure(figsize=(7,5))
+
+# Histogram (counts, not normalized)
+counts, bins, _ = plt.hist(filtered_sizes,
+                           bins=np.arange(min(filtered_sizes), max(filtered_sizes)+1),
+                           color='skyblue', edgecolor='black', alpha=0.7,
+                           density=False, label='Data (counts)')
+
+# Scale PMF to counts
+x = np.arange(min(filtered_sizes), max(filtered_sizes)+1)
+pmf = best_dist.pmf(x, *best_params)
+pmf_scaled = pmf * len(filtered_sizes)
+
+# Format parameters for legend
+param_text = ", ".join([f"{pname}={val:.2f}" for pname, val in zip(best_dist.shapes.split(',') if best_dist.shapes else ['λ'], best_params)]) \
+             if hasattr(best_dist, 'shapes') else ", ".join([f"{val:.2f}" for val in best_params])
+
+plt.plot(x, pmf_scaled, 'r-', lw=2,
+         label=f"{best_name} fit\nparams: {param_text}")
+
+plt.xlabel('Place Field Size (pixels)')
+plt.ylabel('Count')
+plt.title(f'Histogram + Best Discrete Fit (BigroomData)\nSize > {size_threshold} pixels')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+#%% The CDF of sizes
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label
+from scipy import stats
+
+# =================== Get BigroomData ===================
+bigroom_maps = plist[0]  # BigroomData is index 0
+
+# Use 8-connectivity
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# =================== Collect sizes of all place fields ===================
+all_sizes = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    for label_id in range(1, num_features + 1):
+        size = np.sum(labeled_array == label_id)
+        all_sizes.append(size)
+
+all_sizes = np.array(all_sizes)
+
+# =================== Apply threshold ===================
+size_threshold = 0   # change threshold if desired
+filtered_sizes = all_sizes[all_sizes > size_threshold]
+
+print(f"Total fields before threshold: {len(all_sizes)}")
+print(f"After threshold ({size_threshold}): {len(filtered_sizes)}")
+
+# =================== Fit discrete distributions ===================
+fit_results = {}
+
+# Poisson
+lambda_hat = np.mean(filtered_sizes)
+poisson_loglik = np.sum(stats.poisson.logpmf(filtered_sizes, mu=lambda_hat))
+fit_results["Poisson"] = (stats.poisson, (lambda_hat,), poisson_loglik)
+
+# Negative Binomial (r, p)
+mean_ = np.mean(filtered_sizes)
+var_ = np.var(filtered_sizes)
+if var_ > mean_:  # NB only valid when variance > mean
+    r_hat = mean_**2 / (var_ - mean_)
+    p_hat = r_hat / (r_hat + mean_)
+    nb_loglik = np.sum(stats.nbinom.logpmf(filtered_sizes, n=r_hat, p=p_hat))
+    fit_results["NegBinom"] = (stats.nbinom, (r_hat, p_hat), nb_loglik)
+
+# Geometric
+p_geom = 1 / (1 + np.mean(filtered_sizes))
+geom_loglik = np.sum(stats.geom.logpmf(filtered_sizes, p=p_geom))
+fit_results["Geometric"] = (stats.geom, (p_geom,), geom_loglik)
+
+# =================== Pick best fit by log-likelihood ===================
+best_name, (best_dist, best_params, best_ll) = max(fit_results.items(), key=lambda x: x[1][2])
+
+print(f"\nBest discrete fit: {best_name}")
+print(f"Parameters: {best_params}")
+print(f"Log-likelihood: {best_ll:.2f}")
+
+# =================== Plot CDF (empirical + model) ===================
+plt.figure(figsize=(7,5))
+
+# Sort data for empirical CDF
+sorted_sizes = np.sort(filtered_sizes)
+empirical_cdf = np.arange(1, len(sorted_sizes)+1) / len(sorted_sizes)
+
+plt.step(sorted_sizes, empirical_cdf, where='post', label='Empirical CDF', color='blue')
+
+# Theoretical CDF
+x = np.arange(min(filtered_sizes), max(filtered_sizes)+1)
+theoretical_cdf = best_dist.cdf(x, *best_params)
+plt.plot(x, theoretical_cdf, 'r-', lw=2,
+         label=f"{best_name} fit\nparams: {', '.join([f'{p:.2f}' for p in best_params])}")
+
+plt.xlabel('Place Field Size (pixels)')
+plt.ylabel('CDF')
+plt.title(f'Empirical vs Best-Fit CDF (BigroomData)\nSize > {size_threshold} pixels')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+#%% Plot all CDFS for sizes
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label
+from scipy import stats
+
+# =================== Get BigroomData ===================
+bigroom_maps = plist[0]  # BigroomData is index 0
+
+# Use 8-connectivity
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# =================== Collect sizes of all place fields ===================
+all_sizes = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    for label_id in range(1, num_features + 1):
+        size = np.sum(labeled_array == label_id)
+        all_sizes.append(size)
+
+all_sizes = np.array(all_sizes)
+
+# =================== Apply threshold ===================
+size_threshold = 0   # change threshold if desired
+filtered_sizes = all_sizes[all_sizes > size_threshold]
+
+print(f"Total fields before threshold: {len(all_sizes)}")
+print(f"After threshold ({size_threshold}): {len(filtered_sizes)}")
+
+# =================== Fit discrete distributions ===================
+fit_results = {}
+
+# Poisson
+lambda_hat = np.mean(filtered_sizes)
+poisson_loglik = np.sum(stats.poisson.logpmf(filtered_sizes, mu=lambda_hat))
+fit_results["Poisson"] = (stats.poisson, (lambda_hat,), poisson_loglik)
+
+# Negative Binomial (r, p)
+mean_ = np.mean(filtered_sizes)
+var_ = np.var(filtered_sizes)
+if var_ > mean_:  # NB only valid when variance > mean
+    r_hat = mean_**2 / (var_ - mean_)
+    p_hat = r_hat / (r_hat + mean_)
+    nb_loglik = np.sum(stats.nbinom.logpmf(filtered_sizes, n=r_hat, p=p_hat))
+    fit_results["NegBinom"] = (stats.nbinom, (r_hat, p_hat), nb_loglik)
+
+# Geometric
+p_geom = 1 / (1 + np.mean(filtered_sizes))
+geom_loglik = np.sum(stats.geom.logpmf(filtered_sizes, p=p_geom))
+fit_results["Geometric"] = (stats.geom, (p_geom,), geom_loglik)
+
+# =================== Pick best fit by log-likelihood ===================
+best_name, (best_dist, best_params, best_ll) = max(fit_results.items(), key=lambda x: x[1][2])
+print(f"\nBest discrete fit: {best_name}")
+print(f"Parameters: {best_params}")
+print(f"Log-likelihood: {best_ll:.2f}")
+
+# =================== Plot Empirical CDF + All Fits ===================
+plt.figure(figsize=(8,5))
+
+# Empirical CDF
+sorted_sizes = np.sort(filtered_sizes)
+empirical_cdf = np.arange(1, len(sorted_sizes)+1) / len(sorted_sizes)
+plt.step(sorted_sizes, empirical_cdf, where='post', label='Empirical CDF', color='black')
+
+# Theoretical CDFs for each fit
+colors = {'Poisson':'red', 'NegBinom':'green', 'Geometric':'orange'}
+
+for name, (dist, params, _) in fit_results.items():
+    x = np.arange(min(filtered_sizes), max(filtered_sizes)+1)
+    cdf_vals = dist.cdf(x, *params)
+    param_text = ", ".join([f"{p:.2f}" for p in params])
+    plt.plot(x, cdf_vals, lw=2, color=colors.get(name, 'blue'),
+             label=f"{name} CDF\nparams: {param_text}")
+
+plt.xlabel('Place Field Size (pixels)')
+plt.ylabel('CDF')
+plt.title(f'Empirical vs All Discrete Fits (BigroomData)\nSize > {size_threshold} pixels')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+#%% Generate maps with ovals
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label
+from scipy.stats import rankdata
+
+# ===================== Helper: sample from empirical CDF =====================
+def sample_from_cdf(values, n_samples):
+    """
+    Sample n_samples from the empirical CDF of 'values'.
+    """
+    sorted_vals = np.sort(values)
+    probs = np.arange(1, len(values)+1) / len(values)
+    uniform_samples = np.random.rand(n_samples)
+    # Map uniform [0,1] to the empirical CDF
+    sampled_indices = np.searchsorted(probs, uniform_samples, side='right')
+    return sorted_vals[sampled_indices]
+
+# ===================== Inputs from Bigroom data =====================
+# Number of fields per neuron
+num_fields_per_neuron = np.array(nlist[0])
+
+# Sizes of place fields
+all_sizes = []
+structure = np.array([[1,1,1],[1,1,1],[1,1,1]])
+for neuron_map in plist[0]:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    for label_id in range(1, num_features + 1):
+        size = np.sum(labeled_array == label_id)
+        all_sizes.append(size)
+all_sizes = np.array(all_sizes)
+
+# ===================== Synthetic map generation =====================
+map_shape = (65, 116)  # example Bigroom size, adjust as needed
+num_neurons_to_simulate = 5
+
+synthetic_maps = []
+
+for i in range(num_neurons_to_simulate):
+    # Sample number of place fields for this neuron
+    n_fields = int(sample_from_cdf(num_fields_per_neuron, 1)[0])
+
+    # Sample sizes for each field
+    field_sizes = sample_from_cdf(all_sizes, n_fields)
+
+    # Initialize empty matrix
+    neuron_map = np.zeros(map_shape)
+
+    for size in field_sizes:
+        # Sample random centroid coordinate
+        row = np.random.randint(0, map_shape[0])
+        col = np.random.randint(0, map_shape[1])
+
+        # Create an oval (ellipse) at that point
+        # We'll approximate oval as filled ellipse in matrix
+        rr, cc = np.meshgrid(np.arange(map_shape[0]), np.arange(map_shape[1]), indexing='ij')
+        # scale the axes: area ~ size => area = pi*a*b => a = sqrt(size/pi*aspect_ratio), b = sqrt(size/pi/aspect_ratio)
+        aspect_ratio = 1.5  # ellipse ratio, width/height
+        b = np.sqrt(size / (np.pi * aspect_ratio))
+        a = b * aspect_ratio
+
+        # Ellipse formula ((x-h)/a)^2 + ((y-k)/b)^2 <= 1
+        ellipse_mask = ((rr - row)/a)**2 + ((cc - col)/b)**2 <= 1
+        neuron_map[ellipse_mask] = 1
+
+    synthetic_maps.append(neuron_map)
+
+# ===================== Plot synthetic maps =====================
+fig, axes = plt.subplots(1, num_neurons_to_simulate, figsize=(15, 3))
+if num_neurons_to_simulate == 1:
+    axes = [axes]
+
+for ax, neuron_map in zip(axes, synthetic_maps):
+    ax.imshow(neuron_map, cmap='hot', interpolation='nearest')
+    ax.set_title('Synthetic Neuron Map')
+    ax.axis('off')
+
+plt.show()
+
+#%% Generate maps with blobby shapes
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label
+
+# ===================== Helper: sample from empirical CDF =====================
+def sample_from_cdf(values, n_samples):
+    sorted_vals = np.sort(values)
+    probs = np.arange(1, len(values)+1) / len(values)
+    uniform_samples = np.random.rand(n_samples)
+    sampled_indices = np.searchsorted(probs, uniform_samples, side='right')
+    return sorted_vals[sampled_indices]
+
+# ===================== Inputs from Bigroom data =====================
+num_fields_per_neuron = np.array(nlist[0])
+
+# Sizes of place fields
+all_sizes = []
+structure = np.array([[1,1,1],[1,1,1],[1,1,1]])
+for neuron_map in plist[0]:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    for label_id in range(1, num_features + 1):
+        size = np.sum(labeled_array == label_id)
+        all_sizes.append(size)
+all_sizes = np.array(all_sizes)
+
+# ===================== Synthetic map generation =====================
+map_shape = plist[0][0].shape  # use actual neuron map shape
+num_neurons_to_simulate = 1
+
+synthetic_maps = []
+
+for i in range(num_neurons_to_simulate):
+    n_fields = int(sample_from_cdf(num_fields_per_neuron, 1)[0])
+    field_sizes = sample_from_cdf(all_sizes, n_fields)
+    neuron_map = np.zeros(map_shape)
+
+    rr, cc = np.meshgrid(np.arange(map_shape[0]), np.arange(map_shape[1]), indexing='ij')
+
+    for size in field_sizes:
+        # Random centroid
+        row = np.random.randint(0, map_shape[0])
+        col = np.random.randint(0, map_shape[1])
+
+        # Irregular patch: sum of a few small ellipses
+        patch = np.zeros_like(neuron_map)
+        num_blobs = np.random.randint(2, 5)  # 2–4 blobs per patch
+        for _ in range(num_blobs):
+            # Small random offset from centroid
+            r_offset = row + np.random.randint(-3, 4)
+            c_offset = col + np.random.randint(-3, 4)
+            r_offset = np.clip(r_offset, 0, map_shape[0]-1)
+            c_offset = np.clip(c_offset, 0, map_shape[1]-1)
+
+            # Random ellipse axes
+            aspect_ratio = np.random.uniform(0.5, 2.0)
+            b = np.sqrt(size / (num_blobs * np.pi * aspect_ratio))
+            a = b * aspect_ratio
+
+            ellipse_mask = ((rr - r_offset)/a)**2 + ((cc - c_offset)/b)**2 <= 1
+            patch[ellipse_mask] = 1
+
+        neuron_map = np.maximum(neuron_map, patch)  # combine patches
+
+    synthetic_maps.append(neuron_map)
+
+# ===================== Plot synthetic maps =====================
+fig, axes = plt.subplots(1, num_neurons_to_simulate, figsize=(15, 3))
+if num_neurons_to_simulate == 1:
+    axes = [axes]
+
+for ax, neuron_map in zip(axes, synthetic_maps):
+    ax.imshow(neuron_map, cmap='hot', interpolation='nearest')
+    ax.set_title('Synthetic Neuron Map')
+    ax.axis('off')
+
+plt.show()
+
+
+#%% Generate maps with irregular patches using NegBinom for field count
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label
+from scipy import stats
+
+# ===================== Fit Negative Binomial to number of place fields =====================
+num_fields_per_neuron = np.array(nlist[0])  # Bigroom data
+mean_n = np.mean(num_fields_per_neuron)
+var_n = np.var(num_fields_per_neuron)
+
+# Only fit NB if variance > mean
+if var_n > mean_n:
+    r_nb = mean_n**2 / (var_n - mean_n)
+    p_nb = r_nb / (r_nb + mean_n)
+else:
+    r_nb = mean_n
+    p_nb = 0.5  # fallback, geometric-like
+
+print(f"Fitted Negative Binomial: r={r_nb:.2f}, p={p_nb:.2f}")
+
+# Sizes of place fields
+all_sizes = []
+structure = np.array([[1,1,1],[1,1,1],[1,1,1]])
+for neuron_map in plist[0]:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    for label_id in range(1, num_features + 1):
+        size = np.sum(labeled_array == label_id)
+        all_sizes.append(size)
+all_sizes = np.array(all_sizes)
+
+# ===================== Helper: sample from empirical CDF =====================
+def sample_from_cdf(values, n_samples):
+    sorted_vals = np.sort(values)
+    probs = np.arange(1, len(values)+1) / len(values)
+    uniform_samples = np.random.rand(n_samples)
+    sampled_indices = np.searchsorted(probs, uniform_samples, side='right')
+    return sorted_vals[sampled_indices]
+
+# ===================== Synthetic map generation =====================
+map_shape = plist[0][0].shape  # use actual neuron map shape
+num_neurons_to_simulate = 1
+
+synthetic_maps = []
+
+for i in range(num_neurons_to_simulate):
+    # Sample number of fields from Negative Binomial
+    n_fields = stats.nbinom.rvs(r_nb, p_nb)
+    n_fields = max(1, n_fields)  # ensure at least 1 field
+
+    # Sample sizes for each field
+    field_sizes = sample_from_cdf(all_sizes, n_fields)
+    neuron_map = np.zeros(map_shape)
+
+    rr, cc = np.meshgrid(np.arange(map_shape[0]), np.arange(map_shape[1]), indexing='ij')
+
+    for size in field_sizes:
+        # Random centroid
+        row = np.random.randint(0, map_shape[0])
+        col = np.random.randint(0, map_shape[1])
+
+        # Irregular patch: sum of a few small ellipses
+        patch = np.zeros_like(neuron_map)
+        num_blobs = np.random.randint(2, 5)  # 2–4 blobs per patch
+        for _ in range(num_blobs):
+            r_offset = row + np.random.randint(-3, 4)
+            c_offset = col + np.random.randint(-3, 4)
+            r_offset = np.clip(r_offset, 0, map_shape[0]-1)
+            c_offset = np.clip(c_offset, 0, map_shape[1]-1)
+
+            aspect_ratio = np.random.uniform(0.5, 2.0)
+            b = np.sqrt(size / (num_blobs * np.pi * aspect_ratio))
+            a = b * aspect_ratio
+
+            ellipse_mask = ((rr - r_offset)/a)**2 + ((cc - c_offset)/b)**2 <= 1
+            patch[ellipse_mask] = 1
+
+        neuron_map = np.maximum(neuron_map, patch)
+
+    synthetic_maps.append(neuron_map)
+
+# ===================== Plot synthetic maps =====================
+fig, axes = plt.subplots(1, num_neurons_to_simulate, figsize=(15, 3))
+if num_neurons_to_simulate == 1:
+    axes = [axes]
+
+for ax, neuron_map in zip(axes, synthetic_maps):
+    ax.imshow(neuron_map, cmap='hot', interpolation='nearest')
+    ax.set_title('Synthetic Neuron Map')
+    ax.axis('off')
+
+plt.show()
+
+
+#%% Aggregate synthetic neurons and histogram per-pixel occupancy
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label
+from scipy import stats
+
+# -------------------- Use previous synthetic map generator --------------------
+# Assume you already have:
+#   - r_nb, p_nb : fitted Negative Binomial for number of fields
+#   - all_sizes  : empirical sizes of place fields
+#   - map_shape  : shape of the neuron map
+#   - sample_from_cdf() function
+
+num_synthetic_neurons = 200  # number of neurons to aggregate
+aggregated_map = np.zeros(map_shape, dtype=int)
+
+for i in range(num_synthetic_neurons):
+    # Sample number of fields for this neuron
+    n_fields = stats.nbinom.rvs(r_nb, p_nb)
+    n_fields = max(1, n_fields)
+
+    # Sample field sizes
+    field_sizes = sample_from_cdf(all_sizes, n_fields)
+
+    neuron_map = np.zeros(map_shape, dtype=int)
+    rr, cc = np.meshgrid(np.arange(map_shape[0]), np.arange(map_shape[1]), indexing='ij')
+
+    for size in field_sizes:
+        # Random centroid
+        row = np.random.randint(0, map_shape[0])
+        col = np.random.randint(0, map_shape[1])
+
+        # Irregular patch
+        patch = np.zeros_like(neuron_map)
+        num_blobs = np.random.randint(2, 5)
+        for _ in range(num_blobs):
+            r_offset = row + np.random.randint(-3, 4)
+            c_offset = col + np.random.randint(-3, 4)
+            r_offset = np.clip(r_offset, 0, map_shape[0]-1)
+            c_offset = np.clip(c_offset, 0, map_shape[1]-1)
+
+            aspect_ratio = np.random.uniform(0.5, 2.0)
+            b = np.sqrt(size / (num_blobs * np.pi * aspect_ratio))
+            a = b * aspect_ratio
+
+            ellipse_mask = ((rr - r_offset)/a)**2 + ((cc - c_offset)/b)**2 <= 1
+            patch[ellipse_mask] = 1
+
+        neuron_map = np.maximum(neuron_map, patch)
+
+    aggregated_map += neuron_map  # accumulate counts per pixel
+
+# -------------------- Histogram of counts per pixel --------------------
+pixel_counts = aggregated_map.flatten()
+plt.figure(figsize=(7,5))
+counts, bins, _ = plt.hist(pixel_counts, bins=np.arange(pixel_counts.min(), pixel_counts.max()+2),
+                           color='skyblue', edgecolor='black', density=False)
+plt.xlabel('Number of place fields per pixel')
+plt.ylabel('Count of pixels')
+plt.title('Histogram of pixel occupancy (aggregated 200 synthetic neurons)')
+plt.grid(alpha=0.3)
+plt.show()
+
+# -------------------- Fit discrete distributions --------------------
+fit_results = {}
+
+# Poisson fit
+lambda_hat = np.mean(pixel_counts)
+poisson_loglik = np.sum(stats.poisson.logpmf(pixel_counts, mu=lambda_hat))
+fit_results["Poisson"] = (stats.poisson, (lambda_hat,), poisson_loglik)
+
+# Negative Binomial fit
+mean_pix = np.mean(pixel_counts)
+var_pix = np.var(pixel_counts)
+if var_pix > mean_pix:
+    r_hat = mean_pix**2 / (var_pix - mean_pix)
+    p_hat = r_hat / (r_hat + mean_pix)
+    nb_loglik = np.sum(stats.nbinom.logpmf(pixel_counts, n=r_hat, p=p_hat))
+    fit_results["NegBinom"] = (stats.nbinom, (r_hat, p_hat), nb_loglik)
+
+# Geometric fit
+p_geom = 1 / (1 + mean_pix)
+geom_loglik = np.sum(stats.geom.logpmf(pixel_counts, p=p_geom))
+fit_results["Geometric"] = (stats.geom, (p_geom,), geom_loglik)
+
+# -------------------- Best fit --------------------
+best_name, (best_dist, best_params, best_ll) = max(fit_results.items(), key=lambda x: x[1][2])
+print(f"Best fit: {best_name}, params: {best_params}, log-likelihood={best_ll:.2f}")
+
+# -------------------- Plot histogram + best-fit PMF --------------------
+plt.figure(figsize=(7,5))
+counts, bins, _ = plt.hist(pixel_counts, bins=np.arange(pixel_counts.min(), pixel_counts.max()+2),
+                           color='skyblue', edgecolor='black', alpha=0.7, density=False, label='Data')
+
+x = np.arange(pixel_counts.min(), pixel_counts.max()+1)
+pmf = best_dist.pmf(x, *best_params)
+pmf_scaled = pmf * len(pixel_counts)
+
+# Legend formatting
+param_text = ", ".join([f"{val:.2f}" for val in best_params])
+plt.plot(x, pmf_scaled, 'r-', lw=2, label=f"{best_name} fit\nparams: {param_text}")
+
+plt.xlabel('Number of place fields per pixel')
+plt.ylabel('Count of pixels')
+plt.title('Pixel occupancy histogram + best discrete fit')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+#%% Plot an equal distance map
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_distance_grid(room_shape, start_dist=3, step=3, max_dist_ratio=0.5, show_plot=True):
+    """
+    Generate a matrix marking points at certain distances from nearest wall.
+
+    Parameters:
+    - room_shape: tuple (H, W) of the room
+    - start_dist: first distance from wall
+    - step: distance increment
+    - max_dist_ratio: max distance as fraction of smaller room dimension
+    - show_plot: whether to display the plot
+
+    Returns:
+    - output: numpy array with 1s at points, 0s elsewhere
+    """
+    H, W = room_shape
+    output = np.zeros((H, W))
+    max_dist = int(min(H, W) * max_dist_ratio)
+
+    for D in range(start_dist, max_dist + 1, step):
+        for i in range(H):
+            for j in range(W):
+                dist_to_wall = min(i, H-1-i, j, W-1-j)
+                if dist_to_wall == D:
+                    output[i,j] = 1
+
+    if show_plot:
+        plt.figure(figsize=(6,6))
+        plt.imshow(output, cmap='gray', origin='upper')
+        plt.title(f"Points at distances {start_dist},{start_dist+step},{start_dist+step+step} from nearest wall")
+        plt.axis('off')
+        plt.show()
+
+    return output
+
+# ================= Example Usage =================
+room_shape = plist[0][0].shape  # shape of first neuron
+grid = plot_distance_grid(room_shape, start_dist=5, step=10)
 
