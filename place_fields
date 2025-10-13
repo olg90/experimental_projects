@@ -1,4 +1,4 @@
-#%%
+#%%  Load the data and plot a place field
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -57,23 +57,19 @@ extensions = [(68, 120), # 0
 # 
 # =============================================================================
 
-# =============================================================================
-# shapeslist = [[(65, 116), (65, 117)],
-#               [(43, 53), (43, 50), (43, 57)],
-#               [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],
-#               [(12, 12), (13, 13)],
-#               [(24, 36), (31, 40)],
-#               [(20, 20)]]
-# =============================================================================
+shapeslist = [[(65, 116), (65, 117)], # BigroomData
+              [(43, 53), (43, 50), (43, 57)], # CircleData
+              [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)], # HalfroomData
+              [(12, 12), (13, 13)],  # HexagonData
+              [(24, 36), (31, 40)], # RectangleData
+              [(20, 20)]] # SquareData
 
-# =============================================================================
-# extensions = [(68, 120), # 0 
-#               (44, 60), # 1
-#               (64, 60), # 2 
-#               (16,16),  #[(12, 12), (13, 13)],
-#               (32, 40), #[(24, 36), (31, 40)],
-#               (20,20)] #[(20, 20)]]
-# =============================================================================
+extensions = [(68, 120), # BigroomData
+              (44, 60), # CircleData
+              (64, 60), # HalfroomData
+              (16,16),  # HexagonData
+              (32, 40), # RectangleData
+              (20,20)] # SquareData
 
 #%%
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
@@ -101,7 +97,7 @@ for pi in p1:
     plist.append(patches)
     clist.append(counts)
 
-#%%
+#%% Generate trimmed plots
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
 p_trimmed = [pi[:-1, :] for pi in p_trimmed]
 
@@ -120,7 +116,7 @@ plt.yticks([])
 plt.xticks([])
 plt.show()
 
-fs=20
+fs=20#
 plt.figure(figsize=(10,4))
 plt.title('Firing rate map, grid size = ({},{})'.format(grid[0], grid[1]),fontsize=fs)
 # =============================================================================
@@ -1114,7 +1110,7 @@ pth = [(pi > 0).astype(int) for pi in p_trimmed]
 pshape = pth[0].shape
 
 # Grid size for patching
-n = 4
+n = 1
 grid = (n, n)
 
 # Compute number of patches that fit in each dimension
@@ -1305,7 +1301,7 @@ pth = [(pi > 0).astype(int) for pi in p_trimmed]
 pshape = pth[0].shape
 
 # Grid size for patching
-n = 4
+n = 1
 grid = (n, n)
 
 # Compute number of patches that fit in each dimension
@@ -1736,30 +1732,13 @@ plt.tight_layout()
 plt.xlim([binarr[0]-1, binarr[-1]+1]) # limit the plot to within the lower/upper bins
 plt.show()
 
-#%% (Third meeting) The different room shapes, histograms
+#%% (Third meeting) The different room shapes, histograms (GOOD ONE)
 
 def plotresults(data, binnarr, bin_centers, n_neurons, i, dnames, gn):
-    # gaussian mixture model
-    
-    # fit gmm directly to raw data
-    gmm = GaussianMixture(n_components=2, random_state=42)
-    gmm.fit(data.reshape(-1, 1))
-    logL_gmm = gmm.score(data.reshape(-1, 1)) * len(data)
-    w1, w2 = gmm.weights_
-    mu1, mu2 = gmm.means_.flatten()
-    sigma1, sigma2 = np.sqrt(gmm.covariances_.flatten())
-    
-    # compute cv² for each gaussian component
-    cv2_1 = (sigma1 ** 2) / mu1 ** 2 if mu1 != 0 else np.nan
-    cv2_2 = (sigma2 ** 2) / mu2 ** 2 if mu2 != 0 else np.nan
-    
     # beta-binomial mixture model
-    
-    # define 2-component beta-binomial mixture pmf
     def pmf_bb_mix(x, w, a1, b1, a2, b2):
         return w * betabinom.pmf(x, n_neurons, a1, b1) + (1 - w) * betabinom.pmf(x, n_neurons, a2, b2)
     
-    # negative log-likelihood for beta-binomial mixture
     def nll_bb_mix(params):
         w, a1, b1, a2, b2 = params
         pmf = pmf_bb_mix(data, w, a1, b1, a2, b2)
@@ -1767,12 +1746,11 @@ def plotresults(data, binnarr, bin_centers, n_neurons, i, dnames, gn):
             return -np.sum(np.log(pmf + 1e-12))
         return np.inf
     
-    # fit parameters by minimizing nll
     res_bb_mix = minimize(nll_bb_mix, [0.5, 1, 2, 5, 5], bounds=[(1e-3, 1 - 1e-3)] + [(1e-5, None)] * 4)
     w_bb, a1_bb, b1_bb, a2_bb, b2_bb = res_bb_mix.x
     logL_bbmix = -res_bb_mix.fun
-    
-    # compute mean, variance, cv² for both beta-binomial components
+    aic_bbmix = 2 * 5 - 2 * logL_bbmix  # 5 parameters
+
     mean1_bb = n_neurons * a1_bb / (a1_bb + b1_bb)
     var1_bb = (n_neurons * a1_bb * b1_bb * (n_neurons + a1_bb + b1_bb)) / ((a1_bb + b1_bb) ** 2 * (a1_bb + b1_bb + 1))
     cv2_1_bb = var1_bb / mean1_bb ** 2
@@ -1780,13 +1758,11 @@ def plotresults(data, binnarr, bin_centers, n_neurons, i, dnames, gn):
     mean2_bb = n_neurons * a2_bb / (a2_bb + b2_bb)
     var2_bb = (n_neurons * a2_bb * b2_bb * (n_neurons + a2_bb + b2_bb)) / ((a2_bb + b2_bb) ** 2 * (a2_bb + b2_bb + 1))
     cv2_2_bb = var2_bb / mean2_bb ** 2
+
     # binomial mixture model
-    
-    # define 2-component binomial mixture pmf
     def pmf_binom_mix(x, w, p1, p2):
         return w * binom.pmf(x, n_neurons, p1) + (1 - w) * binom.pmf(x, n_neurons, p2)
     
-    # negative log-likelihood for binomial mixture
     def nll_binom_mix(params):
         w, p1, p2 = params
         pmf = pmf_binom_mix(data, w, p1, p2)
@@ -1794,12 +1770,14 @@ def plotresults(data, binnarr, bin_centers, n_neurons, i, dnames, gn):
             return -np.sum(np.log(pmf + 1e-12))
         return np.inf
     
-    # minimize nll to fit parameters
-    res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2], bounds=[(1e-3, 1 - 1e-3), (1e-5, 1 - 1e-5), (1e-5, 1 - 1e-5)])
+    res_binom_mix = minimize(nll_binom_mix, [0.05, 0.1, 0.2],
+                             bounds=[(1e-3, 1 - 1e-3),
+                                     (1e-5, 1 - 1e-5),
+                                     (1e-5, 1 - 1e-5)])
     w_bm, p1_bm, p2_bm = res_binom_mix.x
     logL_binmix = -res_binom_mix.fun
+    aic_binmix = 2 * 3 - 2 * logL_binmix  # 3 parameters
     
-    # compute means, variances, cv² for both binomial components
     mean1_bm = n_neurons * p1_bm
     var1_bm = n_neurons * p1_bm * (1 - p1_bm)
     cv2_1_bm = var1_bm / mean1_bm ** 2
@@ -1807,79 +1785,260 @@ def plotresults(data, binnarr, bin_centers, n_neurons, i, dnames, gn):
     mean2_bm = n_neurons * p2_bm
     var2_bm = n_neurons * p2_bm * (1 - p2_bm)
     cv2_2_bm = var2_bm / mean2_bm ** 2
+
+    # single-component binomial
+    def pmf_binom_single(x, p):
+        return binom.pmf(x, n_neurons, p)
     
-    # compute aic for all models
-    aic_gmm = 2 * 5 - 2 * logL_gmm
-    aic_bbmix = 2 * 5 - 2 * logL_bbmix
-    aic_binmix = 2 * 3 - 2 * logL_binmix
+    def nll_binom_single(p):
+        pmf = pmf_binom_single(data, p[0])
+        if 0 < p[0] < 1:
+            return -np.sum(np.log(pmf + 1e-12))
+        return np.inf
     
-    # prepare x axis for discrete models
+    res_binom_single = minimize(nll_binom_single, [0.1], bounds=[(1e-5, 1-1e-5)])
+    p_single = res_binom_single.x[0]
+    logL_bin_single = -res_binom_single.fun
+    mean_bin_single = n_neurons * p_single
+    var_bin_single = n_neurons * p_single * (1 - p_single)
+    cv2_bin_single = var_bin_single / mean_bin_single ** 2
+    aic_bin_single = 2 * 1 - 2 * logL_bin_single
+
+    # prepare x axis
     x_discrete = np.arange(0, n_neurons + 1)
     pmf_bbmix = pmf_bb_mix(x_discrete, w_bb, a1_bb, b1_bb, a2_bb, b2_bb)
     pmf_binmix = pmf_binom_mix(x_discrete, w_bm, p1_bm, p2_bm)
+    pmf_bin_single = pmf_binom_single(x_discrete, p_single)
 
     # plotting
     fs=15
     plt.figure(figsize=(10, 8))
-    plt.hist(data, bins=binarr, density=False,
-             color='skyblue', edgecolor='black', alpha=0.6, label='histogram')
+    plt.hist(data, bins=binnarr, density=False, color='skyblue', edgecolor='black', alpha=0.6, label='histogram')
     
-    # plot gmm
-    gmm_pdf = w1 * norm.pdf(bin_centers, mu1, sigma1) + w2 * norm.pdf(bin_centers, mu2, sigma2)
-    plt.plot(bin_centers, gmm_pdf * len(data), 'r-', lw=5,
-             label=f'gaussian mixture\nμ₁={mu1:.2f}, CV²₁={cv2_1:.2f},\n'
-                   f'μ₂={mu2:.2f}, CV²₂={cv2_2:.2f},\n w={w1:.2f}, AIC={aic_gmm:.2f}')
-
-    # plot beta-binomial mixture
     plt.plot(x_discrete, pmf_bbmix * len(data), 'g--', lw=5,
              label=f'beta-binomial mixture\nμ₁={mean1_bb:.2f}, CV²₁={cv2_1_bb:.2f},\n'
                    f'μ₂={mean2_bb:.2f}, CV²₂={cv2_2_bb:.2f},\n w={w_bb:.2f}, AIC={aic_bbmix:.2f}')
 
-    # plot binomial mixture
     plt.plot(x_discrete, pmf_binmix * len(data), 'm-.', lw=5,
              label=f'binomial mixture\nn={n_neurons},\n'
                    f'p₁={p1_bm:.2f}, μ₁={mean1_bm:.2f}, CV²₁={cv2_1_bm:.2f},\n'
-                   f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nw={w_bm:.2f},AIC={aic_binmix:.2f}')
+                   f'p₂={p2_bm:.2f}, μ₂={mean2_bm:.2f}, CV²₂={cv2_2_bm:.2f},\nw={w_bm:.2f}, AIC={aic_binmix:.2f}')
+    
+    plt.plot(x_discrete, pmf_bin_single * len(data), 'b-.', lw=5,
+             label=f'binomial\np={p_single:.2f},n={n_neurons},\nμ={mean_bin_single:.2f}, CV²={cv2_bin_single:.2f}, AIC={aic_bin_single:.2f}')
 
     plt.title('{}, ({},{})-grid'.format(dnames[i], gn, gn), fontsize=fs+6)
-    plt.xlabel(f'# place fields per ({grid[0]},{grid[1]}) patch', fontsize=fs)
+    plt.xlabel(f'# place fields per ({gn},{gn}) patch', fontsize=fs)
     plt.ylabel('count', fontsize=fs)
     plt.tick_params(axis='both', labelsize=fs)
     plt.legend(fontsize=fs - 2)
     plt.tight_layout()
-    plt.xlim([binarr[0]-1, binarr[-1]+1]) # limit the plot to within the lower/upper bins
+    plt.xlim([binnarr[0]-1, binnarr[-1]+1])
     plt.show()
+
+
+
+# =============================================================================
+# import numpy as np
+# import os
+# import matplotlib.pyplot as plt
+# from scipy.io import loadmat
+# 
+# import numpy as np  # numerical computing library
+# import matplotlib.pyplot as plt  # plotting library
+# from scipy.stats import norm, betabinom, binom  # probability distributions
+# from scipy.optimize import minimize  # optimization for likelihood-based fits
+# from sklearn.mixture import GaussianMixture  # gmm fitting to raw data
+# 
+# # =================== Setup ===================
+# dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+#           'HexagonData', 'RectangleData', 'SquareData']
+# 
+# shapeslist = [[(65, 116), (65, 117)], # BigroomData
+#               [(43, 53), (43, 50), (43, 57)], # CircleData
+#               [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)], # HalfroomData
+#               [(12, 12), (13, 13)],  # HexagonData
+#               [(24, 36), (31, 40)], # RectangleData
+#               [(20, 20)]] # SquareData
+# 
+# extensions = [(68, 120), # 0
+#               (44, 60),  # 1
+#               (64, 60),  # 2
+#               (16, 16),  # 3
+#               (32, 40),  # 4
+#               (20, 20)]  # 5
+# 
+# location = 0  # Change if needed
+# 
+# # =================== Collect and pad all data ===================
+# p_extended = [[] for _ in range(6)]  # One list per dnametype
+# plist=[]
+# nlist=[]
+# 
+# for dnametype in range(6):
+#     p = []
+#     n = []
+# 
+#     # Set data directory
+#     if location == 0:
+#         dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+#     elif location == 1:
+#         dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+#     
+#     dir2 = os.listdir(dir1)
+# 
+#     for foldername in dir2:
+#         dir3 = os.path.join(dir1, foldername)
+#         if not os.path.isdir(dir3): continue
+#         dirs3 = os.listdir(dir3)
+#         dirs4 = [x for x in dirs3 if x[-7] == 'm']
+#         for matname in dirs4:
+#             mat = loadmat(os.path.join(dir3, matname))
+#             n.append(mat['numFields'][0][0])
+#             p.append(mat['pfields'])
+# 
+#     # Pad each p matrix to the shape in extensions[dnametype]
+#     target_shape = extensions[dnametype]
+#     padded_list = []
+#     for pi in p:
+#         h, w = pi.shape
+#         H, W = target_shape
+#         pad_bottom = H - h
+#         pad_right = W - w
+#         padded = np.pad(pi, ((0, pad_bottom), (0, pad_right)), mode='constant')
+#         padded_list.append(padded)
+# 
+#     p_extended[dnametype] = padded_list  # Store for this dnametype
+#     nlist.append(n)
+#     plist.append(p)
+# 
+# i=0
+# plt.imshow(plist[i][0])  # Show first from CircleData
+# plt.title('{}'.format(dnames[i]))
+# plt.show()
+# 
+# plt.imshow(p_extended[i][0])  # Show first from CircleData
+# plt.title('{} extended'.format(dnames[i]))
+# plt.show()
+# =============================================================================
+
+# =============================================================================
+# # Plot all the maps for some room data
+# i=1
+# for x in plist[i]:
+#     plt.figure()
+#     plt.imshow(x)
+#     plt.show()
+# =============================================================================
 
 import numpy as np
 import os
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
-
-import numpy as np  # numerical computing library
-import matplotlib.pyplot as plt  # plotting library
-from scipy.stats import norm, betabinom, binom  # probability distributions
+from scipy.stats import beta, norm, betabinom, binom, gamma, lognorm  # probability distributions
 from scipy.optimize import minimize  # optimization for likelihood-based fits
 from sklearn.mixture import GaussianMixture  # gmm fitting to raw data
+
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from collections import Counter
 
 # =================== Setup ===================
 dnames = ['BigroomData', 'CircleData', 'HalfroomData',
           'HexagonData', 'RectangleData', 'SquareData']
 
-extensions = [(68, 120), # 0
-              (44, 60),  # 1
-              (64, 60),  # 2
-              (16, 16),  # 3
-              (32, 40),  # 4
-              (20, 20)]  # 5
+shapeslist = [[(65, 116), (65, 117)],  # BigroomData
+              [(43, 53), (43, 50), (43, 57)],  # CircleData
+              [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  # HalfroomData
+              [(12, 12), (13, 13)],  # HexagonData
+              [(24, 36), (31, 40)],  # RectangleData
+              [(20, 20)]]  # SquareData
 
 location = 0  # Change if needed
 
-# =================== Collect and pad all data ===================
-p_extended = [[] for _ in range(6)]  # One list per dnametype
-plist=[]
-nlist=[]
+# =================== Collect all data ===================
+# =============================================================================
+# 
+# # Maximum dimensions
+# p_extended = [[] for _ in range(len(dnames))]  # One list per dataset
+# plist = []
+# nlist = []
+# 
+# for dnametype in range(len(dnames)):
+#     p = []
+#     n = []
+# 
+#     # Set data directory
+#     if location == 0:
+#         dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+#     elif location == 1:
+#         dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+#     
+#     dir2 = os.listdir(dir1)
+# 
+#     for foldername in dir2:
+#         dir3 = os.path.join(dir1, foldername)
+#         if not os.path.isdir(dir3):
+#             continue
+#         dirs3 = os.listdir(dir3)
+#         dirs4 = [x for x in dirs3 if x[-7] == 'm']
+#         for matname in dirs4:
+#             mat = loadmat(os.path.join(dir3, matname))
+#             n.append(mat['numFields'][0][0])
+#             p.append(mat['pfields'])  # original, unmodified matrices
+# 
+#     # =================== Count original shapes with proportion ===================
+#     original_shapes = [pmap.shape for pmap in p]
+#     shape_counts = Counter(original_shapes)
+#     total_maps = len(original_shapes)
+#     
+#     print(f"{dnames[dnametype]} ({total_maps})")
+#     for shape, count in shape_counts.items():
+#         proportion = count / total_maps
+#         print(f"{shape}: {count} ({proportion:.2f})")
+#     print()
+# 
+#     # =================== Compute max shape and pad (original code) ===================
+#     max_x = max(x for x, y in shapeslist[dnametype])
+#     max_y = max(y for x, y in shapeslist[dnametype])
+#     target_shape = (max_x, max_y)
+# 
+#     padded_list = []
+#     for pi in p:
+#         h, w = pi.shape
+#         H, W = target_shape
+#         pad_bottom = H - h
+#         pad_right = W - w
+#         padded = np.pad(pi, ((0, pad_bottom), (0, pad_right)), mode='constant')
+#         padded_list.append(padded)
+# 
+#     p_extended[dnametype] = padded_listO
+#     nlist.append(n)
+#     plist.append(p)
+# =============================================================================
 
-for dnametype in range(6):
+# Minimum dimensions
+
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+shapeslist = [[(65, 116), (65, 117)],  # BigroomData
+              [(43, 53), (43, 50), (43, 57)],  # CircleData
+              [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  # HalfroomData
+              [(12, 12), (13, 13)],  # HexagonData
+              [(24, 36), (31, 40)],  # RectangleData
+              [(20, 20)]]  # SquareData
+
+location = 0  # Change if needed
+
+# =================== Collect all data ===================
+p_extended = [[] for _ in range(len(dnames))]  # One list per dataset
+plist = []
+nlist = []
+
+for dnametype in range(len(dnames)):
     p = []
     n = []
 
@@ -1893,39 +2052,408 @@ for dnametype in range(6):
 
     for foldername in dir2:
         dir3 = os.path.join(dir1, foldername)
-        if not os.path.isdir(dir3): continue
+        if not os.path.isdir(dir3):
+            continue
         dirs3 = os.listdir(dir3)
         dirs4 = [x for x in dirs3 if x[-7] == 'm']
         for matname in dirs4:
             mat = loadmat(os.path.join(dir3, matname))
             n.append(mat['numFields'][0][0])
-            p.append(mat['pfields'])
+            p.append(mat['pfields'])  # original, unmodified matrices
 
-    # Pad each p matrix to the shape in extensions[dnametype]
-    target_shape = extensions[dnametype]
-    padded_list = []
+    # =================== Count original shapes with proportion ===================
+    original_shapes = [pmap.shape for pmap in p]
+    shape_counts = Counter(original_shapes)
+    total_maps = len(original_shapes)
+    
+    print(f"{dnames[dnametype]} ({total_maps})")
+    for shape, count in shape_counts.items():
+        proportion = count / total_maps
+        print(f"{shape}: {count} ({proportion:.2f})")
+    print()
+
+    # =================== Compute minimum shape and crop ===================
+    min_x = min(x for x, y in shapeslist[dnametype])
+    min_y = min(y for x, y in shapeslist[dnametype])
+    target_shape = (min_x, min_y)
+
+    cropped_list = []
     for pi in p:
         h, w = pi.shape
         H, W = target_shape
-        pad_bottom = H - h
-        pad_right = W - w
-        padded = np.pad(pi, ((0, pad_bottom), (0, pad_right)), mode='constant')
-        padded_list.append(padded)
+        cropped = pi[:H, :W]  # crop to minimum dimensions
+        cropped_list.append(cropped)
 
-    p_extended[dnametype] = padded_list  # Store for this dnametype
+    p_extended[dnametype] = cropped_list
     nlist.append(n)
     plist.append(p)
 
-i=0
-plt.imshow(plist[i][0])  # Show first from CircleData
-plt.title('{}'.format(dnames[i]))
+
+#%%  % of the room
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import beta, gamma, norm, lognorm
+
+# =================== Helper: Fit Distributions ===================
+def best_fit_distribution(data):
+    """
+    Try several distributions and return the one with smallest AIC.
+    """
+    candidates = {
+        "beta": beta,
+        "gamma": gamma,
+        "normal": norm,
+        "lognorm": lognorm
+    }
+
+    best_name = None
+    best_params = None
+    best_aic = np.inf
+
+    for name, dist in candidates.items():
+        try:
+            x = np.array(data)
+            if name == "beta":
+                x_scaled = x / 100.0  # scale 0-100 to 0-1
+                params = dist.fit(x_scaled, floc=0, fscale=1)
+                ll = np.sum(dist.logpdf(x_scaled, *params))
+            elif name == "lognorm":
+                params = dist.fit(x, floc=0)
+                ll = np.sum(dist.logpdf(x, *params))
+            else:
+                params = dist.fit(x)
+                ll = np.sum(dist.logpdf(x, *params))
+
+            k = len(params)
+            aic = 2*k - 2*ll
+            if aic < best_aic:
+                best_name = name
+                best_params = params
+                best_aic = aic
+        except Exception:
+            continue
+
+    return best_name, best_params
+
+# =================== Compute % of room coverage and fit ===================
+roomtype_values = []
+
+for dnametype, padded_maps in enumerate(p_extended):
+    if not padded_maps:
+        continue
+
+    H, W = padded_maps[0].shape
+    total_pixels = H * W
+
+    # Compute % room coverage (binary)
+    vals = [np.sum(m > 0) / total_pixels * 100 for m in padded_maps]
+    roomtype_values.append(vals)
+
+    # Fit best distribution
+    dist_name, params = best_fit_distribution(vals)
+    print(f"{dnames[dnametype]}: best fit = {dist_name}  params = {params}")
+
+    # Calculate mean and CV^2 for the chosen distribution
+    mean, cv2 = None, None
+    if dist_name == "gamma":
+        k, loc, theta = params
+        mean = k * theta + loc
+        cv2 = 1.0 / k
+    elif dist_name == "beta":
+        a, b, loc, scale = params
+        mean = loc + scale * a / (a + b)
+        var = scale**2 * a*b / ((a+b)**2 * (a+b+1))
+        cv2 = var / mean**2
+    elif dist_name == "lognorm":
+        s, loc, scale = params
+        mean = scale * np.exp(s**2 / 2) + loc
+        var = (scale**2) * (np.exp(s**2) - 1) * np.exp(s**2) 
+        cv2 = var / mean**2
+    elif dist_name == "normal":
+        mu, sigma = params
+        mean = mu
+        cv2 = (sigma / mu)**2 if mu != 0 else np.nan
+
+    # Plot histogram of counts
+    plt.figure(figsize=(6, 4))
+    count, bins, _ = plt.hist(
+        vals, bins=20,
+        color='lightblue', edgecolor='k', alpha=0.7,
+        label='Data (counts)'
+    )
+
+    # Scale PDF to histogram counts
+    bin_width = bins[1] - bins[0]
+    n = len(vals)
+    x = np.linspace(min(vals), max(vals), 200)
+
+    if dist_name == "beta":
+        pdf = beta.pdf(x / 100.0, *params) / 100.0
+    elif dist_name == "lognorm":
+        pdf = lognorm.pdf(x, *params)
+    elif dist_name == "gamma":
+        pdf = gamma.pdf(x, *params)
+    else:
+        pdf = norm.pdf(x, *params)
+
+    plt.plot(x, pdf * n * bin_width, 'r-', lw=2,
+             label=f"{dist_name} fit (mean={mean:.2f}, CV²={cv2:.2f})")
+
+    plt.ylim(0, max(count) * 1.05)
+    plt.xlabel("% of room covered by place maps")
+    plt.ylabel("Count")
+    plt.title(f"{dnames[dnametype]} (N={len(vals)})")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    
+#%% % of field for each individual place map
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import beta, gamma, norm, lognorm
+from scipy.ndimage import label
+
+# ---------- Helper: find contiguous place fields ----------
+def extract_field_percents(binary_map):
+    H, W = binary_map.shape
+    total_pixels = H * W
+    structure = np.ones((3, 3), dtype=int)  # 8-connectivity
+    labeled, n_fields = label(binary_map > 0, structure=structure)
+    return [(labeled == k).sum() / total_pixels * 100 for k in range(1, n_fields + 1)]
+
+# ---------- Fit distributions & choose best by AIC ----------
+def best_fit_distribution(data):
+    x = np.asarray(data)
+    candidates = {"beta": beta, "gamma": gamma, "normal": norm, "lognorm": lognorm}
+    best_name, best_params, best_aic = None, None, np.inf
+    best_mean, best_cv2 = None, None
+
+    for name, dist in candidates.items():
+        try:
+            if name == "beta":
+                x_scaled = x / 100.0
+                params = dist.fit(x_scaled, floc=0, fscale=1)
+                ll = np.sum(dist.logpdf(x_scaled, *params))
+                a, b, loc, scale = params
+                mean = loc + scale * a / (a + b)
+                var = scale**2 * a * b / ((a + b)**2 * (a + b + 1))
+                cv2 = var / mean**2
+            elif name == "gamma":
+                params = dist.fit(x)
+                ll = np.sum(dist.logpdf(x, *params))
+                k, loc, theta = params
+                mean = k * theta + loc
+                cv2 = 1.0 / k
+            elif name == "lognorm":
+                params = dist.fit(x, floc=0)
+                ll = np.sum(dist.logpdf(x, *params))
+                s, loc, scale = params
+                mean = scale * np.exp(s**2 / 2) + loc
+                var = (scale**2) * (np.exp(s**2) - 1) * np.exp(s**2)
+                cv2 = var / mean**2
+            else:  # normal
+                params = dist.fit(x)
+                ll = np.sum(dist.logpdf(x, *params))
+                mu, sigma = params
+                mean = mu
+                cv2 = (sigma / mu)**2 if mu != 0 else np.nan
+
+            k = len(params)
+            aic = 2 * k - 2 * ll
+            if aic < best_aic:
+                best_name, best_params, best_aic = name, params, aic
+                best_mean, best_cv2 = mean, cv2
+        except Exception:
+            continue
+
+    return best_name, best_params, best_mean, best_cv2
+
+# ---------- Compute % of room per *field* and plot ----------
+field_values = []
+
+for dnametype, padded_maps in enumerate(p_extended):
+    if not padded_maps:
+        continue
+
+    vals = []
+    for m in padded_maps:
+        vals.extend(extract_field_percents(m))
+    if not vals:
+        continue
+    field_values.append(vals)
+
+    # Fit and select best
+    dist_name, params, mean, cv2 = best_fit_distribution(vals)
+    print(f"\n{dnames[dnametype]} -- Best fit: {dist_name}  mean={mean:.2f}  CV²={cv2:.2f}")
+
+    # Histogram
+    plt.figure(figsize=(6, 4))
+    counts, bins, _ = plt.hist(vals, bins=30,
+                               color="lightblue", edgecolor="k", alpha=0.7,
+                               label="Data (fields)")
+    bin_width = bins[1] - bins[0]
+    n = len(vals)
+    x = np.linspace(min(vals), max(vals), 200)
+
+    # Only the best PDF
+    if dist_name == "beta":
+        pdf = beta.pdf(x / 100.0, *params) / 100.0
+    elif dist_name == "gamma":
+        pdf = gamma.pdf(x, *params)
+    elif dist_name == "lognorm":
+        pdf = lognorm.pdf(x, *params)
+    else:
+        pdf = norm.pdf(x, *params)
+
+    plt.plot(x, pdf * n * bin_width, 'r-', lw=2,
+             label=f"{dist_name} fit (mean={mean:.2f}, CV²={cv2:.2f})")
+
+    plt.ylim(0, max(counts) * 1.05)
+    plt.xlabel("% of room covered by individual place fields")
+    plt.ylabel("Count")
+    plt.title(f"{dnames[dnametype]} (Fields N={len(vals)})")
+    plt.legend(fontsize=8)
+    plt.tight_layout()
+    plt.show()
+    
+    
+#%% Thresholded version
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import beta, gamma, norm, lognorm
+from scipy.ndimage import label
+
+# ---------- Helper: find contiguous place fields ----------
+# ---------- Helper: find contiguous place fields with threshold ----------
+def extract_field_percents(binary_map, pixel_threshold=0):
+    """
+    Return list of % of total pixels for each contiguous patch of 1's
+    that contains at least `pixel_threshold` pixels.
+    """
+    H, W = binary_map.shape
+    total_pixels = H * W
+    structure = np.ones((3, 3), dtype=int)  # 8-connectivity
+    labeled, n_fields = label(binary_map > 0, structure=structure)
+
+    sizes = []
+    for k in range(1, n_fields + 1):
+        field_size = (labeled == k).sum()
+        if field_size > pixel_threshold:  # Apply threshold
+            sizes.append(field_size / total_pixels * 100)
+    return sizes
+
+# ---------- Fit distributions & choose best by AIC ----------
+def best_fit_distribution(data):
+    x = np.asarray(data)
+    candidates = {"beta": beta, "gamma": gamma, "normal": norm, "lognorm": lognorm}
+    best_name, best_params, best_aic = None, None, np.inf
+    best_mean, best_cv2 = None, None
+
+    for name, dist in candidates.items():
+        try:
+            if name == "beta":
+                x_scaled = x / 100.0
+                params = dist.fit(x_scaled, floc=0, fscale=1)
+                ll = np.sum(dist.logpdf(x_scaled, *params))
+                a, b, loc, scale = params
+                mean = loc + scale * a / (a + b)
+                var = scale**2 * a * b / ((a + b)**2 * (a + b + 1))
+                cv2 = var / mean**2
+            elif name == "gamma":
+                params = dist.fit(x)
+                ll = np.sum(dist.logpdf(x, *params))
+                k, loc, theta = params
+                mean = k * theta + loc
+                cv2 = 1.0 / k
+            elif name == "lognorm":
+                params = dist.fit(x, floc=0)
+                ll = np.sum(dist.logpdf(x, *params))
+                s, loc, scale = params
+                mean = scale * np.exp(s**2 / 2) + loc
+                var = (scale**2) * (np.exp(s**2) - 1) * np.exp(s**2)
+                cv2 = var / mean**2
+            else:  # normal
+                params = dist.fit(x)
+                ll = np.sum(dist.logpdf(x, *params))
+                mu, sigma = params
+                mean = mu
+                cv2 = (sigma / mu)**2 if mu != 0 else np.nan
+
+            k = len(params)
+            aic = 2 * k - 2 * ll
+            if aic < best_aic:
+                best_name, best_params, best_aic = name, params, aic
+                best_mean, best_cv2 = mean, cv2
+        except Exception:
+            continue
+
+    return best_name, best_params, best_mean, best_cv2
+
+min_pixels = 10   # minimum pixel count per place field to include
+
+field_values = []
+for dnametype, padded_maps in enumerate(p_extended):
+    if not padded_maps:
+        continue
+
+    vals = []
+    for m in padded_maps:
+        vals.extend(extract_field_percents(m, pixel_threshold=min_pixels))
+    if not vals:
+        continue
+    field_values.append(vals)
+
+    # Fit and select best
+    dist_name, params, mean, cv2 = best_fit_distribution(vals)
+    print(f"\n{dnames[dnametype]} -- Best fit: {dist_name}  mean={mean:.2f}  CV²={cv2:.2f}")
+
+    # Histogram
+    plt.figure(figsize=(6, 4))
+    counts, bins, _ = plt.hist(vals, bins=30,
+                               color="lightblue", edgecolor="k", alpha=0.7,
+                               label=f"Data (fields >{min_pixels} px)")
+    bin_width = bins[1] - bins[0]
+    n = len(vals)
+    x = np.linspace(min(vals), max(vals), 200)
+
+    # Only the best PDF
+    if dist_name == "beta":
+        pdf = beta.pdf(x / 100.0, *params) / 100.0
+    elif dist_name == "gamma":
+        pdf = gamma.pdf(x, *params)
+    elif dist_name == "lognorm":
+        pdf = lognorm.pdf(x, *params)
+    else:
+        pdf = norm.pdf(x, *params)
+
+    plt.plot(x, pdf * n * bin_width, 'r-', lw=2,
+             label=f"{dist_name} fit (mean={mean:.2f}, CV²={cv2:.2f})")
+    plt.ylim(0, max(counts) * 1.05)
+    plt.xlabel("% of room covered by individual place fields")
+    plt.ylabel("Count")
+    plt.title(f"{dnames[dnametype]} (Fields N={len(vals)})")
+    plt.legend(fontsize=8)
+    plt.tight_layout()
+    plt.show()
+
+#%%  Visualize a place field map
+i = 0  # pick dataset index
+imagenum=2
+plt.imshow(plist[i][imagenum])  # Show original first matrix
+plt.title(f'{dnames[i]} original')
 plt.show()
 
-plt.imshow(p_extended[i][0])  # Show first from CircleData
-plt.title('{} extended'.format(dnames[i]))
+plt.imshow(p_extended[i][imagenum])  # Show padded version
+plt.title(f'{dnames[i]} padded')
 plt.show()
-
-
+#%% Plot all the images of an individual room
+i = 0  # pick dataset index
+for x in plist[i]:
+    plt.figure()
+    plt.imshow(x)
+    plt.title(x.shape, i)
+    plt.show()
 #%% Plot all the histograms of # of place fields
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1933,7 +2461,7 @@ from scipy.stats import nbinom
 from scipy.optimize import minimize
 
 # Choose index of sublist
-i = 5  # Change as needed
+i = 5  # The room index (0 bigroom)
 data = np.array(nlist[i])  # Use exactly 'data = nlist[i]'
 
 # === Negative Binomial Fit ===
@@ -1964,28 +2492,98 @@ plt.ylabel('# of neurons', fontsize=fs)
 plt.xlabel('# of place fields', fontsize=fs)
 plt.xticks(binplot)
 plt.tick_params(axis='both', labelsize=fs-5)
+plt.plot([],[], '', label='mean={}, FF={}'.format(np.around(np.mean(data),3), np.around(np.var(data)/np.mean(data),3)))
 plt.legend(fontsize=fs)
 plt.show()
-# =============================================================================
-# #%%
-# 
-# x=[list(set([(pi.shape[0], pi.shape[1]) for pi in pii])) for pii in plist]
-# for z in x:
-#     print(x)
-# 
-# [(65, 116), (65, 117)]
-# [(43, 53), (43, 50), (43, 57)]
-# [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)]
-# [(12, 12), (13, 13)]
-# [(24, 36), (31, 40)]
-# [(20, 20)]
-#     
-# #%%
-# =============================================================================
+
+#%%  Plot histogram of # of place fields finding best distribution
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import nbinom, poisson
+from scipy.optimize import minimize
+
+# -------------------------------------------
+# Helper functions
+# -------------------------------------------
+def negbin_nll(params, data):
+    r, p = params
+    if r <= 0 or not (0 < p < 1):
+        return np.inf
+    return -np.sum(nbinom.logpmf(data, r, p))
+
+def aic(nll, k):
+    return 2*k + 2*nll
+
+# -------------------------------------------
+# Loop through each dataset
+# -------------------------------------------
+for i, roomname in enumerate(dnames):
+    data = np.array(nlist[i])
+    if len(data) == 0:
+        print(f"{roomname}: no data")
+        continue
+
+    # ---------- Negative Binomial ----------
+    nb_guess = [2.0, 0.3]
+    nb_result = minimize(negbin_nll, nb_guess, args=(data,),
+                         bounds=[(1e-3,None),(1e-5,1-1e-5)])
+    rhat, phat = nb_result.x
+    nll_nb = negbin_nll([rhat, phat], data)
+    aic_nb = aic(nll_nb, 2)
+    mean_nb = rhat * (1 - phat) / phat
+    var_nb  = rhat * (1 - phat) / (phat**2)
+    ff_nb   = var_nb / mean_nb
+
+    # ---------- Poisson ----------
+    lam_hat = np.mean(data)
+    nll_pois = -np.sum(poisson.logpmf(data, lam_hat))
+    aic_pois = aic(nll_pois, 1)
+    mean_pois = lam_hat
+    var_pois  = lam_hat
+    ff_pois   = var_pois / mean_pois  # should be 1
+
+    # ---------- Plot ----------
+    binarr = np.arange(np.min(data) - 0.5, np.max(data) + 1.5)
+    binplot = np.arange(np.min(data), np.max(data) + 1)
+
+    plt.figure(figsize=(13,5))
+    # histogram
+    plt.hist(data, bins=binarr, color='skyblue', edgecolor='black',
+             alpha=0.7, density=False, label='Histogram')
+
+    # Negative Binomial PMF
+    pmf_nb = nbinom.pmf(binplot, rhat, phat)
+    plt.plot(binplot, pmf_nb*len(data), 'ro-', 
+             label=(f'NegBin( r={rhat:.2f}, p={phat:.2f}, '
+                    f'mean={mean_nb:.2f}, FF={ff_nb:.2f}, AIC={aic_nb:.1f})'))
+
+    # Poisson PMF
+    pmf_pois = poisson.pmf(binplot, lam_hat)
+    plt.plot(binplot, pmf_pois*len(data), 'go-',
+             label=(f'Poisson(λ={lam_hat:.2f}, '
+                    f'mean={mean_pois:.2f}, FF={ff_pois:.2f}, AIC={aic_pois:.1f})'))
+
+    # Figure formatting
+    fs = 18
+    plt.title(roomname, fontsize=fs)
+    plt.ylabel('# of neurons', fontsize=fs)
+    plt.xlabel('# of place fields', fontsize=fs)
+    plt.xticks(binplot)
+    plt.tick_params(axis='both', labelsize=fs-4)
+    plt.legend(fontsize=fs-4)
+    plt.tight_layout()
+    plt.show()
+
+    print(f"\n{roomname}")
+    print("-------------------------")
+    print(f"NegBin:  r={rhat:.3f}, p={phat:.3f}, mean={mean_nb:.3f}, FF={ff_nb:.3f}, AIC={aic_nb:.2f}")
+    print(f"Poisson: λ={lam_hat:.3f}, mean={mean_pois:.3f}, FF={ff_pois:.3f}, AIC={aic_pois:.2f}")
+
+
 
 #%% Get the counts and the patches
 p1 = [[(p_extended[i][j]>0)*1 for j in range(len(p_extended[i]))] for i in range(len(p_extended))]
-gn = 4  # 1,2,4
+gn = 1  # 1,2,4, grid number
 grid = (gn, gn)
 plist=[]
 clist=[]
@@ -2009,16 +2607,18 @@ for z, pi in enumerate(p1): # for each list of rooms in each room list
         clisti.append(counts)
     plist.append(plisti)
     clist.append(clisti)
-#%%
-
+    
 csumlist=[np.sum(c, axis = 0) for c in clist]
 datalist=[c.flatten() for c in csumlist]
+
 # Remove zeros from flattened data
 datalist = [c.flatten()[c.flatten() != 0] for c in csumlist] 
 binnlist=[np.arange(np.min(data) - 0.5, np.max(data) + 1.5) for data in datalist]
 bin_centerslist = [(binarr[:-1] + binarr[1:]) / 2 for binarr in binnlist]
 
-i=5
+#%% Plot the different room data histograms
+
+i=5 # 0 bigroom, 1
 data=datalist[i]
 binarr=binnlist[i]
 bin_centers=bin_centerslist[i]
@@ -2034,6 +2634,26 @@ n_neurons = len(p_extended[i])
 # =============================================================================
 
 plotresults(data, binarr, bin_centers, n_neurons, i, dnames, gn)
+
+#%%
+
+# psums = [np.sum(pi, axis=0) for pi in p1]
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+fig, ax = plt.subplots()
+i=5
+im = ax.imshow(psums[i], cmap='nipy_spectral')
+ax.set_title(dnames[i])
+
+# Attach a new axis to the right of the plot
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.05)
+
+# Make colorbar in the attached axis
+cbar = fig.colorbar(im, cax=cax)
+
+plt.show()
 
 #%% Get complexity scores
 
@@ -2087,7 +2707,6 @@ def get_shape_score_single_shape(binary_image):
 
     score = holes_score + convexity_score + compactness_score + perimeter_score
     return score
-
 
 pshapes = extract_shapes_from_plist(plist)
 ptest = pshapes[0][0][0]
@@ -2222,5 +2841,706 @@ def plot_scores_on_original(int_array):
 
 plot_scores_on_original(p[0])
 
+#%% Centroid stuff (meeting 5)
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from scipy.stats import beta, norm, betabinom, binom, gamma, lognorm  # probability distributions
+from scipy.optimize import minimize  # optimization for likelihood-based fits
+from sklearn.mixture import GaussianMixture  # gmm fitting to raw data
 
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from collections import Counter
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+shapeslist = [[(65, 116), (65, 117)],  # BigroomData
+              [(43, 53), (43, 50), (43, 57)],  # CircleData
+              [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  # HalfroomData
+              [(12, 12), (13, 13)],  # HexagonData
+              [(24, 36), (31, 40)],  # RectangleData
+              [(20, 20)]]  # SquareData
+
+location = 0  # Change if needed
+
+# =================== Collect all data ===================
+p_extended = [[] for _ in range(len(dnames))]  # One list per dataset
+plist = []
+nlist = []
+
+for dnametype in range(len(dnames)):
+    p = []
+    n = []
+
+    # Set data directory
+    if location == 0:
+        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+    elif location == 1:
+        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+    
+    dir2 = os.listdir(dir1)
+
+    for foldername in dir2:
+        dir3 = os.path.join(dir1, foldername)
+        if not os.path.isdir(dir3):
+            continue
+        dirs3 = os.listdir(dir3)
+        dirs4 = [x for x in dirs3 if x[-7] == 'm']
+        for matname in dirs4:
+            mat = loadmat(os.path.join(dir3, matname))
+            n.append(mat['numFields'][0][0])
+            p.append(mat['pfields'])  # original, unmodified matrices
+
+    # =================== Count original shapes with proportion ===================
+    original_shapes = [pmap.shape for pmap in p]
+    shape_counts = Counter(original_shapes)
+    total_maps = len(original_shapes)
+    
+    print(f"{dnames[dnametype]} ({total_maps})")
+    for shape, count in shape_counts.items():
+        proportion = count / total_maps
+        print(f"{shape}: {count} ({proportion:.2f})")
+    print()
+
+    # =================== Compute minimum shape and crop ===================
+    min_x = min(x for x, y in shapeslist[dnametype])
+    min_y = min(y for x, y in shapeslist[dnametype])
+    target_shape = (min_x, min_y)
+
+    cropped_list = []
+    for pi in p:
+        h, w = pi.shape
+        H, W = target_shape
+        cropped = pi[:H, :W]  # crop to minimum dimensions
+        cropped_list.append(cropped)
+
+    p_extended[dnametype] = cropped_list
+    nlist.append(n)
+    plist.append(p)
+    
+    
+p1=[]
+for room in plist:
+    plistroom=[]
+    for neuron in room:
+        plistroom.append(1*(neuron>0))
+    p1.append(plistroom)
+
+#%%  Get the centroids
+
+from scipy.ndimage import label, center_of_mass
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Define 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# =================== Compute centroids ===================
+# centroids[i][j] contains a list of centroids for each contiguous patch of 1's
+centroids = []
+
+for room in p1:
+    room_centroids = []
+    for neuron_map in room:
+        # Label contiguous patches with 8-connectivity
+        labeled_array, num_features = label(neuron_map, structure=structure)
+        # Compute centroid of each labeled patch
+        neuron_centroids = center_of_mass(neuron_map, labeled_array, range(1, num_features + 1))
+        room_centroids.append(neuron_centroids)
+    centroids.append(room_centroids)
+    
+#%% distnace to nearest wall
+    
+import numpy as np
+from scipy.ndimage import label, center_of_mass
+
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+# Get the Bigroom place maps
+bigroom_maps = plist[0]  # list of neurons
+
+# 8-connectivity
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# List to store distances per neuron
+distances_to_edge = []
+
+for neuron_map in bigroom_maps:
+    # Convert nonzero to 1
+    binary_map = 1*(neuron_map>0)
+    
+    # Label contiguous patches
+    labeled_array, num_features = label(binary_map, structure=structure)
+    
+    # Compute centroids
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    # Get map dimensions
+    h, w = binary_map.shape
+    
+    # Compute distance to nearest edge for each centroid
+    neuron_distances = []
+    for c in centroids_list:
+        row, col = c
+        distance = min(row, h-1-row, col, w-1-col)  # distance to top, bottom, left, right edges
+        neuron_distances.append(distance)
+    
+    distances_to_edge.append(neuron_distances)
+
+# distances_to_edge[i][j] = distance of j-th centroid in i-th neuron to nearest edge
+
+#%% CDF
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# Get Bigroom place maps
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# Collect all distances
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    for c in centroids_list:
+        row, col = c
+        distance = min(row, h-1-row, col, w-1-col)
+        all_distances.append(distance)
+
+# Convert to numpy array
+all_distances = np.array(all_distances)
+
+# Sort distances
+sorted_distances = np.sort(all_distances)
+
+# Compute CDF: number of events up to distance d / total number of events
+cdf = np.arange(1, len(sorted_distances)+1) / len(sorted_distances)
+
+# Plot
+plt.figure(figsize=(6,4))
+plt.step(sorted_distances, cdf, where='post')
+plt.xlabel('Distance to nearest edge')
+plt.ylabel('CDF')
+plt.title('CDF of all centroids of placemaps in BigroomData')
+plt.show()
+
+#%% Beta CDF
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy import stats
+
+# ===================== Get Bigroom place maps =====================
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# ===================== Collect distances =====================
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    max_dist = min(h, w) / 2  # maximum distance to normalize
+    for c in centroids_list:
+        row, col = c
+        distance = min(row, h-1-row, col, w-1-col)
+        all_distances.append(distance / max_dist)  # normalize to [0,1]
+
+all_distances = np.array(all_distances)
+
+# ===================== Fit Beta distribution =====================
+epsilon = 1e-6
+all_distances_clipped = np.clip(all_distances, epsilon, 1-epsilon)
+
+a, b, loc, scale = stats.beta.fit(all_distances_clipped, floc=0, fscale=1)
+
+beta_mean = stats.beta.mean(a, b, loc=loc, scale=scale)
+beta_var = stats.beta.var(a, b, loc=loc, scale=scale)
+beta_cv2 = beta_var / beta_mean**2
+
+# ===================== Compute empirical CDF =====================
+sorted_distances = np.sort(all_distances)
+empirical_cdf = np.arange(1, len(sorted_distances)+1) / len(sorted_distances)
+
+# Beta CDF
+x = np.linspace(0,1,300)
+beta_cdf = stats.beta.cdf(x, a, b, loc=loc, scale=scale)
+
+# ===================== Plot =====================
+plt.figure(figsize=(6,4))
+plt.step(sorted_distances, empirical_cdf, where='post', label='Empirical CDF')
+plt.plot(x, beta_cdf, 'r-', lw=2,
+         label=f'Beta fit\nmean={beta_mean:.2f}, CV²={beta_cv2:.2f}')
+
+plt.xlabel('Normalized distance to nearest edge')
+plt.ylabel('CDF')
+plt.title('CDF of normalized centroid distances with Beta fit')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+
+#%% Histogram PDF
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy import stats
+from scipy.special import gamma as gamma_func  # continuous gamma function
+
+# ===================== Get Bigroom place maps =====================
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# ===================== Collect distances =====================
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features + 1))
+    
+    h, w = binary_map.shape
+    for c in centroids_list:
+        row, col = c
+        distance = min(row, h - 1 - row, col, w - 1 - col)
+        all_distances.append(distance)
+
+all_distances = np.array(all_distances)
+
+# ===================== Fit Gamma distribution =====================
+gamma_params = stats.gamma.fit(all_distances)
+gamma_dist = stats.gamma(*gamma_params)
+gamma_mean = gamma_dist.mean()
+gamma_std = gamma_dist.std()
+gamma_cv2 = (gamma_std / gamma_mean)**2
+gamma_loglik = np.sum(gamma_dist.logpdf(all_distances))
+gamma_aic = 2*len(gamma_params) - 2*gamma_loglik
+
+# ===================== Fit continuous Negative Binomial (Gamma-Poisson) =====================
+mean_dist = np.mean(all_distances)
+var_dist = np.var(all_distances)
+r_cont = mean_dist**2 / (var_dist - mean_dist)
+p_cont = r_cont / (r_cont + mean_dist)
+
+# Continuous Negative Binomial PDF
+def cont_nbinom_pdf(x, r, p):
+    return (gamma_func(x+r) / (gamma_func(x+1) * gamma_func(r))) * (p**r) * ((1-p)**x)
+
+# Mean, CV², approximate log-likelihood & AIC
+nb_mean = r_cont*(1-p_cont)/p_cont
+nb_std = np.sqrt(r_cont*(1-p_cont)/p_cont**2)
+nb_cv2 = (nb_std/nb_mean)**2
+nb_loglik = np.sum(np.log(cont_nbinom_pdf(all_distances, r_cont, p_cont)))
+nb_aic = 2*2 - 2*nb_loglik  # 2 parameters: r, p
+
+# ===================== Plot histogram and fits =====================
+plt.figure(figsize=(6,4))
+
+bin_count = 40  # can change number of bins
+counts, bins, _ = plt.hist(all_distances, bins=bin_count, density=False, 
+                           alpha=0.6, color='skyblue', edgecolor='black', label='Data')
+
+bin_width = bins[1] - bins[0]
+x_vals = np.linspace(min(all_distances), max(all_distances), 300)
+
+# Scale PDFs to match histogram counts
+pdf_gamma_scaled = gamma_dist.pdf(x_vals) * len(all_distances) * bin_width
+pdf_nb_scaled = cont_nbinom_pdf(x_vals, r_cont, p_cont) * len(all_distances) * bin_width
+
+plt.plot(x_vals, pdf_gamma_scaled, 'r-', lw=2,
+         label=f'Gamma fit\nmean={gamma_mean:.2f}, CV²={gamma_cv2:.2f}, AIC={gamma_aic:.1f}')
+
+plt.plot(x_vals, pdf_nb_scaled, 'g-', lw=2,
+         label=f'Gamma-Poisson fit\nmean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+
+plt.xlabel('Distance to Nearest Edge (pixels)')
+plt.ylabel('Counts')
+plt.title('Histogram of Place Field Centroid Distances (Bigroom)')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+#%% CDF histogram
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy import stats
+from scipy.special import gamma as gamma_func
+
+# ===================== Get Bigroom place maps =====================
+bigroom_maps = plist[0]
+
+# 8-connectivity
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# Collect all distances
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features + 1))
+    
+    h, w = binary_map.shape
+    for c in centroids_list:
+        row, col = c
+        distance = min(row, h - 1 - row, col, w - 1 - col)
+        all_distances.append(distance)
+
+all_distances = np.array(all_distances)
+
+# ===================== Compute empirical CDF =====================
+sorted_distances = np.sort(all_distances)
+empirical_cdf = np.arange(1, len(sorted_distances)+1) / len(sorted_distances)
+
+# ===================== Fit Gamma =====================
+gamma_params = stats.gamma.fit(all_distances)
+gamma_dist = stats.gamma(*gamma_params)
+gamma_cdf = gamma_dist.cdf(sorted_distances)
+
+# ===================== Fit continuous Negative Binomial (Gamma-Poisson) =====================
+mean_dist = np.mean(all_distances)
+var_dist = np.var(all_distances)
+r_cont = mean_dist**2 / (var_dist - mean_dist)
+p_cont = r_cont / (r_cont + mean_dist)
+
+def cont_nbinom_cdf(x, r, p):
+    # Approximate continuous CDF by summing PDF
+    x_vals = np.linspace(0, x.max(), 5000)
+    pdf_vals = (gamma_func(x_vals + r) / (gamma_func(x_vals + 1) * gamma_func(r))) * (p**r) * ((1-p)**x_vals)
+    cdf_vals = np.cumsum(pdf_vals)
+    cdf_vals /= cdf_vals[-1]  # normalize to 1
+    # interpolate at given x
+    return np.interp(x, x_vals, cdf_vals)
+
+nb_cdf = cont_nbinom_cdf(sorted_distances, r_cont, p_cont)
+
+# ===================== Plot CDFs =====================
+plt.figure(figsize=(6,4))
+plt.step(sorted_distances, empirical_cdf, where='post', label='Empirical CDF')
+plt.plot(sorted_distances, gamma_cdf, 'r-', lw=2,
+         label=f'Gamma fit\nmean={gamma_dist.mean():.2f}, CV²={(gamma_dist.std()/gamma_dist.mean())**2:.2f}')
+plt.plot(sorted_distances, nb_cdf, 'g-', lw=2,
+         label=f'Gamma-Poisson fit\nmean={r_cont*(1-p_cont)/p_cont:.2f}, CV²={(np.sqrt(r_cont*(1-p_cont)/p_cont**2)/(r_cont*(1-p_cont)/p_cont))**2:.2f}')
+
+plt.xlabel('Distance to Nearest Edge (pixels)')
+plt.ylabel('CDF')
+plt.title('CDF of Centroid Distances (Bigroom)')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+
+
+#%%  plot a random point and its distance
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# Select the neuron map
+neuron_map = plist[0][0]
+
+# Convert nonzero to 1
+binary_map = 1*(neuron_map>0)
+
+# Label contiguous patches (8-connectivity)
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+labeled_array, num_features = label(binary_map, structure=structure)
+
+# Compute centroids of each patch
+centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+
+# Plot neuron map
+plt.imshow(binary_map, cmap='gray')
+plt.title('Distance of each centroid to the nearest wall')
+
+# Get room dimensions
+h, w = binary_map.shape
+
+# Overlay all centroids and annotate distances
+for c in centroids_list:
+    row, col = c
+    # Distance to nearest wall
+    distance_to_wall = min(row, h-1-row, col, w-1-col)
+    plt.plot(col, row, 'ro')  # centroid
+    plt.text(col + 1, row + 1, f'{distance_to_wall:.1f}', color='red', fontsize=10)
+
+plt.show()
+
+
+#%% Fit distributions
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+from scipy.ndimage import label, center_of_mass
+
+# Assuming 'all_distances' is already computed from your code
+
+# List of distributions to try
+distributions = [stats.norm, stats.expon, stats.gamma, stats.beta, stats.lognorm]
+
+# Sort distances for plotting empirical CDF
+sorted_distances = np.sort(all_distances)
+empirical_cdf = np.arange(1, len(sorted_distances)+1) / len(sorted_distances)
+
+plt.figure(figsize=(6,4))
+plt.step(sorted_distances, empirical_cdf, where='post', label='Empirical CDF')
+
+best_sse = np.inf
+best_dist_name = None
+best_params = None
+
+for dist in distributions:
+    try:
+        # Fit distribution to data
+        params = dist.fit(all_distances)
+        
+        # Get CDF values
+        fitted_cdf = dist.cdf(sorted_distances, *params)
+        
+        # Compute sum of squared errors to empirical CDF
+        sse = np.sum((fitted_cdf - empirical_cdf)**2)
+        
+        if sse < best_sse:
+            best_sse = sse
+            best_dist_name = dist.name
+            best_params = params
+        
+        # Plot fitted CDF
+        plt.plot(sorted_distances, fitted_cdf, label=f'{dist.name}')
+        
+    except Exception as e:
+        print(f"Skipping {dist.name}: {e}")
+
+plt.xlabel('Distance to nearest edge')
+plt.ylabel('CDF')
+plt.title('Empirical CDF with fitted distributions')
+plt.legend()
+plt.show()
+
+print(f"Best fit: {best_dist_name} with parameters {best_params}")
+
+#%% plot best CDF
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+from scipy.ndimage import label, center_of_mass
+
+# Assuming 'all_distances' is already computed
+sorted_distances = np.sort(all_distances)
+empirical_cdf = np.arange(1, len(sorted_distances)+1) / len(sorted_distances)
+
+# Candidate distributions
+distributions = [stats.norm, stats.expon, stats.gamma, stats.beta, stats.lognorm]
+
+best_sse = np.inf
+best_dist = None
+best_params = None
+best_cdf = None
+best_mean = None
+best_cv2 = None
+
+for dist in distributions:
+    try:
+        params = dist.fit(all_distances)
+        fitted_cdf = dist.cdf(sorted_distances, *params)
+        sse = np.sum((fitted_cdf - empirical_cdf)**2)
+        if sse < best_sse:
+            best_sse = sse
+            best_dist = dist
+            best_params = params
+            best_cdf = fitted_cdf
             
+            # Compute mean and CV^2 for the fitted distribution
+            if dist == stats.norm:
+                mu, sigma = params
+                best_mean = mu
+                best_cv2 = (sigma/mu)**2 if mu != 0 else np.nan
+            elif dist == stats.expon:
+                loc, scale = params
+                best_mean = loc + scale
+                best_cv2 = (scale/best_mean)**2 if best_mean != 0 else np.nan
+            elif dist == stats.gamma:
+                a, loc, scale = params
+                best_mean = a*scale + loc
+                best_cv2 = (np.sqrt(a)*scale/best_mean)**2 if best_mean != 0 else np.nan
+            elif dist == stats.lognorm:
+                s, loc, scale = params
+                best_mean = np.exp(np.log(scale) + s**2 / 2)
+                best_cv2 = (np.exp(s**2) - 1)
+            elif dist == stats.beta:
+                a, b, loc, scale = params
+                best_mean = a / (a+b) * scale + loc
+                best_cv2 = (a*b)/((a+b)**2*(a+b+1))
+    except:
+        continue
+
+# Plot
+plt.figure(figsize=(6,4))
+plt.step(sorted_distances, empirical_cdf, where='post', label='Empirical CDF')
+plt.plot(sorted_distances, best_cdf, color='red',
+         label=f'{best_dist.name} (mean={best_mean:.2f}, CV²={best_cv2:.2f})')
+plt.xlabel('Distance to nearest edge')
+plt.ylabel('CDF')
+plt.title('CDF of ordered centroid distances with best fit')
+plt.legend()
+plt.show()
+
+# =============================================================================
+# #%% Inter centroid distance not good
+# 
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from scipy.ndimage import label, center_of_mass
+# 
+# # Get Bigroom place maps
+# bigroom_maps = plist[0]
+# 
+# # 8-connectivity structure
+# structure = np.array([[1,1,1],
+#                       [1,1,1],
+#                       [1,1,1]])
+# 
+# # Collect all distances
+# all_distances = []
+# 
+# for neuron_map in bigroom_maps:
+#     binary_map = 1*(neuron_map>0)
+#     labeled_array, num_features = label(binary_map, structure=structure)
+#     centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+#     
+#     h, w = binary_map.shape
+#     for c in centroids_list:
+#         row, col = c
+#         distance = min(row, h-1-row, col, w-1-col)
+#         all_distances.append(distance)
+# 
+# # Convert to numpy array
+# all_distances = np.array(all_distances)
+# 
+# # Sort distances
+# sorted_distances = np.sort(all_distances)
+# 
+# # Compute inter-centroid distances (differences between consecutive sorted distances)
+# inter_distances = np.diff(sorted_distances)
+# 
+# # Compute CDF of inter-centroid distances
+# sorted_inter = np.sort(inter_distances)
+# cdf_inter = np.arange(1, len(sorted_inter)+1) / len(sorted_inter)
+# 
+# # Plot
+# plt.figure(figsize=(6,4))
+# plt.step(sorted_inter, cdf_inter, where='post')
+# plt.xlabel('Distance between consecutive centroids')
+# plt.ylabel('CDF')
+# plt.title('CDF of inter-centroid distances in BigroomData')
+# plt.show()
+# =============================================================================
+
+#%% Plot the mean line
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Use the mean from your CDF fit (best_mean)
+mean_distance = best_mean  # from your previous CDF-fitting code
+
+# Get the neuron map
+neuron_map = plist[0][0]
+binary_map = 1 * (neuron_map > 0)
+h, w = binary_map.shape
+
+# Create coordinate grid
+yy, xx = np.indices((h, w))
+
+# Compute distance to the nearest wall for each point
+dist_to_wall = np.minimum.reduce([yy, h - 1 - yy, xx, w - 1 - xx])
+
+# Find points approximately mean_distance away (±1 pixel tolerance)
+mask = np.abs(dist_to_wall - mean_distance) < 1.0
+
+# Plot
+plt.figure(figsize=(6, 6))
+plt.imshow(binary_map, cmap='gray')
+plt.title(f'All Points ≈ {mean_distance:.2f} pixels way from a wall')
+
+# Overlay points at mean distance
+plt.plot(np.where(mask)[1], np.where(mask)[0], 'ro', markersize=2)
+
+plt.show()
+
+#%%  Plot PDF
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import beta
+
+# Given values (from your fit)
+mean = best_mean       # μ
+cv2 = best_cv2         # CV²
+
+# --- Convert mean and CV² to Beta parameters ---
+# Relationship:
+#   μ = α / (α + β)
+#   CV² = (αβ) / [(α + β)² (α + β + 1)]
+# Solve for α, β
+alpha = ((1 - mean) / cv2 - 1 / mean) * mean ** 2
+beta_param = alpha * (1 / mean - 1)
+
+# Create x range
+x = np.linspace(0, 1, 200)
+
+# Compute PDF
+pdf = beta.pdf(x, alpha, beta_param)
+
+# Plot PDF
+plt.figure(figsize=(6, 4))
+plt.plot(x, pdf, 'r-', lw=2, label=f'Beta PDF\nmean={mean:.3f}, CV²={cv2:.3f}\nα={alpha:.2f}, β={beta_param:.2f}')
+plt.xlabel('x')
+plt.ylabel('Density')
+plt.title('Beta Distribution (from mean and CV²)')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
