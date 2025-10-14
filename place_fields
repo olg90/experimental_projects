@@ -3109,8 +3109,7 @@ plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
 
-
-#%% Histogram PDF
+#%% Histogram PDF (nearest wall)
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import label, center_of_mass
@@ -3187,9 +3186,9 @@ plt.plot(x_vals, pdf_gamma_scaled, 'r-', lw=2,
 plt.plot(x_vals, pdf_nb_scaled, 'g-', lw=2,
          label=f'Gamma-Poisson fit\nmean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
 
-plt.xlabel('Distance to Nearest Edge (pixels)')
+plt.xlabel('Distance to nearest edge (pixels)')
 plt.ylabel('Counts')
-plt.title('Histogram of Place Field Centroid Distances (Bigroom)')
+plt.title('Histogram of place field centroid distances (Bigroom)')
 plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
@@ -3260,9 +3259,9 @@ plt.plot(sorted_distances, gamma_cdf, 'r-', lw=2,
 plt.plot(sorted_distances, nb_cdf, 'g-', lw=2,
          label=f'Gamma-Poisson fit\nmean={r_cont*(1-p_cont)/p_cont:.2f}, CV²={(np.sqrt(r_cont*(1-p_cont)/p_cont**2)/(r_cont*(1-p_cont)/p_cont))**2:.2f}')
 
-plt.xlabel('Distance to Nearest Edge (pixels)')
+plt.xlabel('Distance to nearest edge (pixels)')
 plt.ylabel('CDF')
-plt.title('CDF of Centroid Distances (Bigroom)')
+plt.title('CDF of centroid distances (Bigroom)')
 plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
@@ -4051,7 +4050,7 @@ for i in range(num_neurons_to_simulate):
             patch[ellipse_mask] = 1
 
         neuron_map = np.maximum(neuron_map, patch)
-
+        
     synthetic_maps.append(neuron_map)
 
 # ===================== Plot synthetic maps =====================
@@ -4220,3 +4219,243 @@ def plot_distance_grid(room_shape, start_dist=3, step=3, max_dist_ratio=0.5, sho
 room_shape = plist[0][0].shape  # shape of first neuron
 grid = plot_distance_grid(room_shape, start_dist=5, step=10)
 
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+from scipy.optimize import minimize
+
+# ---------------------------------------------------------------------
+# Assume pixel_counts already computed from aggregated_map
+# ---------------------------------------------------------------------
+
+# Example: simulate some pixel_counts if not already defined
+# pixel_counts = np.random.negative_binomial(2, 0.4, size=50000)
+
+# -------------------- Histogram --------------------
+plt.figure(figsize=(7,5))
+counts, bins, _ = plt.hist(pixel_counts, bins=np.arange(pixel_counts.min(), pixel_counts.max()+2),
+                           color='skyblue', edgecolor='black', density=False)
+plt.xlabel('Number of place fields per pixel')
+plt.ylabel('Count of pixels')
+plt.title('Histogram of pixel occupancy')
+plt.grid(alpha=0.3)
+plt.show()
+
+# -------------------- Fit Binomial --------------------
+# Estimate n (max observed count is a good starting point)
+n_hat = np.max(pixel_counts)
+mean_pix = np.mean(pixel_counts)
+p_hat_binom = mean_pix / n_hat
+binom_loglik = np.sum(stats.binom.logpmf(pixel_counts, n=n_hat, p=p_hat_binom))
+
+# -------------------- Fit Negative Binomial --------------------
+var_pix = np.var(pixel_counts)
+if var_pix > mean_pix:
+    r_hat = mean_pix**2 / (var_pix - mean_pix)
+    p_hat_nb = r_hat / (r_hat + mean_pix)
+    nb_loglik = np.sum(stats.nbinom.logpmf(pixel_counts, n=r_hat, p=p_hat_nb))
+else:
+    nb_loglik = -np.inf
+    r_hat, p_hat_nb = np.nan, np.nan
+
+# -------------------- Fit Mixture of two Binomials --------------------
+def negloglik_mixed(params, data):
+    w, n1, p1, n2, p2 = params
+    if not (0 < w < 1 and 0 < p1 < 1 and 0 < p2 < 1):
+        return np.inf
+    pmf1 = stats.binom.pmf(data, int(n1), p1)
+    pmf2 = stats.binom.pmf(data, int(n2), p2)
+    mix = w * pmf1 + (1 - w) * pmf2
+    # Avoid log(0)
+    mix[mix <= 1e-12] = 1e-12
+    return -np.sum(np.log(mix))
+
+# Initial guess
+init_guess = [0.5, np.max(pixel_counts), p_hat_binom, np.max(pixel_counts)//2, p_hat_binom/2]
+bounds = [(1e-3, 1-1e-3), (1, 200), (1e-3, 1-1e-3), (1, 200), (1e-3, 1-1e-3)]
+
+res = minimize(negloglik_mixed, init_guess, args=(pixel_counts,), bounds=bounds)
+if res.success:
+    w_hat, n1_hat, p1_hat, n2_hat, p2_hat = res.x
+    mixed_loglik = -res.fun
+else:
+    w_hat, n1_hat, p1_hat, n2_hat, p2_hat = [np.nan]*5
+    mixed_loglik = -np.inf
+
+# -------------------- Compare fits --------------------
+fit_results = {
+    "Binomial": (stats.binom, (n_hat, p_hat_binom), binom_loglik),
+    "NegBinom": (stats.nbinom, (r_hat, p_hat_nb), nb_loglik),
+    "MixedBinom": (None, (w_hat, n1_hat, p1_hat, n2_hat, p2_hat), mixed_loglik)
+}
+
+best_name, (best_dist, best_params, best_ll) = max(fit_results.items(), key=lambda x: x[1][2])
+print("\n=== Fit Results ===")
+for name, (dist, params, ll) in fit_results.items():
+    print(f"{name:12s}: log-likelihood = {ll:.2f}, params = {params}")
+print(f"\nBest fit: {best_name}")
+
+# -------------------- Plot all fits --------------------
+plt.figure(figsize=(8,5))
+counts, bins, _ = plt.hist(pixel_counts, bins=np.arange(pixel_counts.min(), pixel_counts.max()+2),
+                           color='skyblue', edgecolor='black', alpha=0.6, density=False, label='Data')
+x = np.arange(pixel_counts.min(), pixel_counts.max()+1)
+Npix = len(pixel_counts)
+
+# Binomial
+pmf_binom = stats.binom.pmf(x, n_hat, p_hat_binom)
+plt.plot(x, pmf_binom * Npix, 'r-', lw=2, label=f'Binomial (n={n_hat}, p={p_hat_binom:.3f})')
+
+# Negative Binomial
+if np.isfinite(nb_loglik):
+    pmf_nb = stats.nbinom.pmf(x, r_hat, p_hat_nb)
+    plt.plot(x, pmf_nb * Npix, 'g-', lw=2, label=f'NegBinom (r={r_hat:.2f}, p={p_hat_nb:.3f})')
+
+# Mixed Binomial
+if np.isfinite(mixed_loglik):
+    pmf_mix = (w_hat * stats.binom.pmf(x, int(n1_hat), p1_hat) +
+               (1 - w_hat) * stats.binom.pmf(x, int(n2_hat), p2_hat))
+    plt.plot(x, pmf_mix * Npix, 'm-', lw=2,
+             label=(f'MixBinom (w={w_hat:.2f}, n1={n1_hat:.1f}, p1={p1_hat:.3f}, '
+                    f'n2={n2_hat:.1f}, p2={p2_hat:.3f})'))
+
+plt.xlabel('Number of place fields per pixel')
+plt.ylabel('Count of pixels')
+plt.title('Pixel occupancy histogram + Binomial family fits')
+plt.legend(fontsize=8)
+plt.grid(alpha=0.3)
+plt.show()
+
+
+#%% Plot the center and the centroids and distances to the center
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# ===================== Example: use first map =====================
+place_map = plist[0][0]  # first neuron map
+binary_map = 1 * (place_map > 0)
+
+# 8-connectivity
+structure = np.ones((3, 3))
+labeled_array, num_features = label(binary_map, structure=structure)
+
+# ===================== Find centroids =====================
+centroids = center_of_mass(binary_map, labeled_array, range(1, num_features + 1))
+
+# ===================== Compute distances to center =====================
+h, w = binary_map.shape
+center = np.array([h / 2, w / 2])
+
+distances = []
+for c in centroids:
+    c = np.array(c)
+    d = np.linalg.norm(c - center)
+    distances.append(d)
+distances = np.array(distances)
+
+# ===================== Plot =====================
+plt.figure(figsize=(6,6))
+plt.imshow(place_map, cmap='inferno', origin='upper')
+plt.title('Place Map with Centroids and Distances to Center')
+plt.scatter([c[1] for c in centroids], [c[0] for c in centroids],
+            s=60, facecolors='none', edgecolors='white', label='Centroids')
+plt.scatter(center[1], center[0], c='red', marker='x', s=100, label='Center')
+
+# Annotate distances
+for i, (c, d) in enumerate(zip(centroids, distances)):
+    plt.text(c[1]+2, c[0], f'{d:.1f}', color='white', fontsize=8, ha='left', va='center')
+
+plt.legend()
+plt.axis('off')
+plt.show()
+
+print("Centroid distances to center:")
+for i, d in enumerate(distances, 1):
+    print(f"Field {i}: {d:.2f}")
+    
+#%% Histogram PDF (center)
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy import stats
+from scipy.special import gamma as gamma_func  # continuous gamma function
+
+# ===================== Get Bigroom place maps =====================
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# ===================== Collect distances from center =====================
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features + 1))
+    
+    h, w = binary_map.shape
+    center = np.array([h/2, w/2])
+    for c in centroids_list:
+        row, col = c
+        distance = np.sqrt((row - center[0])**2 + (col - center[1])**2)
+        all_distances.append(distance)
+
+all_distances = np.array(all_distances)
+
+# ===================== Fit Gamma distribution =====================
+gamma_params = stats.gamma.fit(all_distances)
+gamma_dist = stats.gamma(*gamma_params)
+gamma_mean = gamma_dist.mean()
+gamma_std = gamma_dist.std()
+gamma_cv2 = (gamma_std / gamma_mean)**2
+gamma_loglik = np.sum(gamma_dist.logpdf(all_distances))
+gamma_aic = 2*len(gamma_params) - 2*gamma_loglik
+
+# ===================== Fit continuous Negative Binomial (Gamma-Poisson) =====================
+mean_dist = np.mean(all_distances)
+var_dist = np.var(all_distances)
+r_cont = mean_dist**2 / (var_dist - mean_dist)
+p_cont = r_cont / (r_cont + mean_dist)
+
+def cont_nbinom_pdf(x, r, p):
+    """Continuous extension of Negative Binomial (Gamma-Poisson)"""
+    return (gamma_func(x+r) / (gamma_func(x+1) * gamma_func(r))) * (p**r) * ((1-p)**x)
+
+nb_mean = r_cont*(1-p_cont)/p_cont
+nb_std = np.sqrt(r_cont*(1-p_cont)/p_cont**2)
+nb_cv2 = (nb_std/nb_mean)**2
+nb_loglik = np.sum(np.log(cont_nbinom_pdf(all_distances, r_cont, p_cont)))
+nb_aic = 2*2 - 2*nb_loglik  # 2 parameters: r, p
+
+# ===================== Plot histogram and fits =====================
+plt.figure(figsize=(6,4))
+
+bin_count = 40
+counts, bins, _ = plt.hist(all_distances, bins=bin_count, density=False,
+                           alpha=0.6, color='skyblue', edgecolor='black', label='Data')
+
+bin_width = bins[1] - bins[0]
+x_vals = np.linspace(min(all_distances), max(all_distances), 300)
+
+pdf_gamma_scaled = gamma_dist.pdf(x_vals) * len(all_distances) * bin_width
+pdf_nb_scaled = cont_nbinom_pdf(x_vals, r_cont, p_cont) * len(all_distances) * bin_width
+
+plt.plot(x_vals, pdf_gamma_scaled, 'r-', lw=2,
+         label=f'Gamma fit\nmean={gamma_mean:.2f}, CV²={gamma_cv2:.2f}, AIC={gamma_aic:.1f}')
+
+plt.plot(x_vals, pdf_nb_scaled, 'g-', lw=2,
+         label=f'Gamma-Poisson fit\nmean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+
+plt.xlabel('Distance to center (pixels)')
+plt.ylabel('Counts')
+plt.title('Histogram of place field centroid distances from center (Bigroom)')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
