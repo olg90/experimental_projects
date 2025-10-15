@@ -3109,6 +3109,65 @@ plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
 
+#%% Beta PDF
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy import stats
+
+# ===================== Get Bigroom place maps =====================
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# ===================== Collect distances =====================
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    max_dist = min(h, w) / 2  # maximum distance to normalize
+    for c in centroids_list:
+        row, col = c
+        distance = min(row, h-1-row, col, w-1-col)
+        all_distances.append(distance / max_dist)  # normalize to [0,1]
+
+all_distances = np.array(all_distances)
+
+# ===================== Fit Beta distribution =====================
+epsilon = 1e-6
+all_distances_clipped = np.clip(all_distances, epsilon, 1-epsilon)
+
+a, b, loc, scale = stats.beta.fit(all_distances_clipped, floc=0, fscale=1)
+
+beta_mean = stats.beta.mean(a, b, loc=loc, scale=scale)
+beta_var = stats.beta.var(a, b, loc=loc, scale=scale)
+beta_cv2 = beta_var / beta_mean**2
+
+# ===================== Plot Beta PDF =====================
+x = np.linspace(0,1,300)
+beta_pdf = stats.beta.pdf(x, a, b, loc=loc, scale=scale)
+
+plt.figure(figsize=(6,4))
+plt.hist(all_distances, bins=30, density=True, color='lightgray', edgecolor='black', alpha=0.6, label='Empirical histogram')
+plt.plot(x, beta_pdf, 'r-', lw=2,
+         label=f'Beta fit\nmean={beta_mean:.2f}, CV²={beta_cv2:.2f}')
+
+plt.xlabel('Normalized distance to nearest edge')
+plt.ylabel('Density')
+plt.title('PDF of normalized centroid distances with Beta fit')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+
 #%% Histogram PDF (nearest wall)
 import numpy as np
 import matplotlib.pyplot as plt
@@ -3192,6 +3251,1019 @@ plt.title('Histogram of place field centroid distances (Bigroom)')
 plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
+
+#%% All CDFs together of distances to the nearest wall 
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]  # list of neuron maps
+structure = np.ones((3, 3))  # 8-connectivity
+
+# ===================== Plot setup =====================
+plt.figure(figsize=(8,5))
+
+# ===================== Loop over neurons =====================
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+        # distance to nearest wall
+        dist_to_wall = min(row, h-1-row, col, w-1-col)
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) == 0:
+        continue  # skip neurons with no centroids
+    
+    # empirical CDF
+    sorted_dist = np.sort(distances)
+    cdf = np.arange(1, len(sorted_dist)+1) / len(sorted_dist)
+    
+    # plot CDF
+    plt.step(sorted_dist, cdf, where='post', alpha=0.6)
+
+# ===================== Final touches =====================
+plt.xlabel('Distance to nearest wall (pixels)')
+plt.ylabel('CDF')
+plt.title('CDF of distances to nearest wall for each neuron')
+plt.grid(alpha=0.3)
+plt.legend(fontsize=6, ncol=2)  # adjust legend
+plt.tight_layout()
+plt.show()
+
+
+#%% All CDF interdistances
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+
+plt.figure(figsize=(8,5))
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+        # distance to nearest wall
+        dist_to_wall = min(row, h-1-row, col, w-1-col)
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue  # need at least 2 centroids to compute inter-distances
+    
+    # sort distances
+    distances_sorted = np.sort(distances)
+    
+    # compute inter-distance intervals
+    inter_distances = np.diff(distances_sorted)
+    
+    # empirical CDF of inter-distances
+    sorted_inter = np.sort(inter_distances)
+    cdf = np.arange(1, len(sorted_inter)+1) / len(sorted_inter)
+    
+    # plot CDF
+    plt.step(sorted_inter, cdf, where='post', alpha=0.6)
+
+plt.xlabel('Inter-distance between consecutive centroids (pixels)')
+plt.ylabel('CDF')
+plt.title('CDF of inter-centroid distances for each neuron')
+plt.grid(alpha=0.3)
+plt.legend(fontsize=6, ncol=2)
+plt.tight_layout()
+plt.show()
+
+
+#%% CDF of interdistances for each neuron and best fit
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, weibull_min, lognorm, norm
+from scipy.optimize import minimize
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 8  # only include neurons with more than this many place fields
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def negloglik_dist(params, data, dist_name):
+    """Negative log-likelihood for different distributions."""
+    try:
+        if dist_name == 'expon':
+            scale = params[0]
+            pdf_vals = expon.pdf(data, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            pdf_vals = gamma.pdf(data, a=a, scale=scale)
+        elif dist_name == 'weibull':
+            c, scale = params
+            pdf_vals = weibull_min.pdf(data, c=c, scale=scale)
+        elif dist_name == 'lognorm':
+            s, scale = params
+            pdf_vals = lognorm.pdf(data, s=s, scale=scale)
+        elif dist_name == 'norm':
+            mu, sigma = params
+            pdf_vals = norm.pdf(data, loc=mu, scale=sigma)
+        else:
+            return np.inf
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    except Exception:
+        return np.inf
+
+def fit_distribution(data, dist_name):
+    """Fit a single distribution to data and return AIC and params."""
+    if dist_name == 'expon':
+        x0 = [np.mean(data)]
+        bounds = [(1e-6, None)]
+        k = 1
+    elif dist_name == 'gamma':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'weibull':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'lognorm':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'norm':
+        x0 = [np.mean(data), np.std(data)]
+        bounds = [(None, None), (1e-6, None)]
+        k = 2
+    else:
+        raise ValueError("Unknown distribution")
+    
+    res = minimize(negloglik_dist, x0=x0, args=(data, dist_name), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, k)
+    return res.x, aic
+
+# ===================== Main loop: plot all neurons =====================
+best_counts = {'expon':0}
+all_dist_aics = []
+
+plt.figure(figsize=(8,5))
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue  # skip neurons with too few place fields
+    
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+        dist_to_wall = min(row, h-1-row, col, w-1-col)
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue
+    
+    # sorted distances and inter-distance intervals
+    distances_sorted = np.sort(distances)
+    inter_distances = np.diff(distances_sorted)
+    
+    # fit all distributions
+    dist_names = ['expon','gamma','weibull','lognorm','norm']
+    aics = {}
+    for dist_name in dist_names:
+        _, aic = fit_distribution(inter_distances, dist_name)
+        aics[dist_name] = aic
+    
+    # count if exponential is best
+    best_dist = min(aics, key=aics.get)
+    if best_dist == 'expon':
+        best_counts['expon'] += 1
+    
+    all_dist_aics.append(aics)
+    
+    # plot empirical CDF
+    sorted_inter = np.sort(inter_distances)
+    cdf = np.arange(1, len(sorted_inter)+1)/len(sorted_inter)
+    plt.step(sorted_inter, cdf, where='post', alpha=0.5)
+
+plt.xlabel('Inter-distance between consecutive centroids (pixels)')
+plt.ylabel('CDF')
+plt.title(f'CDF of inter-centroid distances (neurons with >{min_fields} place fields)')
+plt.grid(alpha=0.3)
+plt.show()
+
+# ===================== Summary =====================
+num_neurons = len(all_dist_aics)
+print(f"Number of neurons considered: {num_neurons}")
+print(f"Number of neurons where Exponential is best fit: {best_counts['expon']}")
+print(f"Fraction best fit by Exponential: {best_counts['expon']/num_neurons:.2f}")
+
+# ===================== New figure: plot best exponential fit =====================
+best_aic = np.inf
+best_inter_distances = None
+best_scale = None
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue
+
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    h, w = binary_map.shape
+    distances = [min(row, h-1-row, col, w-1-col) for row, col in centroids_list]
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue
+
+    inter_distances = np.diff(np.sort(distances))
+
+    # Fit exponential
+    scale, aic_expon = fit_distribution(inter_distances, 'expon')
+
+    # Keep neuron with lowest exponential AIC
+    if aic_expon < best_aic:
+        best_aic = aic_expon
+        best_inter_distances = inter_distances
+        best_scale = scale[0]  # scale parameter of the exponential
+
+# Plot empirical CDF and best-fit exponential CDF
+if best_inter_distances is not None:
+    sorted_inter = np.sort(best_inter_distances)
+    cdf_emp = np.arange(1, len(sorted_inter)+1)/len(sorted_inter)
+
+    x_vals = np.linspace(0, sorted_inter.max(), 200)
+    cdf_expon = 1 - np.exp(-x_vals / best_scale)
+
+    plt.figure(figsize=(7,4))
+    plt.step(sorted_inter, cdf_emp, where='post', label='Empirical CDF')
+    plt.plot(x_vals, cdf_expon, 'r-', lw=2, label=f'Exponential fit\nscale={best_scale:.2f}, AIC={best_aic:.1f}')
+    plt.xlabel('Inter-distance between consecutive centroids (pixels)')
+    plt.ylabel('CDF')
+    plt.title('Neuron with Best Exponential Fit')
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.show()
+    
+#%% Distance to the first centroid from the wall for each neuron CDF
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, lomax
+from scipy.optimize import minimize
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 2  # minimum place fields to include neuron
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def negloglik_dist(params, data, dist_name):
+    try:
+        if dist_name == 'expon':
+            scale = params[0]
+            if scale <= 0: return np.inf
+            pdf_vals = expon.pdf(data, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            if a <= 0 or scale <= 0: return np.inf
+            pdf_vals = gamma.pdf(data, a=a, scale=scale)
+        elif dist_name == 'lomax':
+            c, scale = params
+            if c <= 0 or scale <= 0: return np.inf
+            pdf_vals = lomax.pdf(data, c=c, scale=scale)
+        else:
+            return np.inf
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    except:
+        return np.inf
+
+def fit_distribution(data, dist_name):
+    if dist_name == 'expon':
+        x0 = [np.mean(data)]
+        bounds = [(1e-6, None)]
+        k = 1
+    elif dist_name in ['gamma', 'lomax']:
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    else:
+        raise ValueError("Unknown distribution")
+    
+    res = minimize(negloglik_dist, x0=x0, args=(data, dist_name), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, k)
+    return res.x, aic
+
+def mean_cv2(dist_name, params):
+    if dist_name == 'expon':
+        mean = params[0]
+        cv2 = 1.0
+    elif dist_name == 'gamma':
+        a, scale = params
+        mean = a * scale
+        cv2 = 1 / a
+    elif dist_name == 'lomax':
+        c, scale = params
+        if c <= 1:
+            mean = np.inf
+        else:
+            mean = scale / (c - 1)
+        if c <= 2:
+            cv2 = np.inf
+        else:
+            cv2 = 1 / (c - 2)
+    return mean, cv2
+
+# ===================== Collect minimum distances =====================
+min_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1*(neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    h, w = binary_map.shape
+    distances = [min(row, h-1-row, col, w-1-col) for row, col in centroids_list]
+    if len(distances) < 1:
+        continue
+    min_distances.append(np.min(distances))
+
+min_distances = np.array(min_distances)
+if len(min_distances) == 0:
+    raise ValueError("No neurons passed the min_fields criterion")
+
+# ===================== Empirical CDF =====================
+sorted_data = np.sort(min_distances)
+cdf_emp = np.arange(1, len(sorted_data)+1) / len(sorted_data)
+
+# ===================== Fit distributions =====================
+dist_names = [
+    # 'expon', 
+    # 'gamma', 
+    'lomax']
+fit_results = {}
+x_vals = np.linspace(0, sorted_data.max()*1.1, 500)
+
+for dist_name in dist_names:
+    params, aic = fit_distribution(min_distances, dist_name)
+    mean, cv2 = mean_cv2(dist_name, params)
+    fit_results[dist_name] = {'params': params, 'aic': aic, 'mean': mean, 'cv2': cv2}
+
+# ===================== Plot =====================
+plt.figure(figsize=(8,5))
+plt.step(sorted_data, cdf_emp, where='post', color='black', label='Empirical CDF')
+
+for dist_name, info in fit_results.items():
+    params = info['params']
+    aic = info['aic']
+    mean = info['mean']
+    cv2 = info['cv2']
+    if dist_name == 'expon':
+        cdf_fit = expon.cdf(x_vals, scale=params[0])
+    elif dist_name == 'gamma':
+        cdf_fit = gamma.cdf(x_vals, a=params[0], scale=params[1])
+    elif dist_name == 'lomax':
+        cdf_fit = lomax.cdf(x_vals, c=params[0], scale=params[1])
+    plt.plot(x_vals, cdf_fit, lw=2, label=f'{dist_name}\nmean={mean:.2f}, CV²={cv2:.4f}')
+
+plt.xlabel('Distance between the wall and the closest centroid of each neuron')
+plt.ylabel('CDF')
+plt.title('Empirical CDF of minimum distances with fitted distributions')
+plt.legend(fontsize=8)
+plt.grid(alpha=0.3)
+plt.show()
+
+
+#%%  Plot all the centroids together for inspection
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]       # list of neuron maps
+structure = np.ones((3, 3))   # 8-connectivity
+min_fields = 2                # minimum place fields to include neuron
+
+# ===================== Helper function =====================
+def closest_to_wall(centroids, h, w):
+    """
+    Returns the centroid closest to any wall and its distance.
+    """
+    distances = [min(row, h-1-row, col, w-1-col) for row, col in centroids]
+    min_idx = np.argmin(distances)
+    return centroids[min_idx], distances[min_idx]
+
+# ===================== Plot setup =====================
+fig, axes = plt.subplots(1, len(bigroom_maps), figsize=(3*len(bigroom_maps), 3))
+if len(bigroom_maps) == 1:
+    axes = [axes]
+
+for ax, neuron_map in zip(axes, bigroom_maps):
+    binary_map = 1*(neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    
+    if num_features <= min_fields:
+        ax.imshow(neuron_map, cmap='viridis')
+        ax.set_title("Too few fields")
+        ax.axis('off')
+        continue
+    
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    h, w = binary_map.shape
+    
+    # Find the centroid closest to a wall
+    centroid, dist = closest_to_wall(centroids_list, h, w)
+    
+    # Plot the neuron map
+    ax.imshow(neuron_map, cmap='viridis')
+    
+    # Plot the closest centroid
+    ax.plot(centroid[1], centroid[0], 'ro', markersize=8)
+    ax.text(centroid[1]+1, centroid[0]+1, f"{dist:.1f}", color='white', fontsize=8)
+    
+    ax.set_title(f"Neuron (closest dist: {dist:.1f})")
+    ax.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+
+    
+#%% Plot all together
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon
+from scipy.optimize import minimize
+import math
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 1  # only include neurons with more than this many place fields
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def negloglik_expon(params, data):
+    scale = params[0]
+    if scale <= 0:
+        return np.inf
+    pdf_vals = expon.pdf(data, scale=scale)
+    return -np.sum(np.log(pdf_vals + 1e-12))
+
+def fit_exponential(data):
+    x0 = [np.mean(data)]
+    bounds = [(1e-6, None)]
+    res = minimize(negloglik_expon, x0=x0, args=(data,), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, 1)
+    return res.x[0], aic
+
+# ===================== Collect neuron fits =====================
+results = []
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue
+    
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features + 1))
+    h, w = binary_map.shape
+    distances = [min(row, h - 1 - row, col, w - 1 - col) for row, col in centroids_list]
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue
+
+    inter_distances = np.diff(np.sort(distances))
+    if np.any(inter_distances <= 0):
+        continue
+
+    scale, aic = fit_exponential(inter_distances)
+
+    results.append({
+        "neuron_idx": neuron_idx,
+        "inter_distances": inter_distances,
+        "scale": scale,
+        "aic": aic
+    })
+
+n_results = len(results)
+print(f"Plotted {n_results} neurons with >{min_fields} place fields")
+
+# ===================== Choose subplot grid automatically =====================
+if n_results == 0:
+    raise ValueError("No neurons met the min_fields criterion.")
+
+ncols = math.ceil(np.sqrt(n_results))
+nrows = math.ceil(n_results / ncols)
+
+# ===================== Plot grid of CDFs =====================
+fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2, nrows * 2))
+axes = np.array(axes).flatten()
+
+for ax_idx, (ax, result) in enumerate(zip(axes, results)):
+    data = result["inter_distances"]
+    scale = result["scale"]
+
+    sorted_data = np.sort(data)
+    cdf_emp = np.arange(1, len(sorted_data) + 1) / len(sorted_data)
+
+    x_vals = np.linspace(0, sorted_data.max(), 200)
+    cdf_exp = 1 - np.exp(-x_vals / scale)
+
+    ax.step(sorted_data, cdf_emp, where="post", color="blue", alpha=0.7)
+    ax.plot(x_vals, cdf_exp, "r-", lw=1.2)
+    ax.set_title(f"Neuron {result['neuron_idx']}\nscale={scale:.2f}", fontsize=6)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.grid(alpha=0.2)
+
+# Hide unused subplots
+for ax in axes[n_results:]:
+    ax.axis("off")
+    
+fig.suptitle('{} neurons with >{} placefields'.format(n_results, min_fields),
+             fontsize=40)
+
+plt.tight_layout()
+plt.show()
+
+#%% Minimum distances CDF
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, weibull_min, lognorm, norm, lomax
+from scipy.optimize import minimize
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 6  # only include neurons with more than this many place fields
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2 * k - 2 * loglik
+
+def negloglik_dist(params, data, dist_name):
+    """Negative log-likelihood for different distributions."""
+    try:
+        if dist_name == 'expon':
+            scale = params[0]
+            pdf_vals = expon.pdf(data, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            pdf_vals = gamma.pdf(data, a=a, scale=scale)
+        elif dist_name == 'weibull':
+            c, scale = params
+            pdf_vals = weibull_min.pdf(data, c=c, scale=scale)
+        elif dist_name == 'lognorm':
+            s, scale = params
+            pdf_vals = lognorm.pdf(data, s=s, scale=scale)
+        elif dist_name == 'norm':
+            mu, sigma = params
+            pdf_vals = norm.pdf(data, loc=mu, scale=sigma)
+        elif dist_name == 'lomax':
+            c, scale = params
+            pdf_vals = lomax.pdf(data, c=c, scale=scale)
+        else:
+            return np.inf
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    except Exception:
+        return np.inf
+
+def fit_distribution(data, dist_name):
+    """Fit a single distribution to data and return AIC and parameters."""
+    if dist_name == 'expon':
+        x0 = [np.mean(data)]
+        bounds = [(1e-6, None)]
+        k = 1
+    elif dist_name == 'gamma':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'weibull':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'lognorm':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'norm':
+        x0 = [np.mean(data), np.std(data)]
+        bounds = [(None, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'lomax':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    else:
+        raise ValueError("Unknown distribution")
+
+    res = minimize(negloglik_dist, x0=x0, args=(data, dist_name), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, k)
+    return res.x, aic
+
+# ===================== Main analysis =====================
+best_aic = np.inf
+best_data = None
+best_fits = None
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+
+    if num_features <= min_fields:
+        continue
+
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features + 1))
+    h, w = binary_map.shape
+    distances = np.array([min(row, h - 1 - row, col, w - 1 - col) for row, col in centroids_list])
+
+    if len(distances) == 0:
+        continue
+
+    # Take the smallest distance per neuron
+    min_dist = np.min(distances)
+
+    # For fair comparison, wrap in an array
+    data = np.array([min_dist])
+
+    # Skip if trivial
+    if np.std(data) == 0:
+        continue
+
+    # Fit all distributions
+    dist_names = ['expon', 'gamma', 'weibull', 'lognorm', 'norm', 'lomax']
+    fits = {}
+    for dist_name in dist_names:
+        params, aic = fit_distribution(data, dist_name)
+        fits[dist_name] = (params, aic)
+
+    # Pick neuron with lowest exponential AIC (just as a consistent selection rule)
+    if fits['expon'][1] < best_aic:
+        best_aic = fits['expon'][1]
+        best_data = data
+        best_fits = fits
+
+# ===================== Plot for the neuron with best exponential fit =====================
+if best_data is not None:
+    sorted_data = np.sort(best_data)
+    cdf_emp = np.arange(1, len(sorted_data) + 1) / len(sorted_data)
+
+    x_vals = np.linspace(0, sorted_data.max() * 1.2 + 1e-6, 200)
+
+    plt.figure(figsize=(8, 5))
+    plt.step(sorted_data, cdf_emp, where='post', lw=2, color='black', label='Empirical CDF')
+
+    for dist_name, (params, aic) in best_fits.items():
+        if dist_name == 'expon':
+            scale = params[0]
+            cdf_fit = expon.cdf(x_vals, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            cdf_fit = gamma.cdf(x_vals, a=a, scale=scale)
+        elif dist_name == 'weibull':
+            c, scale = params
+            cdf_fit = weibull_min.cdf(x_vals, c=c, scale=scale)
+        elif dist_name == 'lognorm':
+            s, scale = params
+            cdf_fit = lognorm.cdf(x_vals, s=s, scale=scale)
+        elif dist_name == 'norm':
+            mu, sigma = params
+            cdf_fit = norm.cdf(x_vals, loc=mu, scale=sigma)
+        elif dist_name == 'lomax':
+            c, scale = params
+            cdf_fit = lomax.cdf(x_vals, c=c, scale=scale)
+        else:
+            continue
+
+        plt.plot(x_vals, cdf_fit, lw=1.8, label=f"{dist_name} (AIC={aic:.1f})")
+
+    plt.xlabel("Smallest centroid-wall distance (pixels)")
+    plt.ylabel("CDF")
+    plt.title("CDF of Smallest Distance (Best Neuron, Lomax Added)")
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.show()
+
+
+#%% Gamma exponential CDF (lomax)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, weibull_min, lognorm, norm, lomax
+from scipy.optimize import minimize
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 15  # only include neurons with more than this many place fields
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def negloglik_dist(params, data, dist_name):
+    """Negative log-likelihood for different distributions."""
+    try:
+        if dist_name == 'expon':
+            scale = params[0]
+            pdf_vals = expon.pdf(data, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            pdf_vals = gamma.pdf(data, a=a, scale=scale)
+        elif dist_name == 'weibull':
+            c, scale = params
+            pdf_vals = weibull_min.pdf(data, c=c, scale=scale)
+        elif dist_name == 'lognorm':
+            s, scale = params
+            pdf_vals = lognorm.pdf(data, s=s, scale=scale)
+        elif dist_name == 'norm':
+            mu, sigma = params
+            pdf_vals = norm.pdf(data, loc=mu, scale=sigma)
+        elif dist_name == 'lomax':
+            c, scale = params
+            pdf_vals = lomax.pdf(data, c=c, scale=scale)
+        else:
+            return np.inf
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    except Exception:
+        return np.inf
+
+def fit_distribution(data, dist_name):
+    """Fit a single distribution to data and return AIC and params."""
+    if dist_name == 'expon':
+        x0 = [np.mean(data)]
+        bounds = [(1e-6, None)]
+        k = 1
+    elif dist_name in ['gamma', 'weibull', 'lognorm', 'lomax']:
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'norm':
+        x0 = [np.mean(data), np.std(data)]
+        bounds = [(None, None), (1e-6, None)]
+        k = 2
+    else:
+        raise ValueError("Unknown distribution")
+    
+    res = minimize(negloglik_dist, x0=x0, args=(data, dist_name), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, len(x0))
+    return res.x, aic
+
+# ===================== Main loop: plot all neurons =====================
+best_counts = {'lomax': 0}
+all_dist_aics = []
+
+plt.figure(figsize=(8,5))
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue  # skip neurons with too few place fields
+    
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+        dist_to_wall = min(row, h-1-row, col, w-1-col)
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue
+    
+    # sorted distances and inter-distance intervals
+    distances_sorted = np.sort(distances)
+    inter_distances = np.diff(distances_sorted)
+    
+    # fit distributions
+    dist_names = ['expon','gamma','weibull','lognorm','norm','lomax']
+    aics = {}
+    for dist_name in dist_names:
+        _, aic = fit_distribution(inter_distances, dist_name)
+        aics[dist_name] = aic
+    
+    # count if Lomax is best
+    best_dist = min(aics, key=aics.get)
+    if best_dist == 'lomax':
+        best_counts['lomax'] += 1
+    
+    all_dist_aics.append(aics)
+    
+    # plot empirical CDF
+    sorted_inter = np.sort(inter_distances)
+    cdf = np.arange(1, len(sorted_inter)+1)/len(sorted_inter)
+    plt.step(sorted_inter, cdf, where='post', alpha=0.5)
+
+plt.xlabel('Inter-distance between consecutive centroids (pixels)')
+plt.ylabel('CDF')
+plt.title(f'CDF of inter-centroid distances (neurons with >{min_fields} place fields)')
+plt.grid(alpha=0.3)
+plt.show()
+
+# ===================== Summary =====================
+num_neurons = len(all_dist_aics)
+print(f"Number of neurons considered: {num_neurons}")
+print(f"Number of neurons where Lomax is best fit: {best_counts['lomax']}")
+print(f"Fraction best fit by Lomax: {best_counts['lomax']/num_neurons:.2f}")
+
+# ===================== Plot best Lomax fit =====================
+best_aic = np.inf
+best_inter_distances = None
+best_params = None
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue
+
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    h, w = binary_map.shape
+    distances = [min(row, h-1-row, col, w-1-col) for row, col in centroids_list]
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue
+
+    inter_distances = np.diff(np.sort(distances))
+
+    # Fit Lomax
+    params, aic_lomax = fit_distribution(inter_distances, 'lomax')
+
+    # Keep neuron with lowest Lomax AIC
+    if aic_lomax < best_aic:
+        best_aic = aic_lomax
+        best_inter_distances = inter_distances
+        best_params = params  # shape and scale
+
+# Plot empirical CDF and best-fit Lomax CDF
+if best_inter_distances is not None:
+    sorted_inter = np.sort(best_inter_distances)
+    cdf_emp = np.arange(1, len(sorted_inter)+1)/len(sorted_inter)
+
+    x_vals = np.linspace(0, sorted_inter.max(), 200)
+    c, scale = best_params
+    cdf_lomax = lomax.cdf(x_vals, c=c, scale=scale)
+
+    plt.figure(figsize=(7,4))
+    plt.step(sorted_inter, cdf_emp, where='post', label='Empirical CDF')
+    plt.plot(x_vals, cdf_lomax, 'r-', lw=2, label=f'Lomax fit\nshape={c:.2f}, scale={scale:.2f}, AIC={best_aic:.1f}')
+    plt.xlabel('Inter-distance between consecutive centroids (pixels)')
+    plt.ylabel('CDF')
+    plt.title('Neuron with Best Lomax (Gamma–Exponential) Fit')
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.show()
+
+
+#%% CDF of the distance to the first centroid from the nearest wall (neuron)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, weibull_min, lognorm, norm
+from scipy.special import gamma as gamma_func
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 1  # only include neurons with more than this many place fields
+
+# ===================== Helper functions =====================
+def get_smallest_distances(neuron_map):
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        return None
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+        dist_to_wall = min(row, h-1-row, col, w-1-col)
+        distances.append(dist_to_wall)
+    return np.min(distances) if distances else None
+
+def fit_distribution_stats(data, dist_name):
+    """Fit distribution and return mean, CV², and CDF values for plotting."""
+    if dist_name == 'expon':
+        scale = np.mean(data)
+        mean = scale
+        var = scale**2
+        cdf_vals = expon.cdf(data, scale=scale)
+    elif dist_name == 'gamma':
+        mean_data = np.mean(data)
+        var_data = np.var(data)
+        theta = var_data / mean_data
+        k = mean_data / theta
+        mean = k*theta
+        var = k*theta**2
+        cdf_vals = gamma.cdf(data, a=k, scale=theta)
+    elif dist_name == 'weibull':
+        # rough method-of-moments estimate
+        mean_data = np.mean(data)
+        var_data = np.var(data)
+        c = 1.2
+        scale = mean_data / gamma_func(1 + 1/c)
+        mean = scale * gamma_func(1 + 1/c)
+        var = scale**2 * (gamma_func(1 + 2/c) - (gamma_func(1 + 1/c))**2)
+        cdf_vals = weibull_min.cdf(data, c=c, scale=scale)
+    elif dist_name == 'norm':
+        mu = np.mean(data)
+        sigma = np.std(data)
+        mean = mu
+        var = sigma**2
+        cdf_vals = norm.cdf(data, loc=mu, scale=sigma)
+    elif dist_name == 'lognorm':
+        mean_data = np.mean(data)
+        var_data = np.var(data)
+        sigma = np.sqrt(np.log(1 + var_data/mean_data**2))
+        scale = mean_data / np.exp(sigma**2/2)
+        mean = np.exp(sigma**2/2) * scale
+        var = (np.exp(sigma**2) - 1) * (scale**2) * np.exp(sigma**2)
+        cdf_vals = lognorm.cdf(data, s=sigma, scale=scale)
+    else:
+        raise ValueError("Unknown distribution")
+    
+    cv2 = var / mean**2
+    return mean, cv2, cdf_vals
+
+# ===================== Collect smallest distances =====================
+smallest_distances = []
+for neuron_map in bigroom_maps:
+    sd = get_smallest_distances(neuron_map)
+    if sd is not None:
+        smallest_distances.append(sd)
+
+smallest_distances = np.array(smallest_distances)
+sorted_data = np.sort(smallest_distances)
+cdf_empirical = np.arange(1, len(sorted_data)+1)/len(sorted_data)
+
+# ===================== Fit distributions =====================
+dist_names = ['expon','gamma','weibull','norm','lognorm']
+fit_results = {}
+
+for dist in dist_names:
+    mean, cv2, cdf_vals = fit_distribution_stats(sorted_data, dist)
+    fit_results[dist] = {'mean': mean, 'cv2': cv2, 'cdf': cdf_vals}
+
+# ===================== Determine best distribution (lowest CV² as proxy) =====================
+best_dist = min(fit_results, key=lambda d: abs(fit_results[d]['cv2'] - 1))  # example metric
+best_mean = fit_results[best_dist]['mean']
+best_cv2 = fit_results[best_dist]['cv2']
+best_cdf = fit_results[best_dist]['cdf']
+
+# ===================== Plot =====================
+plt.figure(figsize=(7,5))
+plt.step(sorted_data, cdf_empirical, where='post', label='Empirical CDF')
+plt.plot(sorted_data, best_cdf, 'r-', lw=2, 
+         label=f'{best_dist} fit\nmean={best_mean:.2f}, CV²={best_cv2:.2f}')
+plt.xlabel('Smallest distance of each centroid (pixels)')
+plt.ylabel('CDF')
+plt.title('CDF of smallest distances per neuron with best fit')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+
 
 #%% CDF histogram
 
@@ -4329,6 +5401,208 @@ plt.grid(alpha=0.3)
 plt.show()
 
 
+
+    
+#%% Center setup
+
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from scipy.stats import beta, norm, betabinom, binom, gamma, lognorm  # probability distributions
+from scipy.optimize import minimize  # optimization for likelihood-based fits
+from sklearn.mixture import GaussianMixture  # gmm fitting to raw data
+
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from collections import Counter
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+shapeslist = [[(65, 116), (65, 117)],  # BigroomData
+              [(43, 53), (43, 50), (43, 57)],  # CircleData
+              [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  # HalfroomData
+              [(12, 12), (13, 13)],  # HexagonData
+              [(24, 36), (31, 40)],  # RectangleData
+              [(20, 20)]]  # SquareData
+
+location = 0  # Change if needed
+
+# =================== Collect all data ===================
+p_extended = [[] for _ in range(len(dnames))]  # One list per dataset
+plist = []
+nlist = []
+
+for dnametype in range(len(dnames)):
+    p = []
+    n = []
+
+    # Set data directory
+    if location == 0:
+        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+    elif location == 1:
+        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+    
+    dir2 = os.listdir(dir1)
+
+    for foldername in dir2:
+        dir3 = os.path.join(dir1, foldername)
+        if not os.path.isdir(dir3):
+            continue
+        dirs3 = os.listdir(dir3)
+        dirs4 = [x for x in dirs3 if x[-7] == 'm']
+        for matname in dirs4:
+            mat = loadmat(os.path.join(dir3, matname))
+            n.append(mat['numFields'][0][0])
+            p.append(mat['pfields'])  # original, unmodified matrices
+
+    # =================== Count original shapes with proportion ===================
+    original_shapes = [pmap.shape for pmap in p]
+    shape_counts = Counter(original_shapes)
+    total_maps = len(original_shapes)
+    
+    print(f"{dnames[dnametype]} ({total_maps})")
+    for shape, count in shape_counts.items():
+        proportion = count / total_maps
+        print(f"{shape}: {count} ({proportion:.2f})")
+    print()
+
+    # =================== Compute minimum shape and crop ===================
+    min_x = min(x for x, y in shapeslist[dnametype])
+    min_y = min(y for x, y in shapeslist[dnametype])
+    target_shape = (min_x, min_y)
+
+    cropped_list = []
+    for pi in p:
+        h, w = pi.shape
+        H, W = target_shape
+        cropped = pi[:H, :W]  # crop to minimum dimensions
+        cropped_list.append(cropped)
+
+    p_extended[dnametype] = cropped_list
+    nlist.append(n)
+    plist.append(p)
+    
+    
+p1=[]
+for room in plist:
+    plistroom=[]
+    for neuron in room:
+        plistroom.append(1*(neuron>0))
+    p1.append(plistroom)
+    
+#%% Histogram PDF (center) with AIC for Gamma / Weibull / Normal mixtures
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+from scipy.stats import gamma, norm, weibull_min
+from scipy.special import gamma as gamma_func
+
+data = np.array(all_distances)
+
+# ===================== Helper =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def mixture_moments(pdf_func, params):
+    w = params[-1]
+    if pdf_func == norm.pdf:
+        mu1, sigma1, mu2, sigma2, _ = params
+        mean1, mean2 = mu1, mu2
+        var1, var2 = sigma1**2, sigma2**2
+    elif pdf_func == gamma.pdf:
+        k1, theta1, k2, theta2, _ = params
+        mean1 = k1*theta1
+        mean2 = k2*theta2
+        var1 = k1*theta1**2
+        var2 = k2*theta2**2
+    elif pdf_func == weibull_min.pdf:
+        c1, scale1, c2, scale2, _ = params
+        mean1 = scale1 * gamma_func(1 + 1/c1)
+        mean2 = scale2 * gamma_func(1 + 1/c2)
+        var1 = scale1**2 * (gamma_func(1 + 2/c1) - (gamma_func(1 + 1/c1))**2)
+        var2 = scale2**2 * (gamma_func(1 + 2/c2) - (gamma_func(1 + 1/c2))**2)
+    CV2_1 = var1 / mean1**2
+    CV2_2 = var2 / mean2**2
+    return mean1, CV2_1, mean2, CV2_2
+
+def fit_mixture_pdf(pdf_func, x0, bounds, data):
+    def negloglik(params, data):
+        *params_dist, w = params
+        if not (0 < w < 1) or any(p <= 0 for p in params_dist):
+            return np.inf
+        if pdf_func == norm.pdf:
+            mu1, sigma1, mu2, sigma2 = params_dist
+            pdf_vals = w*pdf_func(data, loc=mu1, scale=sigma1) + (1-w)*pdf_func(data, loc=mu2, scale=sigma2)
+        elif pdf_func == gamma.pdf:
+            k1, theta1, k2, theta2 = params_dist
+            pdf_vals = w*pdf_func(data, a=k1, scale=theta1) + (1-w)*pdf_func(data, a=k2, scale=theta2)
+        elif pdf_func == weibull_min.pdf:
+            c1, scale1, c2, scale2 = params_dist
+            pdf_vals = w*pdf_func(data, c=c1, scale=scale1) + (1-w)*pdf_func(data, c=c2, scale=scale2)
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    
+    res = minimize(negloglik, x0=x0, args=(data,), bounds=bounds)
+    params_opt = res.x
+    loglik = -res.fun
+    aic = compute_aic(loglik, len(params_opt))
+    
+    # compute mixture PDF for plotting
+    x_vals = np.linspace(0, data.max(), 500)
+    if pdf_func == norm.pdf:
+        mu1, sigma1, mu2, sigma2, w = params_opt
+        pdf_vals_plot = w*pdf_func(x_vals, loc=mu1, scale=sigma1) + (1-w)*pdf_func(x_vals, loc=mu2, scale=sigma2)
+    elif pdf_func == gamma.pdf:
+        k1, theta1, k2, theta2, w = params_opt
+        pdf_vals_plot = w*pdf_func(x_vals, a=k1, scale=theta1) + (1-w)*pdf_func(x_vals, a=k2, scale=theta2)
+    elif pdf_func == weibull_min.pdf:
+        c1, scale1, c2, scale2, w = params_opt
+        pdf_vals_plot = w*pdf_func(x_vals, c=c1, scale=scale1) + (1-w)*pdf_func(x_vals, c=c2, scale=scale2)
+    
+    mean1, cv2_1, mean2, cv2_2 = mixture_moments(pdf_func, params_opt)
+    
+    return params_opt, aic, mean1, cv2_1, mean2, cv2_2, x_vals, pdf_vals_plot
+
+# ===================== Fit mixtures =====================
+gamma_params, aic_gamma, mean1_gamma, cv2_1_gamma, mean2_gamma, cv2_2_gamma, x_gamma, pdf_gamma = fit_mixture_pdf(
+    gamma.pdf, x0=[1,1,3,1,0.5], bounds=[(1e-3,None)]*4 + [(1e-3,1-1e-3)], data=data)
+
+weibull_params, aic_weibull, mean1_weibull, cv2_1_weibull, mean2_weibull, cv2_2_weibull, x_weibull, pdf_weibull = fit_mixture_pdf(
+    weibull_min.pdf, x0=[1,1,2,1,0.5], bounds=[(1e-3,None)]*4 + [(1e-3,1-1e-3)], data=data)
+
+norm_params, aic_norm, mean1_norm, cv2_1_norm, mean2_norm, cv2_2_norm, x_norm, pdf_norm = fit_mixture_pdf(
+    norm.pdf, x0=[data.mean(), data.std(), data.mean()*1.5, data.std(), 0.5],
+    bounds=[(None,None),(1e-3,None),(None,None),(1e-3,None),(1e-3,1-1e-3)], data=data)
+
+# ===================== Plot with w and AIC on next row =====================
+plt.figure(figsize=(8,5))
+plt.hist(data, bins=30, density=True, alpha=0.5, color='lightgray', edgecolor='black', label='Data')
+
+plt.plot(x_gamma, pdf_gamma, 'b-', lw=2,
+         label=(f'Gamma mixture\nmean1={mean1_gamma:.2f}, CV1²={cv2_1_gamma:.3f}\n'
+                f'mean2={mean2_gamma:.2f}, CV2²={cv2_2_gamma:.3f}\n'
+                f'w={gamma_params[-1]:.2f}, AIC={aic_gamma:.1f}'))
+
+plt.plot(x_weibull, pdf_weibull, 'g-', lw=2,
+         label=(f'Weibull mixture\nmean1={mean1_weibull:.2f}, CV1²={cv2_1_weibull:.3f}\n'
+                f'mean2={mean2_weibull:.2f}, CV2²={cv2_2_weibull:.3f}\n'
+                f'w={weibull_params[-1]:.2f}, AIC={aic_weibull:.1f}'))
+
+plt.plot(x_norm, pdf_norm, 'c-', lw=2,
+         label=(f'Normal mixture\nmean1={mean1_norm:.2f}, CV1²={cv2_1_norm:.3f}\n'
+                f'mean2={mean2_norm:.2f}, CV2²={cv2_2_norm:.3f}\n'
+                f'w={norm_params[-1]:.2f}, AIC={aic_norm:.1f}'))
+
+plt.xlabel('Distance between placefield centroids and center')
+plt.ylabel('Density')
+plt.legend(fontsize=8)
+plt.grid(alpha=0.3)
+plt.show()
+
 #%% Plot the center and the centroids and distances to the center
 
 import numpy as np
@@ -4336,7 +5610,7 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import label, center_of_mass
 
 # ===================== Example: use first map =====================
-place_map = plist[0][0]  # first neuron map
+place_map = p1[0][0]  # first neuron map
 binary_map = 1 * (place_map > 0)
 
 # 8-connectivity
@@ -4359,103 +5633,19 @@ distances = np.array(distances)
 
 # ===================== Plot =====================
 plt.figure(figsize=(6,6))
-plt.imshow(place_map, cmap='inferno', origin='upper')
+plt.imshow(place_map, cmap='Wistia', origin='upper')
 plt.title('Place Map with Centroids and Distances to Center')
 plt.scatter([c[1] for c in centroids], [c[0] for c in centroids],
-            s=60, facecolors='none', edgecolors='white', label='Centroids')
+            s=60, facecolors='blue', edgecolors='blue', label='Centroids', )
+for i, (c, d) in enumerate(zip(centroids, distances)):
+    plt.text(c[1]+2, c[0], f'{d:.1f}', color='blue', fontsize=8, ha='left', va='center')
+
 plt.scatter(center[1], center[0], c='red', marker='x', s=100, label='Center')
 
-# Annotate distances
-for i, (c, d) in enumerate(zip(centroids, distances)):
-    plt.text(c[1]+2, c[0], f'{d:.1f}', color='white', fontsize=8, ha='left', va='center')
-
-plt.legend()
+plt.legend(loc='upper center')
 plt.axis('off')
 plt.show()
 
 print("Centroid distances to center:")
 for i, d in enumerate(distances, 1):
     print(f"Field {i}: {d:.2f}")
-    
-#%% Histogram PDF (center)
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.ndimage import label, center_of_mass
-from scipy import stats
-from scipy.special import gamma as gamma_func  # continuous gamma function
-
-# ===================== Get Bigroom place maps =====================
-bigroom_maps = plist[0]
-
-# 8-connectivity structure
-structure = np.array([[1,1,1],
-                      [1,1,1],
-                      [1,1,1]])
-
-# ===================== Collect distances from center =====================
-all_distances = []
-
-for neuron_map in bigroom_maps:
-    binary_map = 1 * (neuron_map > 0)
-    labeled_array, num_features = label(binary_map, structure=structure)
-    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features + 1))
-    
-    h, w = binary_map.shape
-    center = np.array([h/2, w/2])
-    for c in centroids_list:
-        row, col = c
-        distance = np.sqrt((row - center[0])**2 + (col - center[1])**2)
-        all_distances.append(distance)
-
-all_distances = np.array(all_distances)
-
-# ===================== Fit Gamma distribution =====================
-gamma_params = stats.gamma.fit(all_distances)
-gamma_dist = stats.gamma(*gamma_params)
-gamma_mean = gamma_dist.mean()
-gamma_std = gamma_dist.std()
-gamma_cv2 = (gamma_std / gamma_mean)**2
-gamma_loglik = np.sum(gamma_dist.logpdf(all_distances))
-gamma_aic = 2*len(gamma_params) - 2*gamma_loglik
-
-# ===================== Fit continuous Negative Binomial (Gamma-Poisson) =====================
-mean_dist = np.mean(all_distances)
-var_dist = np.var(all_distances)
-r_cont = mean_dist**2 / (var_dist - mean_dist)
-p_cont = r_cont / (r_cont + mean_dist)
-
-def cont_nbinom_pdf(x, r, p):
-    """Continuous extension of Negative Binomial (Gamma-Poisson)"""
-    return (gamma_func(x+r) / (gamma_func(x+1) * gamma_func(r))) * (p**r) * ((1-p)**x)
-
-nb_mean = r_cont*(1-p_cont)/p_cont
-nb_std = np.sqrt(r_cont*(1-p_cont)/p_cont**2)
-nb_cv2 = (nb_std/nb_mean)**2
-nb_loglik = np.sum(np.log(cont_nbinom_pdf(all_distances, r_cont, p_cont)))
-nb_aic = 2*2 - 2*nb_loglik  # 2 parameters: r, p
-
-# ===================== Plot histogram and fits =====================
-plt.figure(figsize=(6,4))
-
-bin_count = 40
-counts, bins, _ = plt.hist(all_distances, bins=bin_count, density=False,
-                           alpha=0.6, color='skyblue', edgecolor='black', label='Data')
-
-bin_width = bins[1] - bins[0]
-x_vals = np.linspace(min(all_distances), max(all_distances), 300)
-
-pdf_gamma_scaled = gamma_dist.pdf(x_vals) * len(all_distances) * bin_width
-pdf_nb_scaled = cont_nbinom_pdf(x_vals, r_cont, p_cont) * len(all_distances) * bin_width
-
-plt.plot(x_vals, pdf_gamma_scaled, 'r-', lw=2,
-         label=f'Gamma fit\nmean={gamma_mean:.2f}, CV²={gamma_cv2:.2f}, AIC={gamma_aic:.1f}')
-
-plt.plot(x_vals, pdf_nb_scaled, 'g-', lw=2,
-         label=f'Gamma-Poisson fit\nmean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
-
-plt.xlabel('Distance to center (pixels)')
-plt.ylabel('Counts')
-plt.title('Histogram of place field centroid distances from center (Bigroom)')
-plt.legend()
-plt.grid(alpha=0.3)
-plt.show()
