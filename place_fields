@@ -71,6 +71,36 @@ extensions = [(68, 120), # BigroomData
               (32, 40), # RectangleData
               (20,20)] # SquareData
 
+#%%  Plot all place maps
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ===================== Parameters =====================
+neuron_maps = p[5]
+
+# ===================== Compute best subplot layout =====================
+n = len(neuron_maps)
+cols = int(np.ceil(np.sqrt(n)))
+rows = int(np.ceil(n / cols))
+
+# ===================== Plot =====================
+fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.8, rows * 1.8))
+axes = np.ravel(axes)
+
+for i, (ax, neuron_map) in enumerate(zip(axes, neuron_maps)):
+    ax.imshow(neuron_map, cmap='viridis', aspect='auto')
+    ax.set_title(f"{i}", fontsize=7, pad=1)
+    ax.axis('off')
+
+# Turn off unused axes
+for ax in axes[len(neuron_maps):]:
+    ax.axis('off')
+
+# Tighten layout to minimize white space
+plt.subplots_adjust(wspace=0.05, hspace=0.05, left=0.01, right=0.99, top=0.97, bottom=0.01)
+plt.show()
+
 #%%
 p_trimmed = [pi[:, :-1] if pi.shape[1] == 117 else pi for pi in p]
 p_trimmed = [pi[:-1, :] for pi in p_trimmed]
@@ -2842,7 +2872,7 @@ def plot_scores_on_original(int_array):
 
 plot_scores_on_original(p[0])
 
-#%% Centroid stuff (Meeting 5)
+#%% Setup for centroids (Meeting 5)
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -3534,9 +3564,10 @@ from scipy.stats import expon, gamma, lomax
 from scipy.optimize import minimize
 
 # ===================== Parameters =====================
-bigroom_maps = plist[0]
+dind=0
+bigroom_maps = plist[dind]
 structure = np.ones((3, 3))  # 8-connectivity
-min_fields = 2  # minimum place fields to include neuron
+min_fields = 0  # minimum place fields to include neuron
 
 # ===================== Helper functions =====================
 def compute_aic(loglik, k):
@@ -3652,12 +3683,153 @@ for dist_name, info in fit_results.items():
         cdf_fit = lomax.cdf(x_vals, c=params[0], scale=params[1])
     plt.plot(x_vals, cdf_fit, lw=2, label=f'{dist_name}\nmean={mean:.2f}, CV²={cv2:.4f}')
 
-plt.xlabel('Distance between the wall and the closest centroid of each neuron')
-plt.ylabel('CDF')
-plt.title('Empirical CDF of minimum distances with fitted distributions')
+plt.xlabel('Distance between the wall and the closest centroid')
+plt.ylabel('Cumulative distribution function')
+plt.title('{}'.format(dnames[dind]), fontsize=20)
 plt.legend(fontsize=8)
 plt.grid(alpha=0.3)
 plt.show()
+
+
+#%% Changed the distance metric to "from the center"
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, lomax
+from scipy.optimize import minimize
+
+# ===================== Parameters =====================
+dind = 0
+bigroom_maps = plist[dind]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 2  # minimum place fields to include neuron
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def negloglik_dist(params, data, dist_name):
+    try:
+        if dist_name == 'expon':
+            scale = params[0]
+            if scale <= 0: return np.inf
+            pdf_vals = expon.pdf(data, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            if a <= 0 or scale <= 0: return np.inf
+            pdf_vals = gamma.pdf(data, a=a, scale=scale)
+        elif dist_name == 'lomax':
+            c, scale = params
+            if c <= 0 or scale <= 0: return np.inf
+            pdf_vals = lomax.pdf(data, c=c, scale=scale)
+        else:
+            return np.inf
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    except:
+        return np.inf
+
+def fit_distribution(data, dist_name):
+    if dist_name == 'expon':
+        x0 = [np.mean(data)]
+        bounds = [(1e-6, None)]
+        k = 1
+    elif dist_name in ['gamma', 'lomax']:
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    else:
+        raise ValueError("Unknown distribution")
+    
+    res = minimize(negloglik_dist, x0=x0, args=(data, dist_name), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, k)
+    return res.x, aic
+
+def mean_cv2(dist_name, params):
+    if dist_name == 'expon':
+        mean = params[0]
+        cv2 = 1.0
+    elif dist_name == 'gamma':
+        a, scale = params
+        mean = a * scale
+        cv2 = 1 / a
+    elif dist_name == 'lomax':
+        c, scale = params
+        if c <= 1:
+            mean = np.inf
+        else:
+            mean = scale / (c - 1)
+        if c <= 2:
+            cv2 = np.inf
+        else:
+            cv2 = 1 / (c - 2)
+    return mean, cv2
+
+# ===================== Collect distances to center =====================
+center_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1*(neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features < min_fields:
+        continue
+
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    h, w = binary_map.shape
+    center = np.array([h/2, w/2])
+
+    # Distance from each centroid to the room center
+    distances_to_center = [np.linalg.norm(np.array([r, c]) - center) for r, c in centroids_list]
+    if len(distances_to_center) < 1:
+        continue
+
+    # Get the closest centroid to the room center
+    closest_distance = np.min(distances_to_center)
+    center_distances.append(closest_distance)
+
+center_distances = np.array(center_distances)
+if len(center_distances) == 0:
+    raise ValueError("No neurons passed the min_fields criterion")
+
+# ===================== Empirical CDF =====================
+sorted_data = np.sort(center_distances)
+cdf_emp = np.arange(1, len(sorted_data)+1) / len(sorted_data)
+
+# ===================== Fit distributions =====================
+dist_names = ['lomax']
+fit_results = {}
+x_vals = np.linspace(0, sorted_data.max()*1.1, 500)
+
+for dist_name in dist_names:
+    params, aic = fit_distribution(center_distances, dist_name)
+    mean, cv2 = mean_cv2(dist_name, params)
+    fit_results[dist_name] = {'params': params, 'aic': aic, 'mean': mean, 'cv2': cv2}
+
+# ===================== Plot =====================
+plt.figure(figsize=(8,5))
+plt.step(sorted_data, cdf_emp, where='post', color='black', label='Empirical CDF')
+
+for dist_name, info in fit_results.items():
+    params = info['params']
+    aic = info['aic']
+    mean = info['mean']
+    cv2 = info['cv2']
+    if dist_name == 'expon':
+        cdf_fit = expon.cdf(x_vals, scale=params[0])
+    elif dist_name == 'gamma':
+        cdf_fit = gamma.cdf(x_vals, a=params[0], scale=params[1])
+    elif dist_name == 'lomax':
+        cdf_fit = lomax.cdf(x_vals, c=params[0], scale=params[1])
+    plt.plot(x_vals, cdf_fit, lw=2, label=f'{dist_name}\nmean={mean:.2f}, CV²={cv2:.4f}')
+
+plt.xlabel('Distance of the centroid closest to the room center')
+plt.ylabel('Cumulative distribution function')
+plt.title('{}'.format(dnames[dind]), fontsize=20)
+plt.legend(fontsize=8)
+plt.grid(alpha=0.3)
+plt.show()
+
 
 
 #%%  Plot all the centroids together for inspection
@@ -3667,9 +3839,9 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import label, center_of_mass
 
 # ===================== Parameters =====================
-bigroom_maps = plist[0]       # list of neuron maps
+bigroom_maps = plist[3]       # list of neuron maps
 structure = np.ones((3, 3))   # 8-connectivity
-min_fields = 2                # minimum place fields to include neuron
+min_fields = 0                # minimum place fields to include neuron
 
 # ===================== Helper function =====================
 def closest_to_wall(centroids, h, w):
@@ -3680,19 +3852,13 @@ def closest_to_wall(centroids, h, w):
     min_idx = np.argmin(distances)
     return centroids[min_idx], distances[min_idx]
 
-# ===================== Plot setup =====================
-fig, axes = plt.subplots(1, len(bigroom_maps), figsize=(3*len(bigroom_maps), 3))
-if len(bigroom_maps) == 1:
-    axes = [axes]
-
-for ax, neuron_map in zip(axes, bigroom_maps):
+# ===================== Loop over neurons =====================
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
     binary_map = 1*(neuron_map > 0)
     labeled_array, num_features = label(binary_map, structure=structure)
     
     if num_features <= min_fields:
-        ax.imshow(neuron_map, cmap='viridis')
-        ax.set_title("Too few fields")
-        ax.axis('off')
+        print(f"Neuron {neuron_idx}: too few place fields ({num_features})")
         continue
     
     centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
@@ -3701,18 +3867,17 @@ for ax, neuron_map in zip(axes, bigroom_maps):
     # Find the centroid closest to a wall
     centroid, dist = closest_to_wall(centroids_list, h, w)
     
-    # Plot the neuron map
-    ax.imshow(neuron_map, cmap='viridis')
+    # Plot neuron map
+    plt.figure(figsize=(4,4))
+    plt.imshow(neuron_map, cmap='viridis')
     
     # Plot the closest centroid
-    ax.plot(centroid[1], centroid[0], 'ro', markersize=8)
-    ax.text(centroid[1]+1, centroid[0]+1, f"{dist:.1f}", color='white', fontsize=8)
+    plt.plot(centroid[1], centroid[0], 'ro', markersize=8)
+    plt.text(centroid[1]+1, centroid[0]+1, f"{dist:.1f}", color='white', fontsize=10)
     
-    ax.set_title(f"Neuron (closest dist: {dist:.1f})")
-    ax.axis('off')
-
-plt.tight_layout()
-plt.show()
+    plt.title(f"Neuron {neuron_idx} - Closest centroid distance: {dist:.1f}")
+    plt.axis('off')
+    plt.show()
 
 
     
@@ -5649,3 +5814,443 @@ plt.show()
 print("Centroid distances to center:")
 for i, d in enumerate(distances, 1):
     print(f"Field {i}: {d:.2f}")
+    
+#%% Find the overlap number for each placefield (Meeting 6)
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from scipy.stats import beta, norm, betabinom, binom, gamma, lognorm  # probability distributions
+from scipy.optimize import minimize  # optimization for likelihood-based fits
+from sklearn.mixture import GaussianMixture  # gmm fitting to raw data
+
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from collections import Counter
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+shapeslist = [[(65, 116), (65, 117)],  # BigroomData
+              [(43, 53), (43, 50), (43, 57)],  # CircleData
+              [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  # HalfroomData
+              [(12, 12), (13, 13)],  # HexagonData
+              [(24, 36), (31, 40)],  # RectangleData
+              [(20, 20)]]  # SquareData
+
+location = 0  # Change if needed
+
+# =================== Collect all data ===================
+p_extended = [[] for _ in range(len(dnames))]  # One list per dataset
+plist = []
+nlist = []
+
+for dnametype in range(len(dnames)):
+    p = []
+    n = []
+
+    # Set data directory
+    if location == 0:
+        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+    elif location == 1:
+        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+    
+    dir2 = os.listdir(dir1)
+
+    for foldername in dir2:
+        dir3 = os.path.join(dir1, foldername)
+        if not os.path.isdir(dir3):
+            continue
+        dirs3 = os.listdir(dir3)
+        dirs4 = [x for x in dirs3 if x[-7] == 'm']
+        for matname in dirs4:
+            mat = loadmat(os.path.join(dir3, matname))
+            n.append(mat['numFields'][0][0])
+            p.append(mat['pfields'])  # original, unmodified matrices
+
+    # =================== Count original shapes with proportion ===================
+    original_shapes = [pmap.shape for pmap in p]
+    shape_counts = Counter(original_shapes)
+    total_maps = len(original_shapes)
+    
+    print(f"{dnames[dnametype]} ({total_maps})")
+    for shape, count in shape_counts.items():
+        proportion = count / total_maps
+        print(f"{shape}: {count} ({proportion:.2f})")
+    print()
+
+    # =================== Compute minimum shape and crop ===================
+    min_x = min(x for x, y in shapeslist[dnametype])
+    min_y = min(y for x, y in shapeslist[dnametype])
+    target_shape = (min_x, min_y)
+
+    cropped_list = []
+    for pi in p:
+        h, w = pi.shape
+        H, W = target_shape
+        cropped = pi[:H, :W]  # crop to minimum dimensions
+        cropped_list.append(cropped)
+
+    p_extended[dnametype] = cropped_list
+    nlist.append(n)
+    plist.append(p)
+    
+p1=[]
+for room in plist:
+    plistroom=[]
+    for neuron in room:
+        plistroom.append(1*(neuron>0))
+    p1.append(plistroom)
+
+#%% Setup: Overlap Histogram for Place Fields (Meeting 6)
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from scipy.ndimage import label
+from collections import Counter
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+shapeslist = [
+    [(65, 116), (65, 117)],                      # BigroomData
+    [(43, 53), (43, 50), (43, 57)],              # CircleData
+    [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  # HalfroomData
+    [(12, 12), (13, 13)],                        # HexagonData
+    [(24, 36), (31, 40)],                        # RectangleData
+    [(20, 20)]                                   # SquareData
+]
+
+location = 0  # 0 = Ogamb path, 1 = Olgud path
+
+# =================== Collect all data ===================
+plist = []
+nlist = []
+
+for dnametype in range(len(dnames)):
+    p = []
+    n = []
+
+    # Set directory
+    if location == 0:
+        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+    elif location == 1:
+        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+
+    dir2 = os.listdir(dir1)
+
+    for foldername in dir2:
+        dir3 = os.path.join(dir1, foldername)
+        if not os.path.isdir(dir3):
+            continue
+        dirs3 = os.listdir(dir3)
+        dirs4 = [x for x in dirs3 if x[-7] == 'm']
+        for matname in dirs4:
+            mat = loadmat(os.path.join(dir3, matname))
+            n.append(mat['numFields'][0][0])
+            p.append(mat['pfields'])
+
+    # Show dataset info
+    original_shapes = [pmap.shape for pmap in p]
+    shape_counts = Counter(original_shapes)
+    total_maps = len(original_shapes)
+    print(f"{dnames[dnametype]} ({total_maps})")
+    for shape, count in shape_counts.items():
+        proportion = count / total_maps
+        print(f"{shape}: {count} ({proportion:.2f})")
+    print()
+
+    plist.append(p)
+    nlist.append(n)
+
+# =================== Crop to smallest shape ===================
+p_cropped = [[] for _ in range(len(dnames))]
+
+for dnametype in range(len(dnames)):
+    min_x = min([xy[0] for xy in shapeslist[dnametype]])
+    min_y = min([xy[1] for xy in shapeslist[dnametype]])
+    target_shape = (min_x, min_y)
+
+    cropped_list = []
+    for pi in plist[dnametype]:
+        h, w = pi.shape
+        H, W = target_shape
+        cropped = pi[:H, :W]  # crop to smallest shape
+        cropped_list.append(cropped)
+
+    p_cropped[dnametype] = cropped_list
+
+plist = p_cropped
+
+# =================== Binarize ===================
+p1 = []
+for room in plist:
+    plistroom = []
+    for neuron in room:
+        plistroom.append(1 * (neuron > 0))
+    p1.append(plistroom)
+
+#%%
+# =================== Compute overlap counts ===================
+all_overlap_counts = []
+
+for d, room in enumerate(p1):
+    print(f"Processing overlaps for {dnames[d]}...")
+    all_fields = []
+    for neuron in room:
+        labeled, num_labels = label(neuron > 0)
+        for i in range(1, num_labels + 1):
+            field_mask = (labeled == i)
+            all_fields.append(field_mask)
+
+    n_fields = len(all_fields)
+    overlap_counts = np.zeros(n_fields, dtype=int)
+
+    for i in range(n_fields):
+        for j in range(n_fields):
+            if i == j:
+                continue
+            if np.any(all_fields[i] & all_fields[j]):
+                overlap_counts[i] += 1
+
+    all_overlap_counts.extend(overlap_counts)
+    
+#%% Thresholded histogram of overlap counts
+
+a, b = 0, 300  # <-- set your desired threshold range here
+
+# Threshold data
+data = np.array(all_overlap_counts)
+data = data[(data >= a) & (data <= b)]
+
+# Plot histogram
+plt.figure(figsize=(6, 4))
+plt.hist(data,
+         bins=np.arange(a, np.max(data) + 2) - 0.5,
+         edgecolor='black')
+plt.xlabel('Number of overlapping place fields')
+plt.ylabel('Count')
+plt.title(f'Histogram of Overlapping Place Fields (All Datasets)\nRange [{a}, {b}]')
+plt.tight_layout()
+plt.xlim([a, b])
+plt.show()
+
+#%% Plot best fit distribution
+from scipy.stats import poisson, nbinom
+import numpy as np
+import matplotlib.pyplot as plt
+
+# --- Threshold range ---
+a, b = 0, 300  # <-- set your desired threshold range here
+
+# --- Threshold data ---
+data = np.array(all_overlap_counts)
+data = data[(data >= a) & (data <= b)]
+
+# --- Fit Poisson ---
+mu_hat = np.mean(data)
+x = np.arange(a, np.max(data) + 1)
+poisson_pmf = poisson.pmf(x, mu_hat)
+
+# --- Fit Negative Binomial ---
+mean = np.mean(data)
+var = np.var(data)
+if var > mean:
+    p_nb = mean / var
+    r_nb = mean**2 / (var - mean)
+    nbinom_pmf = nbinom.pmf(x, r_nb, p_nb)
+else:
+    nbinom_pmf = None
+
+# --- Prepare histogram ---
+plt.figure(figsize=(6, 4))
+counts, bins, _ = plt.hist(data,
+                           bins=np.arange(a, np.max(data) + 2) - 0.5,
+                           edgecolor='black',
+                           color='lightgray',
+                           label='Data')
+
+# Scale PMFs to histogram counts
+scale_factor = len(data) * (bins[1] - bins[0])
+
+if nbinom_pmf is not None:
+    plt.plot(x, nbinom_pmf * scale_factor, 'r', lw=2,
+             label=f'NegBin fit (r={r_nb:.1f}, p={p_nb:.2f})')
+
+# --- Labels and formatting ---
+plt.xlabel('Number of overlapping place fields')
+plt.ylabel('Count')
+plt.title(f'Histogram of Overlapping Place Fields (All Datasets)\nRange [{a}, {b}]')
+plt.legend()
+plt.tight_layout()
+plt.xlim([a, b])
+plt.show()
+
+#%% Generate sample uniform centroids and plot PDF
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import nbinom
+import random
+
+# =================== 1. Fit Negative Binomial ===================
+def fit_negative_binomial(data):
+    data = np.array(data)
+    mean_pf = np.mean(data)
+    var_pf = np.var(data)
+    if var_pf <= mean_pf:
+        var_pf = mean_pf + 1e-3  # avoid degenerate
+    p = mean_pf / var_pf
+    r = mean_pf * p / (1 - p)
+    return r, p
+
+def sample_n_fields(r, p):
+    return nbinom.rvs(r, p)
+
+# =================== 2. Sample centroid locations ===================
+def sample_centroids(matrix_shape, pf_shapes, n_fields, max_attempts=1000):
+    H, W = matrix_shape
+    centroids = []
+    occupancy = np.zeros(matrix_shape)
+    
+    for _ in range(n_fields):
+        placed = False
+        attempts = 0
+        while not placed and attempts < max_attempts:
+            attempts += 1
+            pf_shape = random.choice(pf_shapes)
+            h_pf, w_pf = pf_shape
+            if h_pf > H or w_pf > W:
+                continue
+            x = np.random.randint(0, H - h_pf + 1)
+            y = np.random.randint(0, W - w_pf + 1)
+            if np.sum(occupancy[x:x+h_pf, y:y+w_pf]) == 0:
+                centroids.append((x, y, pf_shape))
+                occupancy[x:x+h_pf, y:y+w_pf] = 1
+                placed = True
+    return centroids
+
+# =================== 3. Place fields into matrix ===================
+def generate_matrix(pfields, matrix_shape, n_fields):
+    pf_shapes = [pf.shape for pf in pfields]
+    centroids = sample_centroids(matrix_shape, pf_shapes, n_fields)
+    new_matrix = np.zeros(matrix_shape)
+    for x, y, shape in centroids:
+        candidates = [pf for pf in pfields if pf.shape == shape]
+        if not candidates:
+            continue
+        pf = random.choice(candidates)
+        new_matrix[x:x+shape[0], y:y+shape[1]] += pf
+    return new_matrix
+
+# =================== 4. Generate multiple non-blank matrices and sum ===================
+def generate_nonblank_matrices(pfields, nlist, matrix_shape, n_matrices=100):
+    r, p = fit_negative_binomial(nlist)
+    summed_matrix = np.zeros(matrix_shape)
+    count = 0
+    while count < n_matrices:
+        n_fields_sampled = sample_n_fields(r, p)
+        if n_fields_sampled == 0:
+            continue  # skip blank matrices
+        mat = generate_matrix(pfields, matrix_shape, n_fields_sampled)
+        summed_matrix += mat
+        count += 1
+    return summed_matrix
+
+# =================== 5. Histogram helpers ===================
+def hist_with_bins(data):
+    max_val = int(np.max(data))
+    bins = np.arange(-0.5, max_val+1.5, 1)
+    hist, bins = np.histogram(data, bins=bins)
+    bin_centers = (bins[:-1] + bins[1:])/2
+    return hist, bin_centers
+
+# =================== 6. Plot functions ===================
+def plot_summed_matrix(matrix):
+    plt.figure(figsize=(8,6))
+    plt.imshow(matrix, cmap='viridis', origin='lower')
+    plt.colorbar(label="Number of place fields")
+    plt.title("Summed Place Fields Across Matrices")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.show()
+
+def plot_histogram_with_nb(data, title, xlabel):
+    hist, bin_centers = hist_with_bins(data)
+    r_fit, p_fit = fit_negative_binomial(data)
+    x_fit = np.arange(int(np.max(data))+1)
+    pmf_fit = nbinom.pmf(x_fit, r_fit, p_fit) * len(data)
+    nb_mean = r_fit * (1-p_fit)/p_fit
+    nb_std = np.sqrt(r_fit * (1-p_fit)/(p_fit**2))
+    nb_cv2 = (nb_std/nb_mean)**2
+
+    plt.figure(figsize=(8,5))
+    plt.bar(bin_centers, hist, width=0.8, align='center',
+            color='lightblue', edgecolor='black', linewidth=1, label="Data")
+    plt.plot(x_fit, pmf_fit, 'r-o', label=f"NB Fit\nMean={nb_mean:.2f}, CV²={nb_cv2:.2f}")
+    plt.xlabel(xlabel)
+    plt.ylabel("Count")
+    plt.title(title)
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend()
+    plt.show()
+
+from scipy.ndimage import label, center_of_mass
+
+def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
+    # Fit NB to get number of fields to sample
+    r, p = fit_negative_binomial(nlist)
+    n_fields_sampled = sample_n_fields(r, p)
+    if n_fields_sampled == 0:
+        n_fields_sampled = 1
+
+    # Generate the neuron matrix
+    sample_matrix = generate_matrix(pfields, matrix_shape, n_fields_sampled)
+
+    # Find contiguous place fields (8-connectivity)
+    structure = np.ones((3,3), dtype=int)  # 8-connectivity
+    labeled_matrix, num_fields = label(sample_matrix>0, structure=structure)
+
+    plt.figure(figsize=(6,5))
+    plt.imshow(sample_matrix, cmap='hot', origin='lower')
+    plt.colorbar(label="Firing rate (generated)")
+    plt.title(f"Sample Generated Neuron Place Map ({num_fields} fields)")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+
+    # Label each contiguous place field with a number at its centroid
+    for field_num in range(1, num_fields+1):
+        y, x = center_of_mass(sample_matrix, labeled_matrix, field_num)
+        plt.text(x, y, str(field_num), color='red', ha='center', va='center', fontweight='bold')
+
+    plt.show()
+
+
+# =================== Example Usage ===================
+dnum = 0
+pfields = p1[dnum]
+nlist_data = nlist[dnum]
+matrix_shape = min([pf.shape for pf in pfields], key=lambda x: x[0]*x[1])
+
+n_matrices = 150
+summed_matrix = generate_nonblank_matrices(pfields, nlist_data, matrix_shape, n_matrices=n_matrices)
+
+# --- Plot 1: Summed matrix ---
+plot_summed_matrix(summed_matrix)
+
+# --- Plot 2: Histogram of place fields per neuron ---
+plot_histogram_with_nb(nlist_data, "Histogram of Place Fields per Neuron", "Number of place fields per neuron")
+
+# --- Plot 3: Histogram of place fields per pixel ---
+plot_histogram_with_nb(summed_matrix.flatten(), "Histogram of Place Fields per Pixel", "Number of place fields at pixel")
+
+# --- Plot 4: Sample generated neuron place map ---
+plot_sample_generated_neuron(pfields, matrix_shape, nlist_data)
+
+
