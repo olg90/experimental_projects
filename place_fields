@@ -6322,4 +6322,198 @@ plot_histogram_neuron(nlist_data)
 plot_histogram_pixel_with_distributions(summed_matrix)
 plot_sample_generated_neuron(pfields, matrix_shape, nlist_data)
 
+#%% test
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import nbinom
+from scipy.ndimage import label
+import random
 
+# ============================================================
+# 1. Fit Negative Binomial
+# ============================================================
+def fit_negative_binomial(data):
+    mean_ = np.mean(data)
+    var_ = np.var(data)
+    if var_ <= mean_:
+        var_ = mean_ + 1e-6
+    r = mean_**2 / (var_ - mean_)
+    p = r / (r + mean_)
+    return r, p
+
+# ============================================================
+# 2. Sample Number of Fields per Neuron
+# ============================================================
+def sample_n_fields(r, p):
+    return nbinom.rvs(r, p)
+
+# ============================================================
+# 3. Helper: Place Field Random Placement Without Overlap
+# ============================================================
+def place_field_random(matrix, pf, max_attempts=100):
+    m_h, m_w = matrix.shape
+    pf_h, pf_w = pf.shape
+
+    if pf_h > m_h or pf_w > m_w:
+        pf = pf[:m_h, :m_w]
+
+    for _ in range(max_attempts):
+        y0 = random.randint(0, m_h - pf_h)
+        x0 = random.randint(0, m_w - pf_w)
+
+        region = matrix[y0:y0 + pf_h, x0:x0 + pf_w]
+        if np.all(region == 0):
+            matrix[y0:y0 + pf_h, x0:x0 + pf_w] = pf
+            return True
+    return False
+
+# ============================================================
+# 4. Generate Matrix (Non-overlapping Placement)
+# ============================================================
+def generate_matrix_nonoverlapping(pfields, matrix_shape, n_fields):
+    matrix = np.zeros(matrix_shape)
+    for _ in range(n_fields):
+        pf = random.choice(pfields)
+        pf_norm = (pf - pf.min()) / (pf.max() - pf.min() + 1e-6)
+        pf_bin = (pf_norm > 0.3).astype(float)
+        placed = place_field_random(matrix, pf_bin)
+        if not placed:
+            continue
+    return matrix
+
+# ============================================================
+# 5. Generate Multiple Matrices and Sum
+# ============================================================
+def generate_nonblank_matrices(pfields, nlist, matrix_shape, n_matrices=100):
+    r, p = fit_negative_binomial(nlist)
+    all_matrices = []
+    for _ in range(n_matrices):
+        n_fields_sampled = sample_n_fields(r, p)
+        if n_fields_sampled <= 0:
+            n_fields_sampled = 1
+        m = generate_matrix_nonoverlapping(pfields, matrix_shape, n_fields_sampled)
+        all_matrices.append(m)
+    summed_matrix = np.sum(all_matrices, axis=0)
+    return summed_matrix, all_matrices
+
+# ============================================================
+# 6. Plot Functions
+# ============================================================
+def plot_summed_matrix(summed_matrix):
+    plt.figure(figsize=(6, 5))
+    plt.imshow(summed_matrix, cmap='hot', origin='lower')
+    plt.colorbar(label="Summed Firing Rate")
+    plt.title("Summed Generated Place Fields (Non-overlapping)")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.show()
+
+def plot_histogram_neuron_from_generated(all_matrices):
+    """
+    Histogram of number of place fields per generated neuron.
+    """
+    n_fields_per_matrix = []
+    for mat in all_matrices:
+        structure = np.ones((3,3))
+        _, n_fields = label(mat > 0, structure=structure)
+        n_fields_per_matrix.append(n_fields)
+    n_fields_per_matrix = np.array(n_fields_per_matrix)
+    
+    plt.figure(figsize=(6, 4.5))
+    bins = np.arange(n_fields_per_matrix.min() - 0.5, n_fields_per_matrix.max() + 1.5, 1)
+    plt.hist(n_fields_per_matrix, bins=bins, density=True, 
+             color='skyblue', edgecolor='black', linewidth=1.2, alpha=0.9)
+    
+    # Fit Negative Binomial
+    r, p = fit_negative_binomial(n_fields_per_matrix)
+    x = np.arange(n_fields_per_matrix.min(), n_fields_per_matrix.max() + 1)
+    plt.plot(x, nbinom.pmf(x, r, p), 'r-o', lw=2, markersize=5, label='NegBinom Fit')
+    
+    mean = np.mean(n_fields_per_matrix)
+    cv2 = np.var(n_fields_per_matrix) / mean**2
+    plt.legend(title=f"mean={mean:.2f}\nCV²={cv2:.2f}")
+    
+    plt.xlabel("Number of Place Fields per Neuron", fontsize=12)
+    plt.ylabel("Probability", fontsize=12)
+    plt.title("Distribution of Place Fields per Generated Neuron", fontsize=14)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.xticks(x)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_histogram_pixel_with_distributions(summed_matrix):
+    """
+    Histogram of place fields per pixel.
+    """
+    data = summed_matrix.flatten()
+    data_nonzero = data[data > 0]
+    
+    plt.figure(figsize=(6, 4.5))
+    bins = np.arange(data_nonzero.min() - 0.5, data_nonzero.max() + 1.5, 1)
+    plt.hist(data_nonzero, bins=bins, color='lightgreen', edgecolor='black', linewidth=1.2, alpha=0.9)
+    
+    plt.xlabel("Number of Place Fields per Pixel", fontsize=12)
+    plt.ylabel("Count", fontsize=12)
+    plt.title("Histogram of Place Fields per Pixel", fontsize=14)
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    plt.xticks(np.arange(int(data_nonzero.min()), int(data_nonzero.max()) + 1))
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
+    r, p = fit_negative_binomial(nlist)
+    n_fields_sampled = sample_n_fields(r, p)
+    if n_fields_sampled <= 0:
+        n_fields_sampled = 1
+    matrix = np.zeros(matrix_shape)
+    for i in range(n_fields_sampled):
+        pf = random.choice(pfields)
+        pf_norm = (pf - pf.min()) / (pf.max() - pf.min() + 1e-6)
+        pf_bin = (pf_norm > 0.3).astype(float)
+        placed = place_field_random(matrix, pf_bin)
+        if not placed:
+            continue
+        matrix[matrix > 0] = i + 1
+
+    plt.figure(figsize=(6, 5))
+    plt.imshow(matrix, origin='lower', cmap='tab20')
+    plt.colorbar(label="Field Label")
+    plt.title(f"Sample Generated Neuron Place Map ({n_fields_sampled} fields, non-overlapping)")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    
+    structure = np.ones((3,3))
+    labeled, n_fields = label(matrix > 0, structure=structure)
+    for i in range(1, n_fields + 1):
+        cy, cx = np.array(np.nonzero(labeled == i)).mean(axis=1)
+        plt.text(cx, cy, str(i), color='red', fontsize=10, ha='center', va='center')
+    
+    plt.show()
+
+# ============================================================
+# 7. Example Usage
+# ============================================================
+dnum = 0
+n_matrices = 238
+
+# Flatten list if nested
+if isinstance(p1[dnum][0], np.ndarray):
+    all_pfields = p1[dnum]
+    nlist_data = nlist[dnum]
+else:
+    all_pfields = [pf for neuron_fields in p1[dnum] for pf in neuron_fields]
+    nlist_data = np.concatenate(nlist[dnum])
+
+matrix_shape = min([pf.shape for pf in all_pfields], key=lambda x: x[0] * x[1])
+
+summed_matrix, all_generated_matrices = generate_nonblank_matrices(
+    all_pfields, nlist_data, matrix_shape, n_matrices=n_matrices
+)
+
+# --- Plots ---
+plot_summed_matrix(summed_matrix)
+plot_histogram_neuron_from_generated(all_generated_matrices)
+plot_histogram_pixel_with_distributions(summed_matrix)
+plot_sample_generated_neuron(all_pfields, matrix_shape, nlist_data)
