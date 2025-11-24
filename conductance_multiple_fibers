@@ -1234,7 +1234,7 @@ tmax=10 # <----------------- TMAX
 dt=1e-4
 navgs=1
 
-enum=0
+enum=1
 efibers=  [40,10,4] 
 estrengths=[1,4,10] # total strength = 40 nS
 inum=0
@@ -1355,7 +1355,7 @@ if ttype ==100:
         for i, fi in enumerate(filist):
             foutsj=[]
             for j in range(navgs):
-                print(i1, i, len(filist), j, navgs)
+                print(i1, len(ifibers), i, len(filist), j, navgs)
                 tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
                 tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
                 
