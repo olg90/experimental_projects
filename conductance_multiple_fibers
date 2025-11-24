@@ -297,14 +297,14 @@ vthneg=-58e-3
 v0=-61e-3
 v1=-62e-3 # end point
 
-tauth=0.01
+tauth=0.8
 
 vtha0=5e-3 # jump size
 vthamax=10e-3
 vtharate=0.1
 
 # Simulation parameters
-tmax=0.5#<----------------- TMAX
+tmax=1#<----------------- TMAX
 dt=1e-4
 
 enum=0
@@ -370,7 +370,8 @@ plt.show()
 
 print(fout)
 
-#%% test 2
+#%%   Lubejko adaptive threshold papaer
+
 import numpy as np
 from matplotlib.pyplot import plot as pt
 import matplotlib.pyplot as plt
@@ -382,196 +383,14 @@ import pandas as pd
 from numba import jit
 import os
 import re
+import math
 
-def getiext(f, tauy, taui, ki, nf, cval, tmax, dt):
 
-        tlist=[]
-        ylist=[]
-        Iextlist=[]
 
-        Iext=0
-        y=0
-
-        tcurr=0
-        timer = dt
-        e=1e-6
-        while tcurr < tmax:
-            t0=np.random.exponential(1/(f*nf+e)) # action potential
-            t1 = timer
-
-            if t0 < t1:
-                y += 1
-                tmin=t0
-                timer-=tmin
-            else:
-                Iextlist.append(Iext)
-                ylist.append(y)
-                tlist.append(tcurr)
-                tmin=timer
-                timer=dt
-            tcurr += tmin
-
-            # Update the continuous dynamics
-            Iext += (-Iext/taui + ki*y)*tmin
-            y += (-y/tauy)*tmin
-            
-        return np.array(tlist), np.array(ylist), np.array(Iextlist)
-
-def getcurrents(f, fi, tauye, tauyi, tauie, tauii, kie, kii, ni, ne, ci, ce,
-                tmax, dt):
-    # Get the currents
-    tlisti, yi, iext = getiext(fi, tauyi, tauii, kii, ni, ci, tmax, dt)
-    tliste, ye, eext = getiext(f, tauye, tauie, kie, ne, ce, tmax, dt)
-    # Make them the same size
-    llist=[len(tlisti), len(tliste)]
-    largmin=np.argmin(llist)
-    if largmin==0:
-        tliste = tliste[:llist[largmin]]
-        eext = eext[:llist[largmin]]
-    else:
-        tlisti = tlisti[:llist[largmin]]
-        iext = iext[:llist[largmin]]
-    return tlisti, tliste, iext, eext, yi, ye
-
-def getstats(aplist, ratio):
-
-    aps = [apind*dt for apind in aplist if apind!=0]
-    
-    tdiffs=np.diff(aps)
-    tmean=np.mean(tdiffs)
-    var=np.var(tdiffs)
-    cv=var/tmean**2
-    
-    return tmean, var, cv
-
+@jit(nopython=True)
 def getaps(aplist, dt):
     return np.where(aplist!=0)[0]*dt
 
-    
-def gspikes(Gexc, Ginh, args):
-    for x in args:
-        if x[3]==1:
-            Gexc[x[0]:x[0]+x[1]]=x[2]
-        if x[3]==-1:
-            Ginh[x[0]:x[0]+x[1]]=x[2]
-    return Gexc, Ginh
-
-@jit(nopython=True)
-def vthmax(v, vthpos, vthneg, v0, v1):
-    if v >= v0:
-        return vthpos
-    elif v < v1:
-        return vthneg
-    else:
-        return vthneg + (v - v1) * (vthpos - vthneg) / (v0 - v1)
-    
-def single_spike_test(y0=1.0, tauy=0.2, taui=0.5, ki=1.0,
-                      t_spike=0, tmax=2.0, dt=1e-3,
-                      scale_I=1.0):
-    """
-    Generate a single spike of y and Iext.
-    Normalize Iext by its peak and scale it by scale_I.
-    Prints the time of the peak of Iext.
-    y is NOT scaled.
-    """
- 
-    t = np.arange(0, tmax, dt)
-    y = np.zeros_like(t)
-    Iext = np.zeros_like(t)
-
-    for i, ti in enumerate(t):
-        if ti >= t_spike:
-            y[i] = y0 * np.exp(-(ti - t_spike) / tauy)
-        if i > 0:
-            Iext[i] = Iext[i-1] + (-Iext[i-1]/taui + ki * y[i-1]) * dt
-
-    # --- Only scale Iext ---
-    Imax = np.max(Iext)
-    if Imax != 0:
-        Iext = (Iext / Imax) * scale_I
-
-    # Find peak time
-    peak_index = np.argmax(Iext)
-    peak_time = t[peak_index]
-    print(f"Peak of Iext occurs at t = {peak_time:.4f} s")
-
-    # Two subplots
-    fig, axs = plt.subplots(2, 1, figsize=(8,6), sharex=True)
-
-    axs[0].plot(t, y, label='y (unscaled)')
-    axs[0].axvline(t_spike, color='gray', linestyle='--')
-    axs[0].set_ylabel('y')
-    axs[0].legend()
-
-    axs[1].plot(t, Iext, label='Iext (normalized & scaled)')
-    axs[1].axvline(t_spike, color='gray', linestyle='--')
-    axs[1].axvline(peak_time, color='red', linestyle='--', label='Peak')
-    axs[1].set_xlabel('Time (s)')
-    axs[1].set_ylabel('Iext')
-    axs[1].legend()
-
-    plt.tight_layout()
-    plt.show()
-
-    return t, y, Iext
-    
-@jit(nopython=True)
-def simulate(vlen, V0, Gexc, Ginh, dt, vr, rf, vthpos, vthneg, v0, v1, gL, 
-             tauth, vtha0, vthamax, vtharate):
-
-    # Time vector
-    t = np.linspace(0, vlen, vlen)
-    
-    # Variables initialization
-    V = np.zeros(vlen)
-    iexc = np.zeros(vlen)
-    iinh = np.zeros(vlen)
-    aplist=np.zeros_like(iinh)
-    vthlist=np.zeros_like(iinh)
-    
-    # Set initial conditions
-    V[0] = V0
-    vthlist[0]=vthmax(V0, vthpos, vthneg, v0, v1)
-    
-    ratio=0.2
-    rfon=False
-    rftimer = np.inf
-    
-    for i in range(1, vlen):
-        # Get all the current and voltage values and update the voltage
-        Vexc=0
-        Vinh=-85e-3 # should be -85 mV
-        i_exc = Gexc[i-1]*(V[i-1]-Vexc) # Conductance based model current is 
-        i_inh = Ginh[i-1]*(V[i-1]-Vinh) # calculated from the 
-        
-        i_ext = i_exc+i_inh
-        i_ion = gL*(V[i-1]-V0)
-
-        dVdt = (1 / C_m) * (-i_ext-i_ion)
-        V[i] = V[i-1] + dVdt * dt*(1-rfon)
-        vthlist[i]=vthlist[i-1] + \
-            (vthmax(V[i-1], vthpos, vthneg, v0, v1)-vthlist[i-1])/tauth*dt
-
-        # Add all the current values to a list for plotting
-        iexc[i] = i_exc
-        iinh[i] = i_inh
-
-        if rftimer!=np.inf:
-            rftimer-=dt 
-
-        if rftimer<=0:
-            rftimer=np.inf
-            rfon=False
-
-        if V[i]>vthlist[i-1]: #AP 
-            if i>int(ratio*vlen):
-                aplist[i]=i*dt
-            rfon=True
-            rftimer=rf
-            vthlist[i]=vthlist[i-1]+vthadd(V[i], vtha0, vthamax, vtharate)
-            V[i]=vr
-
-    return V, t, iexc, iinh, aplist, vthlist
 
 @jit(nopython=True)
 def thetainf(vm, vi, vin, vin2, vt, vtmin, at):
@@ -589,79 +408,183 @@ def thetainf(vm, vi, vin, vin2, vt, vtmin, at):
 
 @jit(nopython=True)
 def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
-             tauth, vi, vin, vin2, vt, vtmin, at, alpha):
-
-    # Time vector
-    t = np.linspace(0, vlen, vlen)
+             vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs):
     
-    # Variables initialization
-    V = np.zeros(vlen)
-    iexc = np.zeros(vlen)
-    iinh = np.zeros(vlen)
-    aplist=np.zeros_like(iinh)
+    fouts=np.zeros(navgs)
     
-    # Set initial conditions
-    V[0] = V0
+    for j in range(navgs):
     
-    ratio=0.2
-    rfon=False
-    rftimer = np.inf
+        # Time vector
+        t = np.linspace(0, vlen, vlen)
+        
+        # Variables initialization
+        V = np.zeros(vlen)
+        iexc = np.zeros(vlen)
+        iinh = np.zeros(vlen)
+        aplist=np.zeros_like(iinh-1)
+        
+        # Set initial conditions
+        V[0] = V0
+        
+        ratio=0.3
+        rfon=False
+        rftimer = np.inf
+        
+        #s
+        theta1=np.zeros(vlen)
+        theta2=np.zeros(vlen)
+        theta=np.zeros(vlen)
     
-    #s
-    theta1=np.zeros(vlen)
-    theta2=np.zeros(vlen)
-    theta=np.zeros(vlen)
+        theta[0]=vt
+        theta1[0]=vt
+        theta2[0]=0
+    
+        for i in range(1, vlen):
+            
+            # Get all the current and voltage values and update the voltage
+            Vexc=0
+            Vinh=-85e-3 # should be -85 mV
+            i_exc = Gexc[i-1]*(V[i-1]-Vexc) # Conductance based model current is 
+            i_inh = Ginh[i-1]*(V[i-1]-Vinh) # calculated from the 
+            
+            i_ext = i_exc+i_inh
+            i_ion = gL*(V[i-1]-V0)
+    
+            dVdt = (1 / C_m) * (-i_ext-i_ion)
+            V[i] = V[i-1] + dVdt * dt*(1-rfon)
+            
+            dtheta1dt = 1/tautheta1*(-theta1[i-1] + 
+                                     thetainf(V[i-1], vi, vin, vin2, vt, vtmin, at))
+            theta1[i] = theta1[i-1] + dtheta1dt*dt
+            
+            dtheta2dt=1/tautheta2*(-theta2[i-1])
+            theta2[i]=theta2[i-1]+dtheta2dt*dt
+            
+            theta[i] = theta1[i]+theta2[i]
+    
+            # Add all the current values to a list for plotting
+            iexc[i] = i_exc
+            iinh[i] = i_inh
+    
+            if rftimer!=np.inf:
+                rftimer-=dt 
+    
+            if rftimer<=0:
+                rftimer=np.inf
+                rfon=False
+    
+            if V[i]>theta[i]: #AP 
+                theta2[i]+=alpha
+                if i>int(ratio*vlen) and i<vlen:
+                    aplist[i]=i*dt
+                rfon=True
+                rftimer=rf
+                V[i]=vr
+                
+        aps=getaps(aplist, dt)
+        if len(aps) < 2:
+            fout = 0.0  # or np.nan if you want to flag it
+        else:
+            fout = 1/np.mean(np.diff(aps))
+        fouts[j]=fout
+    foutmean=np.mean(fouts)
 
-    theta[0]=vt
-    theta1[0]=vt
-    theta2[0]=0
 
-    for i in range(1, vlen):
+    return V, t, iexc, iinh, aps, theta, foutmean
+
+@jit(nopython=True)
+def sima2(V0, dt, vr, rf, gL, 
+             vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs):
+    
+    fouts=np.zeros(navgs)
+    
+    for j in range(navgs):
         
-        # Get all the current and voltage values and update the voltage
-        Vexc=0
-        Vinh=-85e-3 # should be -85 mV
-        i_exc = Gexc[i-1]*(V[i-1]-Vexc) # Conductance based model current is 
-        i_inh = Ginh[i-1]*(V[i-1]-Vinh) # calculated from the 
+        tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+        tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
+    
+        # Time vector
+        t = np.linspace(0, vlen, vlen)
         
-        i_ext = i_exc+i_inh
-        i_ion = gL*(V[i-1]-V0)
-
-        dVdt = (1 / C_m) * (-i_ext-i_ion)
-        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+        # Variables initialization
+        V = np.zeros(vlen)
+        iexc = np.zeros(vlen)
+        iinh = np.zeros(vlen)
+        aplist=np.zeros_like(iinh-1)
         
-        dtheta1dt = 1/tautheta1*(-theta1[i-1] + 
-                                 thetainf(V[i-1], vi, vin, vin2, vt, vtmin, at))
-        theta1[i] = theta1[i-1] + dtheta1dt*dt
+        # Set initial conditions
+        V[0] = V0
         
-        dtheta2dt=1/tautheta2*(-theta2[i-1])
-        theta2[i]=theta2[i-1]+dtheta2dt*dt
+        ratio=0.3
+        rfon=False
+        rftimer = np.inf
         
-        theta[i] = theta1[i]+theta2[i]
+        #s
+        theta1=np.zeros(vlen)
+        theta2=np.zeros(vlen)
+        theta=np.zeros(vlen)
+    
+        theta[0]=vt
+        theta1[0]=vt
+        theta2[0]=0
+    
+        for i in range(1, vlen):
+            
+            # Get all the current and voltage values and update the voltage
+            Vexc=0
+            Vinh=-85e-3 # should be -85 mV
+            i_exc = Gexc[i-1]*(V[i-1]-Vexc) # Conductance based model current is 
+            i_inh = Ginh[i-1]*(V[i-1]-Vinh) # calculated from the 
+            
+            i_ext = i_exc+i_inh
+            i_ion = gL*(V[i-1]-V0)
+    
+            dVdt = (1 / C_m) * (-i_ext-i_ion)
+            V[i] = V[i-1] + dVdt * dt*(1-rfon)
+            
+            dtheta1dt = 1/tautheta1*(-theta1[i-1] + 
+                                     thetainf(V[i-1], vi, vin, vin2, vt, vtmin, at))
+            theta1[i] = theta1[i-1] + dtheta1dt*dt
+            
+            dtheta2dt=1/tautheta2*(-theta2[i-1])
+            theta2[i]=theta2[i-1]+dtheta2dt*dt
+            
+            theta[i] = theta1[i]+theta2[i]
+    
+            # Add all the current values to a list for plotting
+            iexc[i] = i_exc
+            iinh[i] = i_inh
+    
+            if rftimer!=np.inf:
+                rftimer-=dt 
+    
+            if rftimer<=0:
+                rftimer=np.inf
+                rfon=False
+    
+            if V[i]>theta[i]: #AP 
+                theta2[i]+=alpha
+                if i>int(ratio*vlen) and i<vlen:
+                    aplist[i]=i*dt
+                rfon=True
+                rftimer=rf
+                V[i]=vr
+                
+        aps=getaps(aplist, dt)
+        if len(aps) < 2:
+            fout = 0.0  # or np.nan if you want to flag it
+        else:
+            fout = 1/np.mean(np.diff(aps))
+        fouts[j]=fout
+    foutmean=np.mean(fouts)
 
-        # Add all the current values to a list for plotting
-        iexc[i] = i_exc
-        iinh[i] = i_inh
 
-        if rftimer!=np.inf:
-            rftimer-=dt 
-
-        if rftimer<=0:
-            rftimer=np.inf
-            rfon=False
-
-        if V[i]>theta[i]: #AP 
-            theta2[i]+=alpha
-            if i>int(ratio*vlen):
-                aplist[i]=i*dt
-            rfon=True
-            rftimer=rf
-            V[i]=vr
-
-    return V, t, iexc, iinh, aplist, theta
+    return V, t, iexc, iinh, aps, theta, foutmean
 
 
 
+
+@jit(nopython=True)
 def make_normalized_template(td, tr, tmax, dt, scale_I):
     #SynKernel = A * ( exp(-(x)/tauDecay) - exp(-(x)/tauRise) )
     t = np.arange(0, tmax, dt)
@@ -672,6 +595,7 @@ def make_normalized_template(td, tr, tmax, dt, scale_I):
 # ------------------------------------------------------------
 # insert template at exponentially spaced spike times
 # ------------------------------------------------------------
+@jit(nopython=True)
 def generate_spike_train(f, nf, tmax, dt, template):
     t = np.arange(0, tmax, dt)
     out = np.zeros_like(t)
@@ -683,7 +607,8 @@ def generate_spike_train(f, nf, tmax, dt, template):
     e = 1e-6
 
     while tcurr < tmax:
-        t0 = np.random.exponential(1/(f*nf+e))
+        # t0 = np.random.exponential(1/(f*nf+e))
+        t0 = -math.log(1.0 - np.random.random()) / (f*nf + e)
 
         if t0 < timer:
             pos = int(tcurr/dt)
@@ -697,23 +622,40 @@ def generate_spike_train(f, nf, tmax, dt, template):
 
     return t, out
 
+@jit(nopython=True)
 def geti2(f, nf, cval, td, tr, tmax, dt):
     tt, temp = make_normalized_template(td, tr, tmax, dt, cval/nf)
     t, sig = generate_spike_train(f, nf, tmax, dt, temp)
     return t, sig, temp
 
-# Main code -------------------------------------------------------------------
+# Load the entire Excel file
+file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"  # Change this to your actual path
+# Read all data into a dictionary
+data = pd.read_excel(file_path, sheet_name=None, header=None)
+# # Print all sheet names
+# print("data found:", list(data.keys()))
+# # Loop through data and preview first few rows
+# for sheet_name, df in data.items():
+#     print(f"\n--- Sheet: {sheet_name} ---")
 
-# Conductance generation
+names = ['Summary', '240425_E4', '240425_E5', '240425_E6', 
+         '240426_E2', '240426_E3', '240426_E5', '240515_E2', 
+         '240516_E2', '240516_E7']
+d=data[names[0]]
+# rates = d.iloc[:, 0][:8]
+excnum=2 # #0=exc weight 10, #1=exc weight 4, #2=exc weight 1 <------------------
+d1=d.iloc[1:, -3:][7*excnum:7*(excnum+1)] # Mean sustained rate
+
+# Fixed
 f=300 # exc
 fi=0 # inh
 ce=40e-9 # synthetic spiking variable amplitude
 ci=32e-9
 
-tre=0.2e-3#excitatory rise time
-tde=0.5e-3#excitatory decay time
-tri=1.2e-3#inhibitory rise time
-tdi=0.2e-3#inhibitory decay time
+tre=0.2e-3 # excitatory rise time
+tde=0.5e-3 # excitatory decay time
+tri=1.2e-3 # inhibitory rise time
+tdi=0.2e-3 # inhibitory decay time
 
 rf=1e-3 # refractory period
 
@@ -721,586 +663,325 @@ rf=1e-3 # refractory period
 V0 = -60e-3  # initial membrane potential (mV)
 C_m = 100e-12
 vr=V0
-gL=25e-9
+gL=25e-9 # leak conductance nS
 
-tautheta1=37e-3
-tautheta2=3.7e-3
-vr=-62e-3
-vi=-40e-3
-vt=-31e-3
-at=0.8
-alpha=5e-3
-vin=-61e-3
-vin2=-62e-3
-vtmin=-58e-3
-at = 0.8
-alpha=5e-3 # rate of excitatory increase
+# =============================================================================
+# # Varying parameters, good
+# tautheta1=5e-3 # time constant of the threshold increase
+# tautheta2=50e-3 # time constant of the depolarized post-jump decay
+# vt=-50e-3 # threshold base value at no activity
+# vi=-55e-3 # threshold increases when the membrane potential is above this level
+# at = 0.85 # rate of polarization increase
+# alpha=3e-3 # jump size
+# 
+# vin=-60e-3 # voltage at which the threshold resting value lowers
+# vin2=-60.01e-3 # the threshold will not lower below this voltage
+# vtmin=-51e-3 # the lower value of the threshold potential
+# =============================================================================
+
+# Varying parameters
+tautheta1=5e-3 # time constant of the threshold increase
+tautheta2=45e-3 # time constant of the depolarized post-jump decay
+vt=-50e-3 # threshold base value at no activity
+vi=-55e-3 # threshold increases when the membrane potential is above this level
+at = 0.85 # rate of polarization increase
+alpha=4.5e-3 # jump size
+
+vin=-60e-3 # voltage at which the threshold resting value lowers
+vin2=-60.01e-3 # the threshold will not lower below this voltage
+vtmin=-51e-3 # the lower value of the threshold potential
 
 # Simulation parameters
-tmax=0.5#<----------------- TMAX
+tmax=10 # <----------------- TMAX
 dt=1e-4
+navgs=1
 
 enum=0
 efibers=  [40,10,4] 
 estrengths=[1,4,10] # total strength = 40 nS
-
 inum=0
 ifibers=   [4,8,16] 
 istrengths= [8,4,2]  #total strength = 32 nS
-
 ne=efibers[enum] # num excitatory fibers
 ni=ifibers[inum]
 
+ttype=100 # <---------- test type
 
-tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
-tlisti, Ginh, tempi = geti2(fi, ni, ci, tdi, tri, tmax, dt)
+# -----------------------------------------------------------------------------
 
-vlen=len(tliste)
-V, t, iexc, iinh, aplist, vthlist = sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, tauth, vi, vin, vin2, vt, vtmin, at, alpha)
+if ttype==1:
+    
+    tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+    tlisti, Ginh, tempi = geti2(fi, ni, ci, tdi, tri, tmax, dt)
 
-aps=getaps(aplist, dt)
-fout=1/np.mean(np.diff(aps))
+    vlen=len(tliste)
+    V, t, iexc, iinh, aps, vthlist, fout = sima(vlen, V0, Gexc, Ginh, dt, vr, 
+                        rf, gL, vi, vin, vin2, tautheta1, tautheta2, 
+                        vt, vtmin, at, alpha, navgs)
 
-fs = 15
-plt.subplot(2, 1, 1)
-plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
-plt.plot(tliste, Ginh, label='Gi {} Hz'.format(fi))
-plt.ylabel('Conductance', fontsize=fs)
-plt.xticks([], fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.legend(loc='upper right', fontsize=fs)
-plt.title('exc={} nS, inh={} nS'.format(estrengths[enum],istrengths[inum]))
+    fs = 15
+    plt.figure()
+    plt.subplot(2, 1, 1)
+    plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
+    plt.plot(tliste, Ginh, label='Gi {} Hz'.format(fi))
+    plt.ylabel('Conductance', fontsize=fs)
+    plt.xticks([], fontsize=fs)
+    plt.yticks(fontsize=fs)
+    plt.legend(loc='upper right', fontsize=fs)
+    plt.title('exc={} nS, inh={} nS'.format(estrengths[enum],istrengths[inum]))
 
-plt.subplot(2, 1, 2)
-plt.plot(t * dt, V , label='V')
-plt.plot(t * dt, vr * np.ones(len(t)), linestyle='-', color='gray', alpha=0.5, label='vr')
-plt.plot(t * dt, vi * np.ones(len(t)), linestyle='--', color='gray', alpha=0.5, label='vi')
-plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.', color='red', alpha=0.5, label='vin')
+    plt.subplot(2, 1, 2)
+    plt.plot(t * dt, V , label='V')
+    plt.plot(t * dt, vr * np.ones(len(t)), linestyle='-', color='gray', alpha=0.5, label='vr')
+    plt.plot(t * dt, vi * np.ones(len(t)), linestyle='--', color='green', alpha=0.5, label='vi')
+    plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.', color='red', alpha=0.5, label='vin')
 
 
-plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
-plt.xlabel('Time (sec)', fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.xticks(fontsize=fs)
-plt.plot(t*dt, vthlist, label='vth', color='k')
-plt.legend(loc='upper right', fontsize=fs)
+    plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
+    plt.xlabel('Time (sec)', fontsize=fs)
+    plt.yticks(fontsize=fs)
+    plt.xticks(fontsize=fs)
+    plt.plot(t*dt, vthlist, label='vth', color='k')
+    plt.legend(loc='upper right', fontsize=fs)
 
-for x in aps:
-    plt.axvline(x, color='r', alpha=0.6)
-plt.show()
+# =============================================================================
+#     for x in aplist:
+#         plt.axvline(x, color='r', alpha=0.6)
+#     plt.show()
+# =============================================================================
+    plt.show()
 
-print(fout)
+    print(fout)
 
-#%% Real data
-def filter_by_sequence(strings, x1, x2, x3):
-    """
-    Given a list of strings, return those that contain
-    the sequence _x1_, _x2_, _x3_ in order.
-    """
-    pattern = fr"_{x1}_.+?_{x2}_.+?_{x3}_"
-    result = [s for s in strings if re.search(pattern, s)]
-    return result
+if ttype ==10:
 
-def getrates(se, si, dsus):
-    if se==1:
-        excnum=2
-    elif se==4:
-        excnum=1
-    elif se==10:
-        excnum=0
+    filist = [0,50,100,150,200,250,300]
+    foutlist=[]
+    
+    for i, fi in enumerate(filist):
+        print(i, len(filist))
+        tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+        tlisti, Ginh, tempi = geti2(fi, ni, ci, tdi, tri, tmax, dt)
         
-    if si==2:
-        inhnum=2
-    elif si==4:
-        inhnum=1
-    elif si==8:
-        inhnum=0
-    return dsus[7*excnum:7*(excnum+1), inhnum] # Mean sustained rate
-
-def getcondsdata(df, se, si, fi, st=5000, en=25000):
-    titles = df.keys()
-    # Find matching columns for this specific combination
-    matches = filter_by_sequence(titles, se, si, fi)
+        vlen=len(tliste)
+        V, t, iexc, iinh, aplist, vthlist, fout = \
+            sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
+                        vi, vin, vin2, tautheta1, tautheta2, 
+                        vt, vtmin, at, alpha, navgs)
+        foutlist.append(fout)
+            
+        
+    fs=15
+    cs = ["#1f77b4","#ff7f0e","#2ca02c"]
+    for i in range(3):
+        plt.plot(filist, d1.iloc[:,i], marker='o', 
+                 label='exc={}, inh={}'.format(estrengths[enum], istrengths[i]),
+                 color=cs[i])
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.plot(filist, foutlist, marker='o', label='sim', color='k')
+    plt.show()
     
-    if len(matches) == 0:
-        raise ValueError(f"No columns match the sequence _{se}_ _{si}_ _{fi}_")
+if ttype ==100:
+
+    filist = [0,50,100,150,200,250,300]
     
-    # Take the first match (assumes first column is excitatory, second inhibitory)
-    data = np.array(df[matches])
-    return data
-
-def getfout(se, si, fi, df, dsus):
-    titles = df.keys()
-    matches = filter_by_sequence(titles, se, si, fi) # get the dataset
-    cdata = np.array(df[matches]) # conductance data
-    # Want the steady state current # 5000 start of current injection
-    st=5000 # start plot, 5000 for start of conductance injection
-    en=25000 # end plot
-    Gexc = np.abs(cdata[st:en, 0])
-    Ginh = np.abs(cdata[st:en, 1])
-    Gexc=Gexc*1e-8
-    Ginh=Ginh*1e-8
-    msusrate=getrates(se,si,dsus) # mean sustained rate
-    vlen=len(Gexc)
-    V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist\
-        =simulate(vlen, V0, w0, z0, r0, Gexc, Ginh, gLT, gh, 
-                  VK, Vh, q10, dt, vi, vt, at, vr, glk, Vlk, rf, alpha,
-                  tautheta1, tautheta2)
-    aps=getaps(aplist, dt)
-    sustime=int(0.18*len(Gexc))*dt
-    aps=[ap for ap in aps if ap>sustime]
-    fout=1/(np.mean(np.diff(aps)))
-    return t, Gexc, Ginh, iLT, ih, V, theta, msusrate, aps, sustime, fout
-
-# Main code -------------------------------------------------------------------
-
-directory=r'C:\Users\ogamb\OneDrive\Desktop\German group current data\Conductance Stimuli'
-os.chdir(directory)
-# files=[x for x in os.listdir() if x[-1]=='x']
-files=['Rep1.xlsx','Rep10.xlsx','Rep2.xlsx','Rep3.xlsx','Rep4.xlsx',
- 'Rep5.xlsx','Rep6.xlsx','Rep7.xlsx','Rep8.xlsx','Rep9.xlsx']
-# dfs=[pd.read_excel(x) for x in files]
-
-# df=pd.read_excel(files[0]) # <------- Uncomment this when first running
-
-# Load the entire Excel file
-file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"  # Change this to your actual path
-# Read all data into a dictionary
-datainh = pd.read_excel(file_path, sheet_name=None, header=None)
-names = ['Summary', '240425_E4', '240425_E5', '240425_E6',
-         '240426_E2', '240426_E3', '240426_E5', '240515_E2',
-         '240516_E2', '240516_E7']
-d=datainh[names[0]]
-dsus=np.array(d.iloc[1:, -3:]) # all the sustained rate data
-
-# Threshold Lubejko parameters
-tautheta1=1e-3
-tautheta2=10e-3
-vt=-50e-3 # threshold base
-vi=-60e-3 # adapting potential
-vr=-80e-3 # resting potential, -60mV to -75mV
-at=0.01
-alpha=10e-3
-rf=1e-3 # 1e-3
-
-# Conductance model parameters - FIXED
-gLT = 50e-9 # 50e-9 # X <---------------- #200e-9
-gh = 100e-9  # 100e-9 # X <---------------- # 20e-9, 11e-9
-glk = 5e-9  # Leakage conductance
-VK = -80e-3  # potassium reverse potential
-Vh = -43e-3  # hyperpolarizing reverse potential
-Vlk = -65e-3  # leakage reverse potential
-V0 = -60e-3  # initial membrane potential (mV)
-w0 = 0.594  # Low-threshold K+ current
-z0 = 0.608  # Low-threshold K+ current
-r0 = 0.063  # Hyperpolarization current
-C_m = 12e-12  # membrane capacitance (uF/cm^2)
-q10=(3**((37-22)/10)) # heat parameter
-
-# Simulation parameters
-dt=1e-5
-
-se=1 # 1,4,10
-si=2 # 2,4,8
-fi=300 # 0,50,100,150,200,250,300
-
-# simulate code
-t, Gexc, Ginh, iLT, ih, V, theta, msusrate, aps, sustime, fout\
-    = getfout(se, si, fi, df, dsus)
+    foutlists=[]
+    for nif in ifibers:
+        foutlist=[]
+        for i, fi in enumerate(filist):
+            print(i, len(filist))
+            tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+            tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
+            
+            vlen=len(tliste)
+# =============================================================================
+#             V, t, iexc, iinh, aplist, vthlist, fout = \
+#                 sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
+#                             vi, vin, vin2, tautheta1, tautheta2, 
+#                             vt, vtmin, at, alpha, navgs)
+# =============================================================================
+            V, t, iexc, iinh, aplist, vthlist, fout = \
+                sima2(V0, dt, vr, rf, gL, 
+                            vi, vin, vin2, tautheta1, tautheta2, 
+                            vt, vtmin, at, alpha, navgs)
+            foutlist.append(fout)
+        foutlists.append(foutlist)
+            
+        
+    fs=15
+    cs = ["#1f77b4","#ff7f0e","#2ca02c"]
+    for i in range(3):
+        plt.plot(filist, d1.iloc[:,i], marker='o', 
+                 label='exc={}, inh={}'.format(estrengths[enum], istrengths[i]),
+                 color=cs[i])
+        plt.plot(filist, np.array(foutlists[i])-foutlists[i][0]+d1.iloc[0,i], marker='o', 
+                 label='simulation',
+                 color=cs[i], linestyle='--')
+# =============================================================================
+#         plt.plot(filist, np.array(foutlists[i]), marker='o', 
+#                  label='simulation',
+#                  color=cs[i], linestyle='--')
+# =============================================================================
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.show()
     
-    
-    
-# plot 
-fs = 15
-plt.subplot(3, 1, 1)
-plt.plot(t*dt, Gexc, label='Ge {} Hz'.format(300))
-plt.plot(t*dt, Ginh, label='Gi {} Hz'.format(fi))
-plt.ylabel('Conductance', fontsize=fs)
-plt.xticks([], fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.legend(loc='upper right', fontsize=fs)
-
-plt.subplot(3, 1, 2)
-plt.plot(t*dt, iLT, label='iLT')
-plt.plot(t*dt, ih, label='iH')
-# plt.plot(tlisti, ilk, label='iLK')
-plt.ylabel('Current', fontsize=fs)
-plt.xticks([], fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.legend(loc='upper right', fontsize=fs)
-
-plt.subplot(3, 1, 3)
-plt.plot(t*dt , V * 1000, label='V')
-plt.plot(t*dt , vr * 1000 * np.ones(len(t)), linestyle='-', 
-         color='gray', alpha=0.5, label='vr')
-plt.plot(t*dt, vi * 1000 * np.ones(len(t)), linestyle='--', 
-         color='gray', alpha=0.5, label='vi')
-plt.plot(t*dt, theta * 1000 * np.ones(len(t)), linestyle='-', 
-         color='k', alpha=1, label='vth')
-plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
-plt.xlabel('Time (sec)', fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.xticks(fontsize=fs)
-plt.legend(loc='upper right', fontsize=fs)
-for x in aps:
-    plt.axvline(x, color='r', alpha=0.6)
-plt.title('Fout={}, se={}, si={}, fi={}'.format(np.around(fout,3), 
-          se, si, fi))
-plt.axvline(sustime, color='blue')
-plt.show()
-
-# fout plot
-fs=15
-filist=[0,50,100,150,200,250,300]
-foutlist=[]
-for i, fi in enumerate(filist):
-    print(i, len(filist))
-    t, Gexc, Ginh, iLT, ih, V, theta, msusrate, aps, sustime, fout\
-        = getfout(se, si, fi, df, dsus)
-    foutlist.append(fout)
-plt.plot(filist, msusrate, marker='o', label='exc={}, inh={}'.format(se, si))
-plt.plot(filist, foutlist, marker='o', label='Simulation')
-plt.ylabel('Steady state mean firing rate', fontsize=fs)
-plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
-plt.legend(fontsize=fs-3)
-plt.show()
-
-#%%  Fout averaged
+#%% Optimize
 import numpy as np
-from matplotlib.pyplot import plot as pt
-import matplotlib.pyplot as plt
-from numpy.random import exponential, binomial, gamma
-from numpy import exp
-from numpy import sqrt as Sqrt
-from numpy import log as Log
 import pandas as pd
-from numba import jit
-import os
-import re
+from scipy.optimize import minimize
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
-def getiext(f, y0, tauy, taui, ki, tmax, dt):
-    
-        tlist=[]
-        ylist=[]
-        Iextlist=[]
+# ------------------------------
+# 1. Parameter handling
+# ------------------------------
+def build_params(x, P):
+    """Reconstruct full parameter dict from x and P table"""
+    full_params = {}
+    xi = 0
+    for p in P:
+        if p[4] == 'v':  # variable
+            full_params[p[0]] = x[xi]
+            xi += 1
+        else:  # fixed
+            full_params[p[0]] = p[1]
+    return full_params
 
-        Iext=0
-        y=0
+def get_x0(P):
+    return [p[1] for p in P if p[4] == 'v']
 
-        tcurr=0
-        timer = dt
-        e=1e-6
-        while tcurr < tmax:
-            t0=np.random.exponential(1/(f+e)) # action potential
-            t1 = timer
-            
-            if t0 < t1:
-                y += y0
-                tmin=t0
-                timer-=tmin
-            else:
-                Iextlist.append(Iext)
-                ylist.append(y)
-                tlist.append(tcurr)
-                tmin=timer
-                timer=dt
-                
-            tcurr += tmin
+def get_bounds(P):
+    return [(p[2], p[3]) for p in P if p[4] == 'v']
 
-            # Update the continuous dynamics
-            Iext += (-Iext/taui + ki*y)*tmin
-            y += (-y/tauy)*tmin
-            
-        return np.array(tlist), np.array(ylist), np.array(Iextlist)
+# ------------------------------
+# 2. Simulation wrapper with progress
+# ------------------------------
+total_simulations_done = 0
 
-def getcurrents(f, fi, y0e, y0i, tauye, tauyi, tauie, tauii, kie, kii, tmax, dt):
-    # Get the currents
-    tlisti, yi, iext = getiext(fi, y0i, tauyi, tauii, kii, tmax, dt)
-    tliste, ye, eext = getiext(f, y0e, tauye, tauie, kie, tmax, dt)
-    # Make them the same size
-    llist=[len(tlisti), len(tliste)]
-    largmin=np.argmin(llist)
-    if largmin==0:
-        tliste = tliste[:llist[largmin]]
-        eext = eext[:llist[largmin]]
-    else:
-        tlisti = tlisti[:llist[largmin]]
-        iext = iext[:llist[largmin]]
-    return tlisti, tliste, iext, eext, yi, ye
+def simulate_for_fibers_with_progress(ifibers, filist, ne, f, ce, ci, tde, tre, tdi, tri,
+                                      tmax, dt, V0, vr, rf, gL, navgs, vin, vin2, vtmin,
+                                      params, pbar=None):
+    global total_simulations_done
+    foutlists = []
 
-def getstats(aplist, ratio):
+    for nif in ifibers:
+        foutlist = []
+        for fi in filist:
+            # Call your actual simulation functions
+            tliste, Gexc, _ = geti2(f, ne, ce, tde, tre, tmax, dt)
+            tlisti, Ginh, _ = geti2(fi, nif, ci, tdi, tri, tmax, dt)
+            vlen = len(tliste)
+            V, t, iexc, iinh, aplist, vthlist, fout = sima(
+                vlen=vlen, V0=V0, Gexc=Gexc, Ginh=Ginh, dt=dt,
+                vr=vr, rf=rf, gL=gL,
+                vi=params['vi'], vin=vin, vin2=vin2,
+                tautheta1=params['tautheta1'], tautheta2=params['tautheta2'],
+                vt=params['vt'], vtmin=vtmin, at=params['at'], alpha=params['alpha'],
+                navgs=navgs
+            )
+            foutlist.append(fout)
 
-    aps = [apind*dt for apind in aplist if apind!=0]
-    
-    tdiffs=np.diff(aps)
-    
-    tmean=np.mean(tdiffs)
-    var=np.var(tdiffs)
-    cv=var/tmean**2
-    
-    return tmean, var, cv
+            # update progress bar
+            total_simulations_done += 1
+            if pbar:
+                pbar.update(1)
+        foutlists.append(foutlist)
 
-def getaps(aplist, dt):
-    return np.where(aplist!=0)[0]*dt
+    return foutlists
 
-@jit(nopython=True)
-def thetainf(vm, vi, vt, at):
-    if vm < vi:
-        return vt
-    else:
-        return at*(vm-vi)+vt
-    
-def gspikes(Gexc, Ginh, args):
-    for x in args:
-        if x[3]==1:
-            Gexc[x[0]:x[0]+x[1]]=x[2]
-        if x[3]==-1:
-            Ginh[x[0]:x[0]+x[1]]=x[2]
-    return Gexc, Ginh
+# ------------------------------
+# 3. Cost function
+# ------------------------------
+def cost_function_with_progress(x, P, dataset, ifibers, filist, ne, f, ce, ci,
+                                tde, tre, tdi, tri, tmax, dt, V0, vr, rf, gL,
+                                navgs, vin, vin2, vtmin, pbar=None):
+    params = build_params(x, P)
+    foutlists = simulate_for_fibers_with_progress(ifibers, filist, ne, f, ce, ci,
+                                                  tde, tre, tdi, tri, tmax, dt, V0, vr, rf,
+                                                  gL, navgs, vin, vin2, vtmin, params, pbar)
+    total_error = 0.0
+    for i_nif, sim_list in enumerate(foutlists):
+        sim_array = np.array(sim_list)
+        data_array = dataset.iloc[:, i_nif].values
+        total_error += np.mean((sim_array - data_array)**2)
+    return total_error
 
-@jit(nopython=True)
-def rinf(V):
-    # value = 76 # original
-    value = 76 # slightly better subthreshold fit
-    return (1 + exp((V + value) / 7))**(-1)
-# KLVT - low threshold potassium current - K+ ions flow out of neuron 
-# (positive current) 
-# low threshold potassium current, hyperpolarize when subthreshold polarized 
-@jit(nopython=True) 
-def winf(V):#1            48    6 ------------------------------------------------------------------- (CHANGED HERE)
-    return (1 + exp(-(V + 48) / 6))**(-1 / 4)
-@jit(nopython=True) # low threshold potassium current KLT
-def zinf(V):
-    zeta = 0.5 #0.5                           71    10 ------------------------------------------------------------------- (CHANGED HERE)
-    return (1 - zeta)*(1 + exp((V + 100) / 10))**(-1) + zeta
+# ------------------------------
+# 4. Plot simulation vs dataset
+# ------------------------------
+def plot_simulation(foutlists, dataset, filist, ifibers):
+    fs = 15
+    cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+    for i_nif, sim_list in enumerate(foutlists):
+        plt.plot(filist, dataset.iloc[:, i_nif], marker='o', label=f'data: inh={ifibers[i_nif]}', color=cs[i_nif])
+        plt.plot(filist, sim_list, marker='o', linestyle='--', label=f'sim: inh={ifibers[i_nif]}', color=cs[i_nif])
+    plt.xlabel('Inhibitory neuron frequency per fiber (Hz)', fontsize=fs)
+    plt.ylabel('Steady-state mean firing rate (Hz)', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.show()
 
-@jit(nopython=True)
-#            v - better at 1000                                                                    shift hmp lft
-def tauw(V): #100  6          60      6    16*0.2            60    45           1.5
-    return (100 * (6 * exp((V+ 60) / 6) + 16*0.2 * exp(-(V + 60) / 45))**(-1) + 1.5)*1e-3
-@jit(nopython=True)
-def tauz(V):# 1000          60    20    0.2           60    8           50
-    return (1000 * (exp((V + 60) / 20) + 0.2*exp(-(V + 60) / 8))**(-1) + 50)*1e-3
-# END CHANGE ---------------------------------------------------------------------------------------- End change
+# ------------------------------
+# 5. Optimization
+# ------------------------------
+def optimize_parameters_with_progress(P, dataset, ifibers, filist, ne, f, ce, ci,
+                                      tde, tre, tdi, tri, tmax, dt, V0, vr, rf,
+                                      gL, navgs, vin, vin2, vtmin):
+    x0 = get_x0(P)
+    bounds = get_bounds(P)
 
-@jit(nopython=True)
-def taur(V): #10**5  237            60    12    17             60    14           25
-    return (10**5 * (237 * exp((V + 60) / 12) + 17 * exp(-(V + 60) / 14))**(-1) + 25)*1e-3
+    # total simulations per cost evaluation
+    total_runs_per_eval = len(ifibers) * len(filist)
+    estimated_optimizer_calls = 50  # rough estimate
+    total_progress = total_runs_per_eval * estimated_optimizer_calls
 
-@jit(nopython=True)
-def simulate(vlen, V0, w0, z0, r0, Gexc, Ginh, gLT, gh, VK, Vh, q10, dt,
-             vi, vt, at, vr, glk, Vlk, Vexc, Vinh, rf, alpha, tautheta1, tautheta2):
+    global total_simulations_done
+    total_simulations_done = 0
 
-    # Time vector
-    t = np.linspace(0, vlen, vlen)
-    
-    # Variables initialization
-    V = np.zeros(vlen)
-    w = np.zeros(vlen)
-    z = np.zeros(vlen)
-    r = np.zeros(vlen)
+    with tqdm(total=total_progress, desc="Optimization progress", unit="sim") as pbar:
+        result = minimize(cost_function_with_progress, x0,
+                          args=(P, dataset, ifibers, filist, ne, f, ce, ci, tde, tre, tdi, tri,
+                                tmax, dt, V0, vr, rf, gL, navgs, vin, vin2, vtmin, pbar),
+                          bounds=bounds,
+                          method='L-BFGS-B')
+    optimized_params = build_params(result.x, P)
+    return optimized_params, result.fun
 
-    iLT = np.zeros(vlen)
-    ih = np.zeros(vlen)
-    ilk = np.zeros(vlen)
-    iexc = np.zeros(vlen)
-    iinh = np.zeros(vlen)
+# ------------------------------
+# 6. Example usage
+# ------------------------------
 
-    theta=np.zeros(vlen)
-    theta1=np.zeros_like(theta)
-    theta2=np.zeros_like(theta)
-    aplist=np.zeros_like(theta)
-    
-    # Set initial conditions
-    V[0] = V0
-    w[0] = w0 # Low threshold K+ current
-    z[0] = z0
-    r[0] = r0 # Leak current
-    theta1[0]=vt
-    theta[0]=vt
-    
-    rfon=False
-    rftimer = np.inf
-    
-    for i in range(1, vlen):
-        # Get all the current and voltage values and update the voltage
-        i_LT = gLT * w[i-1]**4 * z[i-1] * (V[i-1] - VK)
-        i_h = gh * r[i-1] * (V[i-1] - Vh)
-        i_lk = glk * (V[i-1] - Vlk)
+# Dataset should already be loaded as d1
+# filist, ifibers, and other parameters defined as before
 
+# Define parameter table
+P = [
+    ['tautheta1', 5e-3, 1e-3, 50e-3, 'v'],
+    ['tautheta2', 100e-3, 10e-3, 500e-3, 'v'],
+    ['vt', -50e-3, -60e-3, -40e-3, 'v'],
+    ['at', 0.85, 0.1, 1.5, 'v'],
+    ['alpha', 5e-3, 1e-3, 10e-3, 'v'],
+    ['vi', -55e-3, -65e-3, -45e-3, 'v']
+]
 
-        i_exc = Gexc[i-1]*(V[i-1]-Vexc) # Conductance based model current is 
-        i_inh = Ginh[i-1]*(V[i-1]-Vinh) # calculated from the 
-        
-        # iext = ic + iion
-        # ic = iext - iion
-        # C * dvdt = iext - iion
-        # dvdt = (1/C) * (iext - iion)
-        # dvdt = (1/C) * (gE(V-VE)+gI(V-Vi)-I=iion)
-        
-        i_ext = i_exc+i_inh
-        i_ion = i_LT+i_h#+i_lk
-        
-        # dVdt = -(1 / C_m) * (i_LT + i_h + i_lk +i_exc-i_inh)
-        dVdt = (1 / C_m) * (-i_ext-i_ion)
-        V[i] = V[i-1] + dVdt * dt*(1-rfon)
-        
-        # Add all the current values to a list for plotting
-        iLT[i] = i_LT
-        ih[i] = i_h
-        iexc[i] = i_exc
-        iinh[i] = i_inh
-        ilk[i]=i_lk
+# Run optimization
+optimized_params, opt_cost = optimize_parameters_with_progress(P, d1, ifibers, filist, ne, f, ce, ci,
+                                                               tde, tre, tdi, tri, tmax, dt, V0, vr, rf,
+                                                               gL, navgs, vin, vin2, vtmin)
+print("Optimized parameters:", optimized_params)
+print("Final cost:", opt_cost)
 
-        # Add the current value of each gating variable to a list containing
-        # all the previous values, for plotting
-        vprev = V[i-1] * 1e3
-        w[i] = w[i-1] + ((winf(vprev) - w[i-1]) / tauw(vprev)) * dt * q10
-        z[i] = z[i-1] + ((zinf(vprev) - z[i-1]) / tauz(vprev)) * dt * q10
-        r[i] = r[i-1] + ((rinf(vprev) - r[i-1]) / taur(vprev)) * dt * q10
-        
-        # Thresholds
-        dtheta1dt = 1/tautheta1*(-theta1[i-1] + thetainf(V[i-1], vi, vt, at))
-        theta1[i] = theta1[i-1] + dtheta1dt*dt
-        dtheta2dt=1/tautheta2*(-theta2[i-1])
-        theta2[i]=theta2[i-1]+dtheta2dt*dt
-        theta[i] = theta1[i]+theta2[i]
-        
-        if rftimer!=np.inf:
-            rftimer-=dt
-            
-        if rftimer<=0:
-            rftimer=np.inf
-            rfon=False
-        
-        if V[i]>theta[i]: #AP 
-            theta2[i]+=alpha
-            V[i]=vr
-            aplist[i]=i*dt
-            rfon=True
-            rftimer=rf
-            
-    return V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist
+# Run simulation with optimized parameters
+foutlists_best = simulate_for_fibers_with_progress(ifibers, filist, ne, f, ce, ci, tde, tre,
+                                                   tdi, tri, tmax, dt, V0, vr, rf, gL, navgs,
+                                                   vin, vin2, vtmin, optimized_params)
 
-# Main code -------------------------------------------------------------------
+# Plot best-fit simulation vs dataset
+plot_simulation(foutlists_best, d1, filist, ifibers)
 
-# Conductance model parameters
-gLT = 50e-9 # 50e-9 # X <---------------- #200e-9
-gh = 100e-9  # 100e-9 # X <---------------- # 20e-9, 11e-9
-glk = 5e-9  # Leakage conductance
-VK = -80e-3  # potassium reverse potential
-Vh = -43e-3  # hyperpolarizing reverse potential
-Vlk = -55e-3  # leakage reverse potential
-V0 = -60e-3  # initial membrane potential (mV)
-w0 = 0.594  # Low-threshold K+ current
-z0 = 0.608  # Low-threshold K+ current
-r0 = 0.063  # Hyperpolarization current
-C_m = 12e-12  # membrane capacitance (uF/cm^2)
-q10=(3**((37-22)/10)) # heat parameter
-
-Vexc=0 
-Vinh=-0.085 # should be -85 mV
-
-# Simulation parameters
-tmax=10
-dt=1e-5
-
-foutlist=[]
-nexc=[400,40,4]
-nexcnum=2
-
-# Conductance generation
-f=300 # exc
-fi=0 # inh
-y0e=200e-8 # synthetic spiking variable amplitude
-y0i=300e-8
-tauye=0.01 # decay rate of synthetic spiking variable
-tauyi=0.01
-tauie=0.001 # current decay rate
-tauii=0.01
-kie=1 # convert trom y to I
-kii=1
-
-# Threshold Lubejko parameters
-tautheta1=1e-3
-tautheta2=10e-3
-vt=-50e-3 # threshold base
-vi=-55e-3 # adapting potential
-vr=-70e-3 # resting potential, -60mV to -75mV
-at=0.4
-alpha=10e-3
-rf=1e-3 # 1e-3
-
-tlisti, tliste, Ginh, Gexc, yi, ye = \
-    getcurrents(f*nexc[nexcnum], fi*4, y0e/nexc[nexcnum], y0i, 
-                tauye, tauyi, tauie, tauii, kie, kii, tmax, 
-                                dt)
-
-V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist\
-    =simulate(len(tlisti), V0, w0, z0, r0, Gexc, Ginh, gLT, gh, 
-              VK, Vh, q10, dt, vi, vt, at, vr, glk, Vlk, 
-              Vexc, Vinh, rf, alpha, tautheta1, tautheta2)
-    
-aps=getaps(aplist, dt)
-fout=np.mean(np.diff(aps))
-print(1/fout)
-
-fs = 15
-plt.subplot(3, 1, 1)
-plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
-plt.plot(tliste, Ginh, label='Gi {} Hz'.format(fi))
-plt.ylabel('Conductance', fontsize=fs)
-plt.xticks([], fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.legend(loc='upper right', fontsize=fs)
-
-plt.subplot(3, 1, 2)
-plt.plot(tlisti, iLT, label='iLT')
-plt.plot(tlisti, ih, label='iH')
-# plt.plot(tlisti, ilk, label='iLeak')
-plt.ylabel('Current', fontsize=fs)
-plt.xticks([], fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.legend(loc='upper right', fontsize=fs)
-
-plt.subplot(3, 1, 3)
-plt.plot(t * dt, V * 1000, label='V')
-plt.plot(t * dt, vr * 1000 * np.ones(len(t)), linestyle='-', color='gray', alpha=0.5, label='vr')
-plt.plot(t * dt, vi * 1000 * np.ones(len(t)), linestyle='--', color='gray', alpha=0.5, label='vi')
-plt.plot(t * dt, theta * 1000 * np.ones(len(t)), linestyle='-', color='k', alpha=1, label='vth')
-plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
-plt.xlabel('Time (sec)', fontsize=fs)
-plt.yticks(fontsize=fs)
-plt.xticks(fontsize=fs)
-plt.legend(loc='upper right', fontsize=fs)
-for x in aps:
-    plt.axvline(x, color='r', alpha=0.6)
-plt.show()
-#%% rest of code
-
-filist = [0,50,100,150,200,250,300]
-foutlist=[]
-nexc=[400,40,4]
-nexcnum=0
-ninhnum=0
-
-for i, fi in enumerate(filist):
-    print(i, len(filist))
-    tlisti, tliste, Ginh, Gexc, yi, ye = getcurrents(f*nexc[nexcnum], 
-                                    fi*4, y0e/nexc[nexcnum], y0i, tauye, tauyi, 
-                                    tauie, tauii, kie, kii, tmax, 
-                                    dt)
-    V, t, w, z, r, iLT, ih, ilk, iexc, iinh, theta, aplist\
-        =simulate(len(Gexc), V0, w0, z0, r0, Gexc, Ginh, gLT, gh, 
-                  VK, Vh, q10, dt, vi, vt, at, vr, glk, Vlk, rf, alpha,
-                  tautheta1, tautheta2)
-    aps=getaps(aplist, dt)
-    fout=np.mean(np.diff(aps))
-    foutlist.append(1/fout)
-    
-
-
-fs = 15
-plt.plot(filist, foutlist, marker='o', label='sim')
-plt.show()
