@@ -383,9 +383,51 @@ import pandas as pd
 from numba import jit
 import os
 import re
-import math
 
+def getiext(f, tauy, taui, ki, nf, cval, tmax, dt):
 
+        tlist=[]
+        ylist=[]
+        Iextlist=[]
+
+        Iext=0
+        y=0
+
+        tcurr=0
+        timer = dt
+        e=1e-6
+        while tcurr < tmax:
+            t0=np.random.exponential(1/(f*nf+e)) # action potential
+            t1 = timer
+
+            if t0 < t1:
+                y += 1
+                tmin=t0
+                timer-=tmin
+            else:
+                Iextlist.append(Iext)
+                ylist.append(y)
+                tlist.append(tcurr)
+                tmin=timer
+                timer=dt
+            tcurr += tmin
+
+            # Update the continuous dynamics
+            Iext += (-Iext/taui + ki*y)*tmin
+            y += (-y/tauy)*tmin
+            
+        return np.array(tlist), np.array(ylist), np.array(Iextlist)
+
+def getstats(aplist, ratio):
+
+    aps = [apind*dt for apind in aplist if apind!=0]
+    
+    tdiffs=np.diff(aps)
+    tmean=np.mean(tdiffs)
+    var=np.var(tdiffs)
+    cv=var/tmean**2
+    
+    return tmean, var, cv
 
 @jit(nopython=True)
 def getaps(aplist, dt):
@@ -492,99 +534,6 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
 
     return V, t, iexc, iinh, aps, theta, foutmean
 
-@jit(nopython=True)
-def sima2(V0, dt, vr, rf, gL, 
-             vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs):
-    
-    fouts=np.zeros(navgs)
-    
-    for j in range(navgs):
-        
-        tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
-        tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
-    
-        # Time vector
-        t = np.linspace(0, vlen, vlen)
-        
-        # Variables initialization
-        V = np.zeros(vlen)
-        iexc = np.zeros(vlen)
-        iinh = np.zeros(vlen)
-        aplist=np.zeros_like(iinh-1)
-        
-        # Set initial conditions
-        V[0] = V0
-        
-        ratio=0.3
-        rfon=False
-        rftimer = np.inf
-        
-        #s
-        theta1=np.zeros(vlen)
-        theta2=np.zeros(vlen)
-        theta=np.zeros(vlen)
-    
-        theta[0]=vt
-        theta1[0]=vt
-        theta2[0]=0
-    
-        for i in range(1, vlen):
-            
-            # Get all the current and voltage values and update the voltage
-            Vexc=0
-            Vinh=-85e-3 # should be -85 mV
-            i_exc = Gexc[i-1]*(V[i-1]-Vexc) # Conductance based model current is 
-            i_inh = Ginh[i-1]*(V[i-1]-Vinh) # calculated from the 
-            
-            i_ext = i_exc+i_inh
-            i_ion = gL*(V[i-1]-V0)
-    
-            dVdt = (1 / C_m) * (-i_ext-i_ion)
-            V[i] = V[i-1] + dVdt * dt*(1-rfon)
-            
-            dtheta1dt = 1/tautheta1*(-theta1[i-1] + 
-                                     thetainf(V[i-1], vi, vin, vin2, vt, vtmin, at))
-            theta1[i] = theta1[i-1] + dtheta1dt*dt
-            
-            dtheta2dt=1/tautheta2*(-theta2[i-1])
-            theta2[i]=theta2[i-1]+dtheta2dt*dt
-            
-            theta[i] = theta1[i]+theta2[i]
-    
-            # Add all the current values to a list for plotting
-            iexc[i] = i_exc
-            iinh[i] = i_inh
-    
-            if rftimer!=np.inf:
-                rftimer-=dt 
-    
-            if rftimer<=0:
-                rftimer=np.inf
-                rfon=False
-    
-            if V[i]>theta[i]: #AP 
-                theta2[i]+=alpha
-                if i>int(ratio*vlen) and i<vlen:
-                    aplist[i]=i*dt
-                rfon=True
-                rftimer=rf
-                V[i]=vr
-                
-        aps=getaps(aplist, dt)
-        if len(aps) < 2:
-            fout = 0.0  # or np.nan if you want to flag it
-        else:
-            fout = 1/np.mean(np.diff(aps))
-        fouts[j]=fout
-    foutmean=np.mean(fouts)
-
-
-    return V, t, iexc, iinh, aps, theta, foutmean
-
-
-
-
-@jit(nopython=True)
 def make_normalized_template(td, tr, tmax, dt, scale_I):
     #SynKernel = A * ( exp(-(x)/tauDecay) - exp(-(x)/tauRise) )
     t = np.arange(0, tmax, dt)
@@ -595,7 +544,6 @@ def make_normalized_template(td, tr, tmax, dt, scale_I):
 # ------------------------------------------------------------
 # insert template at exponentially spaced spike times
 # ------------------------------------------------------------
-@jit(nopython=True)
 def generate_spike_train(f, nf, tmax, dt, template):
     t = np.arange(0, tmax, dt)
     out = np.zeros_like(t)
@@ -607,8 +555,7 @@ def generate_spike_train(f, nf, tmax, dt, template):
     e = 1e-6
 
     while tcurr < tmax:
-        # t0 = np.random.exponential(1/(f*nf+e))
-        t0 = -math.log(1.0 - np.random.random()) / (f*nf + e)
+        t0 = np.random.exponential(1/(f*nf+e))
 
         if t0 < timer:
             pos = int(tcurr/dt)
@@ -622,7 +569,6 @@ def generate_spike_train(f, nf, tmax, dt, template):
 
     return t, out
 
-@jit(nopython=True)
 def geti2(f, nf, cval, td, tr, tmax, dt):
     tt, temp = make_normalized_template(td, tr, tmax, dt, cval/nf)
     t, sig = generate_spike_train(f, nf, tmax, dt, temp)
@@ -797,14 +743,8 @@ if ttype ==100:
             tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
             
             vlen=len(tliste)
-# =============================================================================
-#             V, t, iexc, iinh, aplist, vthlist, fout = \
-#                 sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
-#                             vi, vin, vin2, tautheta1, tautheta2, 
-#                             vt, vtmin, at, alpha, navgs)
-# =============================================================================
             V, t, iexc, iinh, aplist, vthlist, fout = \
-                sima2(V0, dt, vr, rf, gL, 
+                sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
                             vi, vin, vin2, tautheta1, tautheta2, 
                             vt, vtmin, at, alpha, navgs)
             foutlist.append(fout)
