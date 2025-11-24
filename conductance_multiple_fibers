@@ -738,16 +738,19 @@ if ttype ==100:
     for nif in ifibers:
         foutlist=[]
         for i, fi in enumerate(filist):
-            print(i, len(filist))
-            tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
-            tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
-            
-            vlen=len(tliste)
-            V, t, iexc, iinh, aplist, vthlist, fout = \
-                sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
-                            vi, vin, vin2, tautheta1, tautheta2, 
-                            vt, vtmin, at, alpha, navgs)
-            foutlist.append(fout)
+            foutsj=[]
+            for j in range(navgs):
+                print(i, len(filist), j, navgs)
+                tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+                tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
+                
+                vlen=len(tliste)
+                V, t, iexc, iinh, aplist, vthlist, fout = \
+                    sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
+                                vi, vin, vin2, tautheta1, tautheta2, 
+                                vt, vtmin, at, alpha, 1)
+                foutsj.append(fout)
+            foutlist.append(np.mean(fout))
         foutlists.append(foutlist)
             
         
