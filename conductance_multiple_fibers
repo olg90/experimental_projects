@@ -1163,10 +1163,14 @@ names = ['Summary', '240425_E4', '240425_E5', '240425_E6',
 d=data[names[0]]
 # rates = d.iloc[:, 0][:8]
 
-mev=[]
-for i in range(3):
-    d1=d.iloc[1:, -3:][7*(2-i):7*((2-i)+1)] # Mean sustained rate
-    mev.append(np.mean(d1.iloc[i,:]))
+
+d10=d.iloc[1:8,4:7]
+d4=d.iloc[8:15,4:7]
+d1=d.iloc[15:22,4:7]
+
+dlist=[d1, d4, d10]
+
+mev=[np.mean(x.iloc[0,:]) for x in dlist]
 
 
 
@@ -1230,11 +1234,11 @@ vin2=-60.1e-3 # the threshold will not lower below this voltage
 vtmin=-51e-3 # the lower value of the threshold potential
 
 # Simulation parameters
-tmax=10 # <----------------- TMAX
+tmax=20 # <----------------- TMAX
 dt=1e-4
 navgs=1
 
-enum=1
+enum=0
 efibers=  [40,10,4] 
 estrengths=[1,4,10] # total strength = 40 nS
 inum=0
@@ -1247,7 +1251,6 @@ ttype=100 # <---------- test type
 
 d1=d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)] # Mean sustained rate
 
-
 # =============================================================================
 # fouts=[]
 # for i in range(3):
@@ -1257,8 +1260,8 @@ d1=d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)] # Mean sustained rate
 #         tliste, Gexc, tempe = geti2(f, efibers[i], ce, tde, tre, tmax, dt)
 #         tlisti, Ginh, tempi = geti2(0, ni, ci, tdi, tri, tmax, dt)
 #         vlen=len(tliste)
-#         res=sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
-#                  vi, vin, vin2, tautheta1, tautheta2, 
+#         res=sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
+#                  vi, vin, vin2, tautheta1, tautheta2,
 #                  vt, vtmin, at, alpha, 1)
 #         mean = np.mean(res[6])
 #         foutj.append(mean)
@@ -1266,8 +1269,8 @@ d1=d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)] # Mean sustained rate
 # print('data', mev)
 # print('sim',fouts)
 # #%%
+# 
 # =============================================================================
-
 # -----------------------------------------------------------------------------
 
 if ttype==1:
@@ -1374,7 +1377,7 @@ if ttype ==100:
         plt.plot(filist, d1.iloc[:,i], marker='o', 
                  label='exc={}, inh={}'.format(estrengths[enum], istrengths[i]),
                  color=cs[i])
-        ptype=0
+        ptype=1
         if ptype==0:
             plt.plot(filist, np.array(foutlists[i]), marker='o', 
                      label='simulation',
@@ -1480,3 +1483,425 @@ for i in range(3):
 
 print('data', mev)
 print('sim', fouts)
+
+#%% Optimize over all three datasets
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+import os
+import re
+from scipy.optimize import minimize
+
+def getiext(f, tauy, taui, ki, nf, cval, tmax, dt):
+
+        tlist=[]
+        ylist=[]
+        Iextlist=[]
+
+        Iext=0
+        y=0
+
+        tcurr=0
+        timer = dt
+        e=1e-6
+        while tcurr < tmax:
+            t0=np.random.exponential(1/(f*nf+e)) # action potential
+            t1 = timer
+
+            if t0 < t1:
+                y += 1
+                tmin=t0
+                timer-=tmin
+            else:
+                Iextlist.append(Iext)
+                ylist.append(y)
+                tlist.append(tcurr)
+                tmin=timer
+                timer=dt
+            tcurr += tmin
+
+            # Update the continuous dynamics
+            Iext += (-Iext/taui + ki*y)*tmin
+            y += (-y/tauy)*tmin
+            
+        return np.array(tlist), np.array(ylist), np.array(Iextlist)
+
+def getstats(aplist, ratio):
+
+    aps = [apind*dt for apind in aplist if apind!=0]
+    
+    tdiffs=np.diff(aps)
+    tmean=np.mean(tdiffs)
+    var=np.var(tdiffs)
+    cv=var/tmean**2
+    
+    return tmean, var, cv
+
+@jit(nopython=True)
+def getaps(aplist, dt):
+    return np.where(aplist!=0)[0]*dt
+
+
+@jit(nopython=True)
+def thetainf(vm, vi, vin, vin2, vt, vtmin, at):
+    if vm < vi and vm>vin:
+        return vt
+    if vm >= vi:
+        return at*(vm-vi)+vt
+    if vm<=vin and vm > vin2:
+        return vtmin + (vt - vtmin) * (vm - vin2) / (vin - vin2)
+    if vm<=vin2:
+        return vtmin
+
+@jit(nopython=True)
+def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL, 
+             vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs):
+    
+    fouts=np.zeros(navgs)
+    
+    for j in range(navgs):
+    
+        # Time vector
+        t = np.linspace(0, vlen, vlen)
+        
+        # Variables initialization
+        V = np.zeros(vlen)
+        iexc = np.zeros(vlen)
+        iinh = np.zeros(vlen)
+        aplist=np.zeros_like(iinh-1)
+        
+        # Set initial conditions
+        V[0] = V0
+        
+        ratio=0.3
+        rfon=False
+        rftimer = np.inf
+        
+        #s
+        theta1=np.zeros(vlen)
+        theta2=np.zeros(vlen)
+        theta=np.zeros(vlen)
+    
+        theta[0]=vt
+        theta1[0]=vt
+        theta2[0]=0
+    
+        for i in range(1, vlen):
+            
+            # Get all the current and voltage values and update the voltage
+            Vexc=0
+            Vinh=-85e-3 # should be -85 mV
+            i_exc = Gexc[i-1]*(V[i-1]-Vexc) # Conductance based model current is 
+            i_inh = Ginh[i-1]*(V[i-1]-Vinh) # calculated from the 
+            
+            i_ext = i_exc+i_inh
+            i_ion = gL*(V[i-1]-V0)
+    
+            dVdt = (1 / C_m) * (-i_ext-i_ion)
+            V[i] = V[i-1] + dVdt * dt*(1-rfon)
+            
+            dtheta1dt = 1/tautheta1*(-theta1[i-1] + 
+                                     thetainf(V[i-1], vi, vin, vin2, vt, vtmin, at))
+            theta1[i] = theta1[i-1] + dtheta1dt*dt
+            
+            dtheta2dt=1/tautheta2*(-theta2[i-1])
+            theta2[i]=theta2[i-1]+dtheta2dt*dt
+            
+            theta[i] = theta1[i]+theta2[i]
+    
+            # Add all the current values to a list for plotting
+            iexc[i] = i_exc
+            iinh[i] = i_inh
+    
+            if rftimer!=np.inf:
+                rftimer-=dt 
+    
+            if rftimer<=0:
+                rftimer=np.inf
+                rfon=False
+    
+            if V[i]>theta[i]: #AP 
+                theta2[i]+=alpha
+                if i>int(ratio*vlen) and i<vlen:
+                    aplist[i]=i*dt
+                rfon=True
+                rftimer=rf
+                V[i]=vr
+                
+        aps=getaps(aplist, dt)
+        if len(aps) < 2:
+            fout = 0.0  # or np.nan if you want to flag it
+        else:
+            fout = 1/np.mean(np.diff(aps))
+        fouts[j]=fout
+    foutmean=np.mean(fouts)
+
+
+    return V, t, iexc, iinh, aps, theta, foutmean
+
+def make_normalized_template(td, tr, tmax, dt, scale_I):
+    #SynKernel = A * ( exp(-(x)/tauDecay) - exp(-(x)/tauRise) )
+    t = np.arange(0, tmax, dt)
+    A = scale_I / (-(tr/td)**(td/(td-tr)) + (tr/td)**(tr/(td-tr)))
+    template = A * (np.exp(-t / td) - np.exp(-t / tr))
+    return t, template
+
+# ------------------------------------------------------------
+# insert template at exponentially spaced spike times
+# ------------------------------------------------------------
+def generate_spike_train(f, nf, tmax, dt, template):
+    t = np.arange(0, tmax, dt)
+    out = np.zeros_like(t)
+    L = len(t)
+    Ltemp = len(template)
+
+    tcurr = 0
+    timer = dt
+    e = 1e-6
+
+    while tcurr < tmax:
+        t0 = np.random.exponential(1/(f*nf+e))
+
+        if t0 < timer:
+            pos = int(tcurr/dt)
+            end = min(pos + Ltemp, L)
+            out[pos:end] += template[:end-pos]
+            timer -= t0
+            tcurr += t0
+        else:
+            tcurr += timer
+            timer = dt
+
+    return t, out
+
+def geti2(f, nf, cval, td, tr, tmax, dt):
+    tt, temp = make_normalized_template(td, tr, tmax, dt, cval/nf)
+    t, sig = generate_spike_train(f, nf, tmax, dt, temp)
+    return t, sig, temp
+
+
+# Load the entire Excel file
+file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"  # Change this to your actual path
+# Read all data into a dictionary
+data = pd.read_excel(file_path, sheet_name=None, header=None)
+# # Print all sheet names
+# print("data found:", list(data.keys()))
+# # Loop through data and preview first few rows
+# for sheet_name, df in data.items():
+#     print(f"\n--- Sheet: {sheet_name} ---")
+
+names = ['Summary', '240425_E4', '240425_E5', '240425_E6', 
+         '240426_E2', '240426_E3', '240426_E5', '240515_E2', 
+         '240516_E2', '240516_E7']
+d=data[names[0]]
+# rates = d.iloc[:, 0][:8]
+
+d10=d.iloc[1:8,4:7]
+d4=d.iloc[8:15,4:7]
+d1=d.iloc[15:22,4:7]
+
+d10 = d10.to_numpy()
+d4 = d4.to_numpy()
+d1 = d1.to_numpy()
+
+
+# Fixed
+f=300 # exc
+fi=0 # inh
+ce=40e-9 # synthetic spiking variable amplitude
+ci=32e-9
+
+tre=0.2e-3 # excitatory rise time
+tde=0.5e-3 # excitatory decay time
+tri=1.2e-3 # inhibitory rise time
+tdi=0.2e-3 # inhibitory decay time
+
+rf=1e-3 # refractory period
+
+# Conductance model parameters
+V0 = -60e-3  # initial membrane potential (mV)
+C_m = 100e-12
+vr=V0
+gL=25e-9 # leak conductance nS
+
+# =============================================================================
+# # Varying parameters, good
+# tautheta1=5e-3 # time constant of the threshold increase
+# tautheta2=50e-3 # time constant of the depolarized post-jump decay
+# vt=-50e-3 # threshold base value at no activity
+# vi=-55e-3 # threshold increases when the membrane potential is above this level
+# at = 0.85 # rate of polarization increase
+# alpha=3e-3 # jump size
+# 
+# vin=-60e-3 # voltage at which the threshold resting value lowers
+# vin2=-60.01e-3 # the threshold will not lower below this voltage
+# vtmin=-51e-3 # the lower value of the threshold potential
+# =============================================================================
+
+# =============================================================================
+# # Varying parameters, better fits
+# tautheta1=5e-3 # time constant of the threshold increase
+# tautheta2=45e-3 # time constant of the depolarized post-jump decay
+# vt=-50e-3 # threshold base value at no activity
+# vi=-55e-3 # threshold increases when the membrane potential is above this level
+# at = 0.85 # rate of polarization increase
+# alpha=4.5e-3 # jump size
+# 
+# vin=-60e-3 # voltage at which the threshold resting value lowers
+# vin2=-60.01e-3 # the threshold will not lower below this voltage
+# vtmin=-51e-3 # the lower value of the threshold potential
+# =============================================================================
+
+def cost_function(x, other_params):
+    vi, vin, vin2, tautheta1, tautheta2, vtmin, at, alpha = x
+    f, ce, tde, tre, ci, tdi, tri, tmax, dt, V0, vr, rf, gL, navgs, efibers, ifibers, d1, d4, d10 = other_params
+    filist = [0,50,100,150,200,250,300]
+    foute = []
+    for ie, ne in enumerate(efibers):
+        foutlists = []
+        for i1, nif in enumerate(ifibers):
+            foutlist = []
+            for i, fi in enumerate(filist):
+                foutsj = []
+                for j in range(navgs):
+                    tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+                    tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
+                    vlen = len(tliste)
+                    V, t, iexc, iinh, aplist, vthlist, fout = sima(
+                        vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
+                        vi, vin, vin2, tautheta1, tautheta2,
+                        vt, vtmin, at, alpha, 1
+                    )
+                    foutsj.append(fout)
+                foutlist.append(np.mean(foutsj))
+            foutlists.append(foutlist)
+        foute.append(foutlists)
+
+    f0 = np.array(foute[0])
+    f1 = np.array(foute[1])
+    f2 = np.array(foute[2])
+
+    error = 0
+    for i in range(3):   # three inhibitory conditions
+        error += np.mean((f0[i] - d1[:, i])**2)
+        error += np.mean((f1[i] - d4[:, i])**2)
+        error += np.mean((f2[i] - d10[:, i])**2)
+
+    return error
+
+
+
+# Varying parameters
+tautheta1=2.2e-3 # time constant of threshold decay to its infinite value 
+tautheta2=15e-3 # time constant of the depolarized post-jump decay
+vt=-50e-3 # threshold base value at no activity
+vi=-55e-3 # threshold increases when the membrane potential is above this level
+at = 0.85 # rate of polarization increase
+alpha=0.4e-3 # jump size
+
+vin=-60e-3 # voltage at which the threshold resting value lowers
+vin2=-60.1e-3 # the threshold will not lower below this voltage
+vtmin=-51e-3 # the lower value of the threshold potential
+
+# Simulation parameters
+tmax=20 # <----------------- TMAX
+dt=1e-4
+navgs=1
+
+enum=0
+efibers=  [40,10,4] 
+estrengths=[1,4,10] # total strength = 40 nS
+inum=0
+ifibers=   [4,8,16] 
+istrengths= [8,4,2]  #total strength = 32 nS
+ne=efibers[enum] # num excitatory fibers
+ni=ifibers[inum]
+
+# Bounds for each parameter
+bounds = [
+    (1e-3, 200e-3), # tautheta1
+    (1e-3, 200e-3), # tautheta2
+    (-59e-3,-51e-3),    # vi
+    (0, 10),             # at
+    (0.4e-3, 100e-3),    # alpha
+    (-70e-3, -60e-3),    # vin
+    (-100e-3, -60e-3),    # vin2
+    (-100e-3, -51e-3, ),   # vtmin
+]
+
+# Initial guess
+x0 = [vi, vin, vin2, tautheta1, tautheta2, vtmin, at, alpha]
+other_params = (f, ce, tde, tre, ci, tdi, tri, tmax, dt,
+                V0, vr, rf, gL, navgs, efibers, ifibers,
+                d1, d4, d10)
+
+res = minimize(
+    lambda x: cost_function(x, other_params),
+    x0,
+    method='L-BFGS-B',
+    bounds=bounds,  # Nelder-Mead ignores bounds, so this has no effect
+    options={'maxiter':500,'ftol':1e-4, 'disp':True}
+)
+
+
+
+print("Optimal parameters:", res.x)
+print("Function value:", res.fun)
+
+# Unpack the best parameters
+best_params = res.x
+vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha = best_params
+
+# Prepare simulation outputs for plotting
+foute_best = []
+filist = [0,50,100,150,200,250,300]
+
+for ie, ne in enumerate(efibers):
+    foutlists = []
+    for i1, nif in enumerate(ifibers):
+        foutlist = []
+        for i, fi in enumerate(filist):
+            foutsj = []
+            for j in range(navgs):
+                tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+                tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
+                vlen = len(tliste)
+                V, t, iexc, iinh, aplist, vthlist, fout = sima(
+                    vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
+                    vi, vin, vin2, tautheta1, tautheta2,
+                    vt, vtmin, at, alpha, 1
+                )
+                foutsj.append(fout)
+            foutlist.append(np.mean(foutsj))
+        foutlists.append(foutlist)
+    foute_best.append(foutlists)
+
+# Now plot for the first excitatory condition (d1) as an example
+fs = 15
+cs = ["#1f77b4","#ff7f0e","#2ca02c"]
+ptype = 1  # 0 = raw simulation, 1 = aligned to first data point
+
+plt.figure(figsize=(7,5))
+for i in range(3):
+    # Plot data
+    plt.plot(filist, d1.iloc[:,i], marker='o',
+             label='exc={}, inh={}'.format(estrengths[enum], istrengths[i]),
+             color=cs[i])
+    # Plot simulation
+    sim_data = np.array(foute_best[0][i])  # first excitatory condition
+    if ptype==1:
+        sim_data = sim_data - sim_data[0] + d1.iloc[0,i]
+    plt.plot(filist, sim_data, marker='o', linestyle='--', color=cs[i], label='simulation')
+
+plt.ylabel('Steady state mean firing rate', fontsize=fs)
+plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs-3)
+plt.show()
