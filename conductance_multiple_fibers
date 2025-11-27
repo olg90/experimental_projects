@@ -989,54 +989,6 @@ plot_simulation(foutlists_best, d1, filist, ifibers)
 
 # %% Fits to the excitatory data
 
-
-def getiext(f, tauy, taui, ki, nf, cval, tmax, dt):
-
-    tlist = []
-    ylist = []
-    Iextlist = []
-
-    Iext = 0
-    y = 0
-
-    tcurr = 0
-    timer = dt
-    e = 1e-6
-    while tcurr < tmax:
-        t0 = np.random.exponential(1/(f*nf+e))  # action potential
-        t1 = timer
-
-        if t0 < t1:
-            y += 1
-            tmin = t0
-            timer -= tmin
-        else:
-            Iextlist.append(Iext)
-            ylist.append(y)
-            tlist.append(tcurr)
-            tmin = timer
-            timer = dt
-        tcurr += tmin
-
-        # Update the continuous dynamics
-        Iext += (-Iext/taui + ki*y)*tmin
-        y += (-y/tauy)*tmin
-
-    return np.array(tlist), np.array(ylist), np.array(Iextlist)
-
-
-def getstats(aplist, ratio):
-
-    aps = [apind*dt for apind in aplist if apind != 0]
-
-    tdiffs = np.diff(aps)
-    tmean = np.mean(tdiffs)
-    var = np.var(tdiffs)
-    cv = var/tmean**2
-
-    return tmean, var, cv
-
-
 @jit(nopython=True)
 def getaps(aplist, dt):
     return np.where(aplist != 0)[0]*dt
@@ -1141,6 +1093,7 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
     return V, t, iexc, iinh, aps, theta, foutmean
 
 
+@jit(nopython=True)
 def make_normalized_template(td, tr, tmax, dt, scale_I):
     # SynKernel = A * ( exp(-(x)/tauDecay) - exp(-(x)/tauRise) )
     t = np.arange(0, tmax, dt)
@@ -1152,24 +1105,30 @@ def make_normalized_template(td, tr, tmax, dt, scale_I):
 # insert template at exponentially spaced spike times
 # ------------------------------------------------------------
 
-
+@jit(nopython=True)
 def generate_spike_train(f, nf, tmax, dt, template):
     t = np.arange(0, tmax, dt)
-    out = np.zeros_like(t)
-    L = len(t)
-    Ltemp = len(template)
+    out = np.zeros(t.shape)
+    L = t.shape[0]
+    Ltemp = template.shape[0]
 
-    tcurr = 0
+    tcurr = 0.0
     timer = dt
     e = 1e-6
 
     while tcurr < tmax:
-        t0 = np.random.exponential(1/(f*nf+e))
+        # random exponential interval
+        t0 = np.random.exponential(1.0 / (f * nf + e))
 
         if t0 < timer:
-            pos = int(tcurr/dt)
-            end = min(pos + Ltemp, L)
-            out[pos:end] += template[:end-pos]
+            pos = int(tcurr / dt)
+            end = pos + Ltemp
+            if end > L:
+                end = L
+            # add template
+            for i in range(pos, end):
+                out[i] += template[i - pos]
+
             timer -= t0
             tcurr += t0
         else:
@@ -1178,11 +1137,61 @@ def generate_spike_train(f, nf, tmax, dt, template):
 
     return t, out
 
-
+@jit(nopython=True)
 def geti2(f, nf, cval, td, tr, tmax, dt):
     tt, temp = make_normalized_template(td, tr, tmax, dt, cval/nf)
     t, sig = generate_spike_train(f, nf, tmax, dt, temp)
     return t, sig, temp
+
+@jit(nopython=True)
+def t10(f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt, V0,
+        vr, rf, gL, vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs):
+
+    filist = np.array([0, 50, 100, 150, 200, 250, 300])
+    foutlist = np.zeros_like(filist)
+
+    for i, fi in enumerate(filist):
+        print(i, len(filist))
+        tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+        tlisti, Ginh, tempi = geti2(fi, ni, ci, tdi, tri, tmax, dt)
+
+        vlen = len(tliste)
+        V, t, iexc, iinh, aplist, vthlist, fout = \
+            sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
+                 vi, vin, vin2, tautheta1, tautheta2,
+                 vt, vtmin, at, alpha, navgs)
+        foutlist[i]=fout
+    return filist, foutlist
+
+@jit(nopython=True)
+def t100(ifibers, f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt,
+         V0, vr, rf, gL, vi, vin, vin2, tautheta1, tautheta2,
+         vt, vtmin, at, alpha, navgs):
+
+    filist = np.array([0, 50, 100, 150, 200, 250, 300], dtype=np.float64)
+    foutlists = np.zeros((len(ifibers), len(filist)), dtype=np.float64)
+
+    for q, nif in enumerate(ifibers):
+        foutlist = np.zeros(len(filist), dtype=np.float64)
+        for i, fi_val in enumerate(filist):
+            foutsj = np.zeros(navgs, dtype=np.float64)
+            for j in range(navgs):
+                # Debug print
+                print(q, len(ifibers), i, len(filist), j, navgs)
+
+                tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+                tlisti, Ginh, tempi = geti2(fi_val, nif, ci, tdi, tri, tmax, dt)
+
+                vlen = len(tliste)
+                V, t, iexc, iinh, aplist, vthlist, fout = sima(
+                    vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
+                    vi, vin, vin2, tautheta1, tautheta2,
+                    vt, vtmin, at, alpha, 1
+                )
+                foutsj[j] = fout
+            foutlist[i] = np.mean(foutsj)
+        foutlists[q, :] = foutlist
+    return filist, foutlists
 
 
 # Load the entire Excel file
@@ -1230,17 +1239,30 @@ C_m = 100e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
-# Varying parameters
+# =============================================================================
+# # Varying parameters, good for exc=1
+# tautheta1 = 2.2e-3  # time constant of threshold decay to its infinite value
+# tautheta2 = 50e-3  # time constant of the depolarized post-jump decay
+# vt = -50e-3  # threshold base value at no activity
+# vi = -55e-3  # threshold increases when the membrane potential is above this level
+# at = 0.85  # rate of polarization increase
+# alpha = 0.4e-3  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -62e-3  # the threshold will not lower below this voltage
+# vtmin = -60e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Testing 
 tautheta1 = 2.2e-3  # time constant of threshold decay to its infinite value
 tautheta2 = 50e-3  # time constant of the depolarized post-jump decay
 vt = -50e-3  # threshold base value at no activity
 vi = -55e-3  # threshold increases when the membrane potential is above this level
 at = 0.85  # rate of polarization increase
 alpha = 0.4e-3  # jump size
-
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -62e-3  # the threshold will not lower below this voltage
-vtmin = -60e-3  # the lower value of the threshold potential
+vtmin = -59e-3  # the lower value of the threshold potential
 
 # Simulation parameters
 tmax = 10  # <----------------- TMAX
@@ -1256,7 +1278,7 @@ istrengths = [8, 4, 2]  # total strength = 32 nS
 ne = efibers[enum]  # num excitatory fibers
 ni = ifibers[inum]
 
-ttype = 100  # <---------- test type
+ttype = 10  # <---------- test type
 
 d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
 
@@ -1281,7 +1303,6 @@ d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-
 if ttype == 1:
 
     tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
@@ -1330,22 +1351,7 @@ if ttype == 1:
     print(fout)
 
 if ttype == 10:
-
-    filist = [0, 50, 100, 150, 200, 250, 300]
-    foutlist = []
-
-    for i, fi in enumerate(filist):
-        print(i, len(filist))
-        tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
-        tlisti, Ginh, tempi = geti2(fi, ni, ci, tdi, tri, tmax, dt)
-
-        vlen = len(tliste)
-        V, t, iexc, iinh, aplist, vthlist, fout = \
-            sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
-                 vi, vin, vin2, tautheta1, tautheta2,
-                 vt, vtmin, at, alpha, navgs)
-        foutlist.append(fout)
-
+    filist, foutlist = t10(f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt, V0, vr, rf, gL, vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs)
     fs = 15
     cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
     for i in range(3):
@@ -1356,35 +1362,13 @@ if ttype == 10:
     plt.ylabel('Steady state mean firing rate', fontsize=fs)
     plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
     plt.tick_params(axis='both', labelsize=fs)
+    plt.plot(filist, foutlist, marker='o', label='sim {}'.format(istrengths[inum]), color='k')
     plt.legend(fontsize=fs-3)
-    plt.plot(filist, foutlist, marker='o', label='sim', color='k')
     plt.show()
 
 if ttype == 100:
 
-    filist = [0, 50, 100, 150, 200, 250, 300]
-
-    foutlists = []
-    count = 0
-    for i1, nif in enumerate(ifibers):
-        foutlist = []
-        for i, fi in enumerate(filist):
-            foutsj = []
-            for j in range(navgs):
-                print(i1, len(ifibers), i, len(filist), j, navgs)
-                count += 1
-                print(count/(len(ifibers)*len(filist)*navgs))
-                tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
-                tlisti, Ginh, tempi = geti2(fi, nif, ci, tdi, tri, tmax, dt)
-
-                vlen = len(tliste)
-                V, t, iexc, iinh, aplist, vthlist, fout = \
-                    sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
-                         vi, vin, vin2, tautheta1, tautheta2,
-                         vt, vtmin, at, alpha, 1)
-                foutsj.append(fout)
-            foutlist.append(np.mean(fout))
-        foutlists.append(foutlist)
+    filist, foutlists = t100(ifibers, f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt, V0, vr, rf, gL, vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs)
 
     fs = 15
     cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
@@ -1408,6 +1392,7 @@ if ttype == 100:
     plt.tick_params(axis='both', labelsize=fs)
     plt.legend(fontsize=fs-3)
     plt.show()
+
 
 # %% optimize for excitatory
 
@@ -1964,9 +1949,7 @@ def getstats(aplist, ratio):
     tmean = np.mean(tdiffs)
     var = np.var(tdiffs)
     cv = var/tmean**2
-
     return tmean, var, cv
-
 
 @jit(nopython=True)
 def getaps(aplist, dt):
@@ -2116,21 +2099,14 @@ def geti2(f, nf, cval, td, tr, tmax, dt):
     return t, sig, temp
 
 
-# Load the entire Excel file
-# Change this to your actual path
-file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
+file = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\mean sustained firing rate.xlsx"
 # Read all data into a dictionary
-data = pd.read_excel(file_path, sheet_name=None, header=None)
-# # Print all sheet names
-# print("data found:", list(data.keys()))
-# # Loop through data and preview first few rows
-# for sheet_name, df in data.items():
-#     print(f"\n--- Sheet: {sheet_name} ---")
-
-file = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\excdata.xlsx"
-# Read all data into a dictionary
-edata = np.array(pd.read_excel(file))
-flist = edata[:, 0]
+data = pd.read_excel(file)
+ds=np.array(data.iloc[2:12, 0:6])
+flist=ds[:,0]
+ed=ds[:,1:]
+strengths=[10,4,2,1, 0.1]
+ninputs=  [4,10,20,40,100]
 
 e2 = edata[:, 1]
 e4 = edata[:, 2]
@@ -2499,7 +2475,7 @@ def t100(ifibers, f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt,
             foutsj = np.zeros(navgs, dtype=np.float64)
             for j in range(navgs):
                 # Debug print
-                print(i, len(filist), j, navgs)
+                print(q, len(ifibers), i, len(filist), j, navgs)
 
                 tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
                 tlisti, Ginh, tempi = geti2(fi_val, nif, ci, tdi, tri, tmax, dt)
@@ -2612,7 +2588,7 @@ tmax = 10  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 2
+enum = 1
 efibers = [40, 10, 4]
 estrengths = [1, 4, 10]  # total strength = 40 nS
 
