@@ -3053,10 +3053,10 @@ gL = 25e-9  # leak conductance nS
 
 # Medium fits but the middle one is bandpass
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 20e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -52.7e-3  # threshold base value at no activity
+tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -52.9e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 0.96  # rate of polarization increase, larger means more curve downward at high f
+at = 1.02  # rate of polarization increase, larger means more curve downward at high f
 alpha = [2e-3, 0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
