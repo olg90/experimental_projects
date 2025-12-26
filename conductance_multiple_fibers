@@ -302,7 +302,8 @@ rf = 1e-3  # refractory period
 
 # Conductance model parameters
 V0 = -60e-3  # initial membrane potential (mV)
-C_m = 100e-12
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9
 
@@ -385,7 +386,22 @@ plt.show()
 
 print(fout)
 
-# %% Lubejko adaptive threshold papaer
+# %% Lubejko adaptive threshold paper
+
+from tqdm import tqdm
+from scipy.optimize import minimize
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+import os
+import re
+
 
 
 def getiext(f, tauy, taui, ki, nf, cval, tmax, dt):
@@ -585,7 +601,7 @@ def geti2(f, nf, cval, td, tr, tmax, dt):
 
 # Load the entire Excel file
 # Change this to your actual path
-file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
+file_path = r"C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
 # Read all data into a dictionary
 data = pd.read_excel(file_path, sheet_name=None, header=None)
 # # Print all sheet names
@@ -618,7 +634,8 @@ rf = 1e-3  # refractory period
 
 # Conductance model parameters
 V0 = -60e-3  # initial membrane potential (mV)
-C_m = 100e-12
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
@@ -651,7 +668,7 @@ gL = 25e-9  # leak conductance nS
 # =============================================================================
 
 # =============================================================================
-# # Varying parameters
+# # Good for enum=0
 # tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 # tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
 # vt = -50e-3  # threshold base value at no activity
@@ -664,7 +681,21 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Varying parameters
+# =============================================================================
+# # Medium fits for excitatory, but the middle one is bandpass
+# tautheta1 = 6e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
+# vt = -57.8e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# at = 1.27  # rate of polarization increase
+# alpha = 0.8e-3  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Good for enum=0
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
 vt = -50e-3  # threshold base value at no activity
@@ -692,7 +723,7 @@ istrengths = [8, 4, 2]  # total strength = 32 nS
 ne = efibers[enum]  # num excitatory fibers
 ni = ifibers[inum]
 
-ttype = 10  # <---------- test type
+ttype = 100  # <---------- test type
 
 
 d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
@@ -748,7 +779,7 @@ if ttype == 1:
 
 if ttype == 10:
 
-    filist = [0, 50, 100, 150, 200, 250, 300]
+    filist = np.arange(0,300+50,50)
     foutlist = []
 
     for i, fi in enumerate(filist):
@@ -1209,7 +1240,7 @@ def t100(ifibers, f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt,
 
 # Load the entire Excel file
 # Change this to your actual path
-file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
+file_path = r"C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
 # Read all data into a dictionary
 data = pd.read_excel(file_path, sheet_name=None, header=None)
 # # Print all sheet names
@@ -1248,7 +1279,8 @@ rf = 1e-3  # refractory period
 
 # Conductance model parameters
 V0 = -60e-3  # initial membrane potential (mV)
-C_m = 100e-12
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
@@ -1325,54 +1357,56 @@ istrengths = [8, 4, 2]  # total strength = 32 nS
 ne = efibers[enum]  # num excitatory fibers
 ni = ifibers[inum]
 
-ttype = 1  # <---------- test type
+ttype = 100  # <---------- test type
 
 d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
 
-fouts=[]
-vthlists=[]
-Vs=[]
-for i, ne in enumerate(efibers):
-    foutj=[]
-    for j in range(navgs):
-        print(i, 3, j, navgs)
-        tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
-        vlen=len(tliste)
-        V, t, iexc, iinh, aps, vthlist, fout=sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
-                 vi, vin, vin2, tautheta1, tautheta2,
-                 vt, vtmin, at, alpha, 1)
-        vthlists.append(vthlist)
-        Vs.append(V)
-        foutj.append(fout)
-    fouts.append(np.mean(foutj))
-print('data', mev)
-print('sim',fouts)
-
-plt.figure(figsize=(12,6))
-for i in range(3):
-    plt.subplot(3,1,i+1)
-    plt.plot(t * dt, Vs[i], label='V')
-    plt.plot(t * dt, vr * np.ones(len(t)), linestyle='-',
-             color='gray', alpha=0.5, label='vr')
-    plt.plot(t * dt, vi * np.ones(len(t)), linestyle='--',
-             color='green', alpha=0.5, label='vi')
-    plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.',
-             color='red', alpha=0.5, label='vin')
-    
-    plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
-    if i==2:
-        plt.xlabel('Time (sec)', fontsize=fs)
-    plt.yticks(fontsize=fs)
-    plt.xticks(fontsize=fs)
-    plt.plot(t*dt, vthlists[i], label='vth', color='k')
-    if i == 0:
-        plt.legend(loc='upper right', fontsize=fs)
-        
-    if i<2:
-        plt.xticks([])
-plt.show()
-#%%
-
+# =============================================================================
+# fouts=[]
+# vthlists=[]
+# Vs=[]
+# for i, ne in enumerate(efibers):
+#     foutj=[]
+#     for j in range(navgs):
+#         print(i, 3, j, navgs)
+#         tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
+#         vlen=len(tliste)
+#         V, t, iexc, iinh, aps, vthlist, fout=sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
+#                  vi, vin, vin2, tautheta1, tautheta2,
+#                  vt, vtmin, at, alpha, 1)
+#         vthlists.append(vthlist)
+#         Vs.append(V)
+#         foutj.append(fout)
+#     fouts.append(np.mean(foutj))
+# print('data', mev)
+# print('sim',fouts)
+# 
+# plt.figure(figsize=(12,6))
+# for i in range(3):
+#     plt.subplot(3,1,i+1)
+#     plt.plot(t * dt, Vs[i], label='V')
+#     plt.plot(t * dt, vr * np.ones(len(t)), linestyle='-',
+#              color='gray', alpha=0.5, label='vr')
+#     plt.plot(t * dt, vi * np.ones(len(t)), linestyle='--',
+#              color='green', alpha=0.5, label='vi')
+#     plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.',
+#              color='red', alpha=0.5, label='vin')
+#     
+#     plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
+#     if i==2:
+#         plt.xlabel('Time (sec)', fontsize=fs)
+#     plt.yticks(fontsize=fs)
+#     plt.xticks(fontsize=fs)
+#     plt.plot(t*dt, vthlists[i], label='vth', color='k')
+#     if i == 0:
+#         plt.legend(loc='upper right', fontsize=fs)
+#         
+#     if i<2:
+#         plt.xticks([])
+# plt.show()
+# #%%
+# 
+# =============================================================================
 # -----------------------------------------------------------------------------
 if ttype == 1:
 
@@ -1478,7 +1512,7 @@ import re
 
 # Load the entire Excel file
 # Change this to your actual path
-file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
+file_path = r"C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
 # Read all data into a dictionary
 data = pd.read_excel(file_path, sheet_name=None, header=None)
 # # Print all sheet names
@@ -1793,7 +1827,7 @@ def geti2(f, nf, cval, td, tr, tmax, dt):
 
 # Load the entire Excel file
 # Change this to your actual path
-file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
+file_path = r"C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
 # Read all data into a dictionary
 data = pd.read_excel(file_path, sheet_name=None, header=None)
 # # Print all sheet names
@@ -1832,7 +1866,8 @@ rf = 1e-3  # refractory period
 
 # Conductance model parameters
 V0 = -60e-3  # initial membrane potential (mV)
-C_m = 100e-12
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
@@ -2208,7 +2243,8 @@ rf = 1e-3  # refractory period
 
 # Conductance model parameters
 V0 = -60e-3  # initial membrane potential (mV)
-C_m = 100e-12
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
@@ -2464,6 +2500,7 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
 
             if V[i] > theta[i]:  # AP
                 theta2[i] += alpha
+                # theta2[i] += alpha*(V[i]/vt)**2
                 if i > int(ratio*vlen) and i < vlen:
                     aplist[i] = i*dt
                 rfon = True
@@ -2564,7 +2601,6 @@ def t100(ifibers, f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt,
         for i, fi_val in enumerate(filist):
             foutsj = np.zeros(navgs, dtype=np.float64)
             for j in range(navgs):
-                # Debug print
                 print(q, len(ifibers), i, len(filist), j, navgs)
                 tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
                 tlisti, Ginh, tempi = geti2(fi_val, nif, ci, tdi, tri, tmax, dt)
@@ -2581,7 +2617,7 @@ def t100(ifibers, f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt,
 
 # Load the entire Excel file
 # Change this to your actual path
-file_path = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
+file_path = r"C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\allcellscopy.xlsx"
 # Read all data into a dictionary
 data = pd.read_excel(file_path, sheet_name=None, header=None)
 # # Print all sheet names
@@ -2600,7 +2636,7 @@ d1 = d.iloc[1:, -3:][7*excnum:7*(excnum+1)]  # Mean sustained rate
 
 # Fixed
 f = 300  # exc
-fi = 0  # inh
+fi = 300  # inh
 ce = 40e-9  # synthetic spiking variable amplitude
 ci = 32e-9
 
@@ -2612,41 +2648,14 @@ tdi = 0.2e-3  # inhibitory decay time
 rf = 1e-3  # refractory period
 
 # Conductance model parameters
-V0 = -70e-3  # initial membrane potential (mV), originally -60e-3
-C_m = 100e-12
+V0 = -60e-3  # initial membrane potential (mV), originally -60e-3
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
 # =============================================================================
-# # Varying parameters, good
-# tautheta1=5e-3 # time constant of the threshold increase
-# tautheta2=50e-3 # time constant of the depolarized post-jump decay
-# vt=-50e-3 # threshold base value at no activity
-# vi=-55e-3 # threshold increases when the membrane potential is above this level
-# at = 0.85 # rate of polarization increase
-# alpha=3e-3 # jump size
-#
-# vin=-60e-3 # voltage at which the threshold resting value lowers
-# vin2=-60.01e-3 # the threshold will not lower below this voltage
-# vtmin=-51e-3 # the lower value of the threshold potential
-# =============================================================================
-
-# =============================================================================
-# # Varying parameters, better fits
-# tautheta1=5e-3 # time constant of the threshold increase
-# tautheta2=45e-3 # time constant of the depolarized post-jump decay
-# vt=-50e-3 # threshold base value at no activity
-# vi=-55e-3 # threshold increases when the membrane potential is above this level
-# at = 0.85 # rate of polarization increase
-# alpha=4.5e-3 # jump size
-#
-# vin=-60e-3 # voltage at which the threshold resting value lowers
-# vin2=-60.01e-3 # the threshold will not lower below this voltage
-# vtmin=-51e-3 # the lower value of the threshold potential
-# =============================================================================
-
-# =============================================================================
-# # Varying parameters
+# # Good fit to excnum=0
 # tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 # tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
 # vt = -50e-3  # threshold base value at no activity
@@ -2659,24 +2668,53 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Testing
-tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
-vt = -56e-3  # threshold base value at no activity
-vi = -61e-3  # threshold increases when the membrane potential is above this level
-at = 0.85  # rate of polarization increase
-alpha = 4.5e-3  # jump size
+# =============================================================================
+# # Medium fits from Excitatory fits parameters
+# tautheta1 = 6e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
+# vt = -57.8e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# at = 1.27  # rate of polarization increase
+# alpha = 0.8e-3  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -61e-3  # the threshold will not lower below this voltage
+# vtmin = -60e-3  # the lower value of the threshold potential
+# =============================================================================
 
-vin = -70e-3  # voltage at which the threshold resting value lowers
-vin2 = -71e-3  # the threshold will not lower below this voltage
-vtmin = -69e-3  # the lower value of the threshold potential
+# =============================================================================
+# # Good fit to excnum=0
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
+# vt = -50e-3  # threshold base value at no activity
+# vi = -55e-3  # threshold increases when the membrane potential is above this level
+# at = 0.85  # rate of polarization increase
+# alpha = 4.5e-3  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Medium fits but the middle one is bandpass
+tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
+vt = -58e-3  # threshold base value at no activity
+vi = -59e-3  # threshold increases when the membrane potential is above this level
+at = 1.27  # rate of polarization increase
+alpha = 0.5e-3  # jump size
+
+vin = -60e-3  # voltage at which the threshold resting value lowers
+vin2 = -65e-3  # the threshold will not lower below this voltage
+vtmin = -59e-3  # the lower value of the threshold potential
+
 
 # Simulation parameters
 tmax = 10  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 1
+enum = 2
 efibers = [40, 10, 4]
 estrengths = [1, 4, 10]  # total strength = 40 nS
 
@@ -2700,7 +2738,8 @@ if ttype == 1:
 
     vlen = len(tliste)
     V, t, iexc, iinh, aps, vthlist, fout = sima(vlen, V0, Gexc, Ginh, dt, vr,
-                                                rf, gL, vi, vin, vin2, tautheta1, tautheta2,
+                                                rf, gL, vi, vin, vin2, tautheta1, 
+                                                tautheta2,
                                                 vt, vtmin, at, alpha, navgs)
 
     fs = 15
@@ -2750,7 +2789,7 @@ if ttype == 10:
                      estrengths[enum], istrengths[i]),
                  color=cs[i])
     plt.ylabel('Steady state mean firing rate', fontsize=fs)
-    plt.xlabel('Inhibitory neuron frequency', fontsize=fs)
+    plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
     plt.tick_params(axis='both', labelsize=fs)
     plt.plot(filist, foutlist, marker='o', label='sim {}'.format(istrengths[inum]), color='k')
     plt.legend(fontsize=fs-3)
@@ -2758,7 +2797,11 @@ if ttype == 10:
 
 if ttype == 100:
 
-    filist, foutlists = t100(ifibers, f, fi, ne, ni, ce, ci, tde, tdi, tre, tri, tmax, dt, V0, vr, rf, gL, vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs)
+    filist, foutlists = t100(ifibers, f, fi, ne, ni, ce, 
+                             ci, tde, tdi, tre, tri, tmax, dt, 
+                             V0, vr, rf, gL, vi, vin, vin2, 
+                             tautheta1, tautheta2, vt, vtmin, 
+                             at, alpha, navgs)
 
     fs = 15
     cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
@@ -2884,7 +2927,10 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
 
             if V[i] > theta[i]:  # AP
                 # theta2[i] += alpha
-                theta2[i] += alpha*(V[i]/vt)**2
+                theta2[i] += alpha*(V[i]/vt) 
+                # theta2[i] += (alpha*0+0.0006)*(V[i]/vt)
+                # theta2[i] += alpha*(V[i]/vt)**2
+                # theta2[i] += alpha*(V[i]/vt)**2+0.00005*(V[i]/vt)
                 if i > int(ratio*vlen) and i < vlen:
                     aplist[i] = i*dt
                 rfon = True
@@ -2937,14 +2983,12 @@ def generate_spike_train(f, nf, tmax, dt, template):
 
     return t, out
 
-
 def geti2(f, nf, cval, td, tr, tmax, dt):
     tt, temp = make_normalized_template(td, tr, tmax, dt, cval/nf)
     t, sig = generate_spike_train(f, nf, tmax, dt, temp)
     return t, sig, temp
 
-
-file = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\mean sustained firing rate.xlsx"
+file = r"C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\mean sustained firing rate.xlsx"
 # Read all data into a dictionary
 data = pd.read_excel(file)
 ds=np.array(data.iloc[2:12, 0:6])
@@ -2977,7 +3021,8 @@ rf = 1e-3  # refractory period
 
 # Conductance model parameters
 V0 = -60e-3  # initial membrane potential (mV)
-C_m = 100e-12
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
@@ -2996,13 +3041,13 @@ gL = 25e-9  # leak conductance nS
 # =============================================================================
 
 # =============================================================================
-# # Medium fits but the middle one is bandpass
+# # Good fit to excnum=0
 # tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-# tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
-# vt = -58e-3  # threshold base value at no activity
-# vi = -59e-3  # threshold increases when the membrane potential is above this level
-# at = 1.27  # rate of polarization increase
-# alpha = 0.8e-3  # jump size
+# tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
+# vt = -50e-3  # threshold base value at no activity
+# vi = -55e-3  # threshold increases when the membrane potential is above this level
+# at = 0.85  # rate of polarization increase
+# alpha = 4.5e-3  # jump size
 # 
 # vin = -60e-3  # voltage at which the threshold resting value lowers
 # vin2 = -65e-3  # the threshold will not lower below this voltage
@@ -3010,24 +3055,23 @@ gL = 25e-9  # leak conductance nS
 # =============================================================================
 
 # Medium fits but the middle one is bandpass
-tautheta1 = 6e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
-vt = -57.8e-3  # threshold base value at no activity
+tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+tautheta2 = 20e-3  # time constant of the depolarized post-jump decay
+vt = -53e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 1.27  # rate of polarization increase
-alpha = 0.8e-3  # jump size
+at = 1.05  # rate of polarization increase
+alpha = 3e-3  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
-
 # Simulation parameters
-tmax = 10  # <----------------- TMAX
+tmax = 20  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 0 # 0-1nS, 1-4nS, 2-10nS
+enum = 2 # 0-1nS, 1-4nS, 2-10nS
 
 ttype = 100  # <---------- test type        
 
@@ -3144,7 +3188,6 @@ if ttype == 100:
     plt.tick_params(axis='both', labelsize=fs)
     plt.legend(fontsize=fs-3)
     plt.show()
-    
     
 #%%  Minimize cost function for all three excitatory datasets
 
@@ -3344,7 +3387,8 @@ rf = 1e-3  # refractory period
 
 # Conductance model parameters
 V0 = -60e-3  # initial membrane potential (mV)
-C_m = 100e-12
+# C_m = 100e-12
+C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
@@ -3440,3 +3484,344 @@ res = differential_evolution(cost_function, bounds,
 print("optimal parameters:")
 print(res.x)
 print("minimum cost:", res.fun)
+
+
+#%% 1D model
+
+from tqdm import tqdm
+from scipy.optimize import minimize
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+import os
+import re
+
+@jit(nopython=True)
+def getaps(aplist, dt):
+    return np.where(aplist != 0)[0]*dt
+
+@jit(nopython=True)
+def thetainf(vm, vi, vin, vin2, vt, vtmin, at):
+    if vm < vi and vm > vin:
+        return vt
+    if vm >= vi:
+        return at*(vm-vi)+vt
+    if vm <= vin and vm > vin2:
+        return vtmin + (vt - vtmin) * (vm - vin2) / (vin - vin2)
+    if vm <= vin2:
+        return vtmin
+
+@jit(nopython=True)
+def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
+         vi, vin, vin2, tautheta1, tautheta2, vt, vtmin, at, alpha, navgs):
+
+    fouts = np.zeros(navgs)
+
+    for j in range(navgs):
+
+        # Time vector
+        t = np.linspace(0, vlen, vlen)
+
+        # Variables initialization
+        V = np.zeros(vlen)
+        iexc = np.zeros(vlen)
+        iinh = np.zeros(vlen)
+        aplist = np.zeros_like(iinh-1)
+
+        # Set initial conditions
+        V[0] = V0
+
+        ratio = 0.3
+        rfon = False
+        rftimer = np.inf
+
+        # s
+        theta1 = np.zeros(vlen)
+        theta2 = np.zeros(vlen)
+        theta = np.zeros(vlen)
+
+        theta[0] = vt
+        theta1[0] = vt
+        theta2[0] = 0
+
+        for i in range(1, vlen):
+
+            # Get all the current and voltage values and update the voltage
+            Vexc = 0
+            Vinh = -85e-3  # should be -85 mV
+            # Conductance based model current is
+            i_exc = Gexc[i-1]*(V[i-1]-Vexc)
+            i_inh = Ginh[i-1]*(V[i-1]-Vinh)  # calculated from the
+
+            i_ext = i_exc+i_inh
+            i_ion = gL*(V[i-1]-V0)
+
+            dVdt = (1 / C_m) * (-i_ext-i_ion)
+            V[i] = V[i-1] + dVdt * dt*(1-rfon)
+
+            # Add all the current values to a list for plotting
+            iexc[i] = i_exc
+            iinh[i] = i_inh
+
+            if rftimer != np.inf:
+                rftimer -= dt
+
+            if rftimer <= 0:
+                rftimer = np.inf
+                rfon = False
+
+            if V[i] > theta[i]:  # AP
+                # theta2[i] += alpha
+                # theta2[i] += (alpha*0+0.00055)*(V[i]/vt)
+                theta2[i] += (alpha*0+0.0006)*(V[i]/vt)
+                # theta2[i] += alpha*(V[i]/vt)**2
+                # theta2[i] += alpha*(V[i]/vt)**2+0.00005*(V[i]/vt)
+                if i > int(ratio*vlen) and i < vlen:
+                    aplist[i] = i*dt
+                rfon = True
+                rftimer = rf
+                V[i] = vr
+
+        aps = getaps(aplist, dt)
+        if len(aps) < 2:
+            fout = 0.0  # or np.nan if you want to flag it
+        else:
+            fout = 1/np.mean(np.diff(aps))
+        fouts[j] = fout
+    foutmean = np.mean(fouts)
+
+    return V, t, iexc, iinh, aps, theta, foutmean
+
+def make_normalized_template(td, tr, tmax, dt, scale_I):
+    # SynKernel = A * ( exp(-(x)/tauDecay) - exp(-(x)/tauRise) )
+    t = np.arange(0, tmax, dt)
+    A = scale_I / (-(tr/td)**(td/(td-tr)) + (tr/td)**(tr/(td-tr)))
+    template = A * (np.exp(-t / td) - np.exp(-t / tr))
+    return t, template
+
+# ------------------------------------------------------------
+# insert template at exponentially spaced spike times
+# ------------------------------------------------------------
+
+def generate_spike_train(f, nf, tmax, dt, template):
+    t = np.arange(0, tmax, dt)
+    out = np.zeros_like(t)
+    L = len(t)
+    Ltemp = len(template)
+
+    tcurr = 0
+    timer = dt
+    e = 1e-6
+
+    while tcurr < tmax:
+        t0 = np.random.exponential(1/(f*nf+e))
+
+        if t0 < timer:
+            pos = int(tcurr/dt)
+            end = min(pos + Ltemp, L)
+            out[pos:end] += template[:end-pos]
+            timer -= t0
+            tcurr += t0
+        else:
+            tcurr += timer
+            timer = dt
+
+    return t, out
+
+def geti2(f, nf, cval, td, tr, tmax, dt):
+    tt, temp = make_normalized_template(td, tr, tmax, dt, cval/nf)
+    t, sig = generate_spike_train(f, nf, tmax, dt, temp)
+    return t, sig, temp
+
+file = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\mean sustained firing rate.xlsx"
+# Read all data into a dictionary
+data = pd.read_excel(file)
+ds=np.array(data.iloc[2:12, 0:6])
+flist=ds[:,0]
+ed=ds[:,1:]
+strengths=[10,4,2,1, 0.1]
+ninputs=  [4,10,20,40,100]
+
+e1 = np.array(data.iloc[2:, 4])
+e4 = np.array(data.iloc[2:, 2])
+e10 = np.array(data.iloc[2:, 1])
+edata=[e1,e4,e10]
+
+strength = 40e-9
+strengths = [1, 4, 10]
+nfibers = [40, 10, 4]
+
+# Fixed
+f = 50  # exc
+fi = 0  # inh
+ce = 40e-9  # synthetic spiking variable amplitude
+ci = 32e-9
+
+tre = 0.2e-3  # excitatory rise time
+tde = 0.5e-3  # excitatory decay time
+tri = 1.2e-3  # inhibitory rise time
+tdi = 0.2e-3  # inhibitory decay time
+
+rf = 1e-3  # refractory period
+
+# Conductance model parameters
+V0 = -60e-3  # initial membrane potential (mV)
+# C_m = 100e-12
+C_m = 25e-12
+vr = V0
+gL = 25e-9  # leak conductance nS
+
+# =============================================================================
+# # Testing
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
+# vt = -50e-3  # threshold base value at no activity
+# vi = -55e-3  # threshold increases when the membrane potential is above this level
+# at = 0.85  # rate of polarization increase
+# alpha = 4.5e-3  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Medium fits but the middle one is bandpass
+tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
+vt = -58e-3  # threshold base value at no activity
+vi = -59e-3  # threshold increases when the membrane potential is above this level
+at = 1.27  # rate of polarization increase
+alpha = 0.8e-3  # jump size
+
+vin = -60e-3  # voltage at which the threshold resting value lowers
+vin2 = -65e-3  # the threshold will not lower below this voltage
+vtmin = -59e-3  # the lower value of the threshold potential
+
+# Simulation parameters
+tmax = 10  # <----------------- TMAX
+dt = 1e-4
+navgs = 1
+
+enum = 0 # 0-1nS, 1-4nS, 2-10nS
+
+ttype = 100  # <---------- test type        
+
+# -----------------------------------------------------------------------------
+
+if ttype == 1:
+
+    tliste, Gexc, tempe = geti2(f, nfibers[enum], strength, tde, tre, tmax, dt)
+
+    vlen = len(tliste)
+    V, t, iexc, iinh, aps, vthlist, fout = sima(vlen, V0, Gexc, 0*Gexc, dt, vr,
+                                                rf, gL, vi, vin, vin2, tautheta1, tautheta2,
+                                                vt, vtmin, at, alpha, navgs)
+
+    fs = 15
+    plt.figure()
+    plt.subplot(2, 1, 1)
+    plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
+    plt.ylabel('Conductance', fontsize=fs)
+    plt.xticks([], fontsize=fs)
+    plt.yticks(fontsize=fs)
+    plt.legend(loc='upper right', fontsize=fs)
+    plt.title('exc={} nS'.format(strengths[enum]))
+
+    plt.subplot(2, 1, 2)
+    plt.plot(t * dt, V, label='V')
+    plt.plot(t * dt, vr * np.ones(len(t)), linestyle='-',
+             color='gray', alpha=0.5, label='vr')
+    plt.plot(t * dt, vi * np.ones(len(t)), linestyle='--',
+             color='green', alpha=0.5, label='vi')
+    plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.',
+             color='red', alpha=0.5, label='vin')
+
+    plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
+    plt.xlabel('Time (sec)', fontsize=fs)
+    plt.yticks(fontsize=fs)
+    plt.xticks(fontsize=fs)
+    plt.plot(t*dt, vthlist, label='vth', color='k')
+    plt.legend(loc='upper right', fontsize=fs)
+    plt.show()
+
+    print(fout)
+
+if ttype == 10:
+    
+    foutlist = np.zeros(len(flist))
+    for i, f in enumerate(flist):
+        foutj=np.zeros(navgs)
+        for j in range(navgs):
+            print(i, len(flist), j, navgs)
+            tliste, Gexc, tempe = geti2(
+                f, nfibers[enum], strength, tde, tre, tmax, dt)
+    
+            vlen = len(tliste)
+            V, t, iexc, iinh, aplist, vthlist, fout = \
+                sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
+                     vi, vin, vin2, tautheta1, tautheta2,
+                     vt, vtmin, at, alpha, 1)
+            foutj[j]=fout
+        foutlist[i]=np.mean(foutj)
+        
+    fs = 15
+    cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+    for i in range(3):
+        plt.plot(flist, edata[i], marker='o',
+                 label='exc={}'.format(strengths[i]),
+                 color=cs[i])
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.plot(flist, foutlist, marker='o',
+             label='sim {}'.format(strengths[enum]), color='k')
+    plt.legend(fontsize=fs-3)
+    plt.show()
+
+if ttype == 100:
+
+    foutlists = []
+    count = 0
+    for i1, nef in enumerate(nfibers):
+        foutlist = []
+        for i, f in enumerate(flist):
+            foutsj = []
+            for j in range(navgs):
+                print(i1, len(nfibers), i, len(flist), j, navgs)
+                count += 1
+                print(count/(len(nfibers)*len(flist)*navgs))
+                tliste, Gexc, tempe = geti2(
+                    f, nef, strength, tde, tre, tmax, dt)
+
+                vlen = len(tliste)
+                V, t, iexc, iinh, aplist, vthlist, fout = \
+                    sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
+                         vi, vin, vin2, tautheta1, tautheta2,
+                         vt, vtmin, at, alpha, 1)
+                foutsj.append(fout)
+            foutlist.append(np.mean(foutsj))
+        foutlists.append(foutlist)
+
+    fs = 15
+    cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+    for i in range(3):
+        plt.plot(flist, edata[2-i], marker='o',
+                 label='exc={}'.format(strengths[2-i]),
+                 color=cs[i])
+        ptype = 0
+        if ptype == 0:
+            plt.plot(flist, np.array(foutlists[2-i]), marker='o',
+                     label='simulation',
+                     color=cs[i], linestyle='--')
+
+    plt.ylabel('Steady state mean firing rate', fontsize=fs)
+    plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.legend(fontsize=fs-3)
+    plt.show()
