@@ -2927,10 +2927,7 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
 
             if V[i] > theta[i]:  # AP
                 # theta2[i] += alpha
-                theta2[i] += alpha*(V[i]/vt) 
-                # theta2[i] += (alpha*0+0.0006)*(V[i]/vt)
-                # theta2[i] += alpha*(V[i]/vt)**2
-                # theta2[i] += alpha*(V[i]/vt)**2+0.00005*(V[i]/vt)
+                theta2[i] += alpha[0]+alpha[1]*(V[i]/vt)*2 
                 if i > int(ratio*vlen) and i < vlen:
                     aplist[i] = i*dt
                 rfon = True
@@ -3056,18 +3053,18 @@ gL = 25e-9  # leak conductance nS
 
 # Medium fits but the middle one is bandpass
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 20e-3  # time constant of the depolarized post-jump decay
-vt = -53e-3  # threshold base value at no activity
+tautheta2 = 20e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -52.7e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 1.05  # rate of polarization increase
-alpha = 3e-3  # jump size
+at = 0.96  # rate of polarization increase, larger means more curve downward at high f
+alpha = [2e-3, 0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
 # Simulation parameters
-tmax = 20  # <----------------- TMAX
+tmax = 10  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
@@ -3639,7 +3636,7 @@ def geti2(f, nf, cval, td, tr, tmax, dt):
     t, sig = generate_spike_train(f, nf, tmax, dt, temp)
     return t, sig, temp
 
-file = r"C:\Users\ogamb\OneDrive\Desktop\Research\current_project\postinhibitory_facilitation\mean sustained firing rate.xlsx"
+file = r"C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\mean sustained firing rate.xlsx"
 # Read all data into a dictionary
 data = pd.read_excel(file)
 ds=np.array(data.iloc[2:12, 0:6])
