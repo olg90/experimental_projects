@@ -2500,7 +2500,7 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
 
             if V[i] > theta[i]:  # AP
                 theta2[i] += alpha
-                # theta2[i] += alpha*(V[i]/vt)**2
+                theta2[i] += alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)*2 
                 if i > int(ratio*vlen) and i < vlen:
                     aplist[i] = i*dt
                 rfon = True
@@ -2696,13 +2696,27 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Medium fits but the middle one is bandpass
+# =============================================================================
+# # Medium fits but the middle one is bandpass
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
+# vt = -58e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# at = 1.27  # rate of polarization increase
+# alpha = 0.5e-3  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Closest fits so far
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
-vt = -58e-3  # threshold base value at no activity
+tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -52.9e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 1.27  # rate of polarization increase
-alpha = 0.5e-3  # jump size
+at = 1  # rate of polarization increase, larger means more curve downward at high f
+alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
@@ -3052,7 +3066,7 @@ gL = 25e-9  # leak conductance nS
 # =============================================================================
 
 # =============================================================================
-# # Closest fits so far
+# # Closest exc fits so far
 # tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 # tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
 # vt = -52.9e-3  # threshold base value at no activity
@@ -3070,13 +3084,12 @@ tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -52.9e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 1  # rate of polarization increase, larger means more curve downward at high f
-alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+at = 1*0  # rate of polarization increase, larger means more curve downward at high f
+alpha = [2e-3, 0.05e-3, 0.1e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
-
 
 # Simulation parameters
 tmax = 10  # <----------------- TMAX
