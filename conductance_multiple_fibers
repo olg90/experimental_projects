@@ -537,7 +537,8 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
                 rfon = False
 
             if V[i] > theta[i]:  # AP
-                theta2[i] += alpha
+                # theta2[i] += alpha
+                theta2[i] += alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)*2 
                 if i > int(ratio*vlen) and i < vlen:
                     aplist[i] = i*dt
                 rfon = True
@@ -695,13 +696,27 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Good for enum=0
+# =============================================================================
+# # Good for enum=0
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
+# vt = -50e-3  # threshold base value at no activity
+# vi = -55e-3  # threshold increases when the membrane potential is above this level
+# at = 0.85  # rate of polarization increase
+# alpha = 4.5e-3  # jump size
+#
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Closest exc fits so far
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
-vt = -50e-3  # threshold base value at no activity
-vi = -55e-3  # threshold increases when the membrane potential is above this level
-at = 0.85  # rate of polarization increase
-alpha = 4.5e-3  # jump size
+tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -52.9e-3  # threshold base value at no activity
+vi = -59e-3  # threshold increases when the membrane potential is above this level
+at = 1  # rate of polarization increase, larger means more curve downward at high f
+alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
@@ -712,7 +727,7 @@ tmax = 10  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 0
+enum = 1
 efibers = [40, 10, 4]
 estrengths = [1, 4, 10]  # total strength = 40 nS
 
@@ -828,18 +843,20 @@ if ttype == 100:
                          vi, vin, vin2, tautheta1, tautheta2,
                          vt, vtmin, at, alpha, 1)
                 foutsj.append(fout)
-            foutlist.append(np.mean(fout))
+            foutlist.append(np.mean(foutsj))
         foutlists.append(foutlist)
 
     fs = 15
     cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
     for i in range(3):
+        # plot data
         plt.plot(filist, d1.iloc[:, i], marker='o',
                  label='exc={}, inh={}'.format(
                      estrengths[enum], istrengths[i]),
                  color=cs[i])
         ptype = 0
         if ptype == 0:
+            # plot simulations
             plt.plot(filist, np.array(foutlists[i]), marker='o',
                      label='simulation',
                      color=cs[i], linestyle='--')
@@ -2397,7 +2414,7 @@ if ttype == 100:
     plt.legend(fontsize=fs-3)
     plt.show()
     
-#%%  Fast code
+#%%  Fast code: exc + inh
 
 from tqdm import tqdm
 from scipy.optimize import minimize
@@ -2416,7 +2433,6 @@ import re
 @jit(nopython=True)
 def getaps(aplist, dt):
     return np.where(aplist != 0)[0]*dt
-
 
 @jit(nopython=True)
 def thetainf(vm, vi, vin, vin2, vt, vtmin, at):
@@ -2499,7 +2515,7 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
                 rfon = False
 
             if V[i] > theta[i]:  # AP
-                theta2[i] += alpha
+                # theta2[i] += alpha
                 theta2[i] += alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)*2 
                 if i > int(ratio*vlen) and i < vlen:
                     aplist[i] = i*dt
@@ -2710,7 +2726,21 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Closest fits so far
+# =============================================================================
+# # Closest exc fits so far
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -52.9e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# at = 1  # rate of polarization increase, larger means more curve downward at high f
+# alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Closest exc fits so far
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -52.9e-3  # threshold base value at no activity
@@ -2722,13 +2752,12 @@ vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
-
 # Simulation parameters
 tmax = 10  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 2
+enum = 1
 efibers = [40, 10, 4]
 estrengths = [1, 4, 10]  # total strength = 40 nS
 
@@ -3018,7 +3047,7 @@ strengths = [1, 4, 10]
 nfibers = [40, 10, 4]
 
 # Fixed
-f = 50  # exc
+f = 300  # exc
 fi = 0  # inh
 ce = 40e-9  # synthetic spiking variable amplitude
 ci = 32e-9
@@ -3065,40 +3094,40 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
+# Closest exc fits so far
+tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -52.9e-3  # threshold base value at no activity
+vi = -59e-3  # threshold increases when the membrane potential is above this level
+at = 1  # rate of polarization increase, larger means more curve downward at high f
+alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+
+vin = -60e-3  # voltage at which the threshold resting value lowers
+vin2 = -65e-3  # the threshold will not lower below this voltage
+vtmin = -59e-3  # the lower value of the threshold potential
+
 # =============================================================================
-# # Closest exc fits so far
+# # Testing
 # tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 # tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
-# vt = -52.9e-3  # threshold base value at no activity
+# vt = -59.9e-3  # threshold base value at no activity
 # vi = -59e-3  # threshold increases when the membrane potential is above this level
-# at = 1  # rate of polarization increase, larger means more curve downward at high f
-# alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+# at = 1*0  # rate of polarization increase, larger means more curve downward at high f
+# alpha = [0e-3, 0*1e-3, 10e-3]  # jump size
 # 
 # vin = -60e-3  # voltage at which the threshold resting value lowers
 # vin2 = -65e-3  # the threshold will not lower below this voltage
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Testing
-tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -59.9e-3  # threshold base value at no activity
-vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 1*0  # rate of polarization increase, larger means more curve downward at high f
-alpha = [0e-3, 0*1e-3, 5e-3]  # jump size
-
-vin = -60e-3  # voltage at which the threshold resting value lowers
-vin2 = -65e-3  # the threshold will not lower below this voltage
-vtmin = -59e-3  # the lower value of the threshold potential
-
 # Simulation parameters
 tmax = 10  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 2 # 0-1nS, 1-4nS, 2-10nS
+enum = 1 # 0-1nS, 1-4nS, 2-10nS
 
-ttype = 100  # <---------- test type        
+ttype = 100   # <---------- test type        
 
 # -----------------------------------------------------------------------------
 
@@ -3184,9 +3213,7 @@ if ttype == 100:
                 print(i1, len(nfibers), i, len(flist), j, navgs)
                 count += 1
                 print(count/(len(nfibers)*len(flist)*navgs))
-                tliste, Gexc, tempe = geti2(
-                    f, nef, strength, tde, tre, tmax, dt)
-
+                tliste, Gexc, tempe = geti2(f, nef, strength, tde, tre, tmax, dt)
                 vlen = len(tliste)
                 V, t, iexc, iinh, aplist, vthlist, fout = \
                     sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
@@ -3590,6 +3617,15 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
             dVdt = (1 / C_m) * (-i_ext-i_ion)
             V[i] = V[i-1] + dVdt * dt*(1-rfon)
 
+            dtheta1dt = 1/tautheta1*(-theta1[i-1] +
+                                     thetainf(V[i-1], vi, vin, vin2, vt, vtmin, at))
+            theta1[i] = theta1[i-1] + dtheta1dt*dt
+
+            dtheta2dt = 1/tautheta2*(-theta2[i-1])
+            theta2[i] = theta2[i-1]+dtheta2dt*dt
+
+            theta[i] = theta1[i]+theta2[i]
+
             # Add all the current values to a list for plotting
             iexc[i] = i_exc
             iinh[i] = i_inh
@@ -3603,10 +3639,7 @@ def sima(vlen, V0, Gexc, Ginh, dt, vr, rf, gL,
 
             if V[i] > theta[i]:  # AP
                 # theta2[i] += alpha
-                # theta2[i] += (alpha*0+0.00055)*(V[i]/vt)
-                theta2[i] += (alpha*0+0.0006)*(V[i]/vt)
-                # theta2[i] += alpha*(V[i]/vt)**2
-                # theta2[i] += alpha*(V[i]/vt)**2+0.00005*(V[i]/vt)
+                theta2[i] += alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)*2 
                 if i > int(ratio*vlen) and i < vlen:
                     aplist[i] = i*dt
                 rfon = True
@@ -3683,7 +3716,7 @@ strengths = [1, 4, 10]
 nfibers = [40, 10, 4]
 
 # Fixed
-f = 50  # exc
+f = 300  # exc
 fi = 0  # inh
 ce = 40e-9  # synthetic spiking variable amplitude
 ci = 32e-9
@@ -3702,27 +3735,14 @@ C_m = 25e-12
 vr = V0
 gL = 25e-9  # leak conductance nS
 
-# =============================================================================
-# # Testing
-# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-# tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
-# vt = -50e-3  # threshold base value at no activity
-# vi = -55e-3  # threshold increases when the membrane potential is above this level
-# at = 0.85  # rate of polarization increase
-# alpha = 4.5e-3  # jump size
-# 
-# vin = -60e-3  # voltage at which the threshold resting value lowers
-# vin2 = -65e-3  # the threshold will not lower below this voltage
-# vtmin = -59e-3  # the lower value of the threshold potential
-# =============================================================================
-
-# Medium fits but the middle one is bandpass
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 40e-3  # time constant of the depolarized post-jump decay
-vt = -58e-3  # threshold base value at no activity
+tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 1.27  # rate of polarization increase
-alpha = 0.8e-3  # jump size
+at = 0  # rate of polarization increase, larger means more curve downward at high f
+
+# ------- Here
+vt = -50e-3  # threshold base value at no activity
+alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
@@ -3733,9 +3753,9 @@ tmax = 10  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 0 # 0-1nS, 1-4nS, 2-10nS
+enum = 1 # 0-1nS, 1-4nS, 2-10nS
 
-ttype = 100  # <---------- test type        
+ttype = 100   # <---------- test type        
 
 # -----------------------------------------------------------------------------
 
@@ -3821,9 +3841,7 @@ if ttype == 100:
                 print(i1, len(nfibers), i, len(flist), j, navgs)
                 count += 1
                 print(count/(len(nfibers)*len(flist)*navgs))
-                tliste, Gexc, tempe = geti2(
-                    f, nef, strength, tde, tre, tmax, dt)
-
+                tliste, Gexc, tempe = geti2(f, nef, strength, tde, tre, tmax, dt)
                 vlen = len(tliste)
                 V, t, iexc, iinh, aplist, vthlist, fout = \
                     sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
