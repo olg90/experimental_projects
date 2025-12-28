@@ -2652,7 +2652,7 @@ d1 = d.iloc[1:, -3:][7*excnum:7*(excnum+1)]  # Mean sustained rate
 
 # Fixed
 f = 300  # exc
-fi = 300  # inh
+fi = 50  # inh
 ce = 40e-9  # synthetic spiking variable amplitude
 ci = 32e-9
 
@@ -2727,21 +2727,21 @@ gL = 25e-9  # leak conductance nS
 # =============================================================================
 
 # =============================================================================
-# # Closest exc fits so far
+# # Good fit to excnum=0
 # tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
-# vt = -52.9e-3  # threshold base value at no activity
-# vi = -59e-3  # threshold increases when the membrane potential is above this level
-# at = 1  # rate of polarization increase, larger means more curve downward at high f
-# alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+# tautheta2 = 45e-3  # time constant of the depolarized post-jump decay
+# vt = -46e-3  # threshold base value at no activity
+# vi = -55e-3  # threshold increases when the membrane potential is above this level
+# at = 0.85  # rate of polarization increase
+# alpha = [4.5e-3, 0*0.01e-3, 0*0.01e-3]  # jump size
 # 
 # vin = -60e-3  # voltage at which the threshold resting value lowers
 # vin2 = -65e-3  # the threshold will not lower below this voltage
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Closest exc fits so far
-tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# Closest exc fits so far - BEST # check from 1-3 ms tautheta1
+tautheta1 = 3e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -52.9e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
@@ -2752,12 +2752,13 @@ vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
+
 # Simulation parameters
-tmax = 10  # <----------------- TMAX
+tmax = 5  # <----------------- TMAX
 dt = 1e-4
 navgs = 1
 
-enum = 1
+enum = 0
 efibers = [40, 10, 4]
 estrengths = [1, 4, 10]  # total strength = 40 nS
 
@@ -2768,7 +2769,7 @@ istrengths = [8, 4, 2]  # total strength = 32 nS
 ne = efibers[enum] # num excitatory fibers
 ni = ifibers[inum]
 
-ttype = 100  # <---------- test type
+ttype = 1 # <---------- test type
 
 d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
 
@@ -3742,7 +3743,7 @@ at = 0  # rate of polarization increase, larger means more curve downward at hig
 
 # ------- Here
 vt = -50e-3  # threshold base value at no activity
-alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+alpha = [4e-3, 0.05e-3, 10e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
