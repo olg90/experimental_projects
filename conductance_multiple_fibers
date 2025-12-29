@@ -2652,7 +2652,7 @@ d1 = d.iloc[1:, -3:][7*excnum:7*(excnum+1)]  # Mean sustained rate
 
 # Fixed
 f = 300  # exc
-fi = 50  # inh
+fi = 150  # inh
 ce = 40e-9  # synthetic spiking variable amplitude
 ci = 32e-9
 
@@ -2740,22 +2740,35 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Closest exc fits so far - BEST # check from 1-3 ms tautheta1
-tautheta1 = 3e-3  # time constant of the threshold change to the infinite value
+# =============================================================================
+# # Closest exc fits so far
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -52.9e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# at = 1  # rate of polarization increase, larger means more curve downward at high f
+# alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Best fits for exc+inh
+tautheta1 = 0.8e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -52.9e-3  # threshold base value at no activity
+vt = -52e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
-at = 1  # rate of polarization increase, larger means more curve downward at high f
+at = 0.85  # rate of polarization increase, larger means more curve downward at high f
 alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
-vin2 = -65e-3  # the threshold will not lower below this voltage
-vtmin = -59e-3  # the lower value of the threshold potential
-
+vin2 = -80e-3  # the threshold will not lower below this voltage
+vtmin = -52.99e-3  # the lower value of the threshold potential
 
 # Simulation parameters
-tmax = 5  # <----------------- TMAX
-dt = 1e-4
+tmax = 10  # <----------------- TMAX
+dt = 1e-4 
 navgs = 1
 
 enum = 0
@@ -2769,7 +2782,7 @@ istrengths = [8, 4, 2]  # total strength = 32 nS
 ne = efibers[enum] # num excitatory fibers
 ni = ifibers[inum]
 
-ttype = 1 # <---------- test type
+ttype = 100 # <---------- test type
 
 d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
 
@@ -2806,6 +2819,8 @@ if ttype == 1:
              color='green', alpha=0.5, label='vi')
     plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.',
              color='red', alpha=0.5, label='vin')
+    plt.plot(t * dt, vin2 * np.ones(len(t)), linestyle='-.',
+             color='orange', alpha=0.5, label='vin2')
 
     plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
     plt.xlabel('Time (sec)', fontsize=fs)
@@ -2854,7 +2869,7 @@ if ttype == 100:
                  label='exc={}, inh={}'.format(
                      estrengths[enum], istrengths[i]),
                  color=cs[i])
-        ptype = 0
+        ptype = 1
         if ptype == 0:
             plt.plot(filist, np.array(foutlists[i]), marker='o',
                      label='simulation',
@@ -3095,8 +3110,23 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
+# =============================================================================
+# # Closest exc fits so far
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -52.9e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# at = 1  # rate of polarization increase, larger means more curve downward at high f
+# alpha = [2e-3, 0.05e-3, 0.01e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# 
+# =============================================================================
+
 # Closest exc fits so far
-tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+tautheta1 = 3e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -52.9e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
@@ -3107,19 +3137,6 @@ vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
-# =============================================================================
-# # Testing
-# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
-# vt = -59.9e-3  # threshold base value at no activity
-# vi = -59e-3  # threshold increases when the membrane potential is above this level
-# at = 1*0  # rate of polarization increase, larger means more curve downward at high f
-# alpha = [0e-3, 0*1e-3, 10e-3]  # jump size
-# 
-# vin = -60e-3  # voltage at which the threshold resting value lowers
-# vin2 = -65e-3  # the threshold will not lower below this voltage
-# vtmin = -59e-3  # the lower value of the threshold potential
-# =============================================================================
 
 # Simulation parameters
 tmax = 10  # <----------------- TMAX
@@ -3741,9 +3758,9 @@ tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vi = -59e-3  # threshold increases when the membrane potential is above this level
 at = 0  # rate of polarization increase, larger means more curve downward at high f
 
-# ------- Here
-vt = -50e-3  # threshold base value at no activity
-alpha = [4e-3, 0.05e-3, 10e-3]  # jump size
+# ------------------------------------------------
+vt = -59e-3  # threshold base value at no activity
+alpha = [7e-3, 1e-3, 1e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
