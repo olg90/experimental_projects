@@ -3628,7 +3628,7 @@ gL = 25e-9  # leak conductance nS
 # =============================================================================
 
 # Best fits for exc+inh
-tautheta1 = 0.7e-3  # time constant of the threshold change to the infinite value
+tautheta1 = 0.9e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 14e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -52e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
