@@ -1,3 +1,4 @@
+#%%
 from tqdm import tqdm
 from scipy.optimize import minimize
 import numpy as np
@@ -58,6 +59,12 @@ def sim(V0, tlen, Iext, dt, vr, rf, gL, vt, C_m):
 def getaps(aplist, dt):
     return np.where(aplist != 0)[0]*dt
 
+def geti(tmax, dt, A):
+    Iext = np.zeros(int(tmax/dt))
+    Iext[int(tmax/dt*2/15):int(tmax/dt*4/5)]=A
+    return Iext
+
+
 file = r'C:\Users\Oliver\Desktop\Research\PYR\PYR model data'
 files=['F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
 
@@ -66,44 +73,77 @@ data=pd.read_csv(file+'\{}'.format(files[0]))
 data=np.array(data.iloc[:, :2])
 data[:,0]*=1e-9
 
-tmax = 1.5  # <----------------- TMAX
-dt = 1e-4
+tmax = 1.5  # <----------------- simulation run time
+dt = 1e-4 # sample rate
 rf = 1e-3  # refractory period
 
-V0 = -70e-3  # initial membrane potential (mV)
-C_m = 200e-12
-vr = V0
-gL = 15e-9  # leak conductance nS
-vt = -50e-3  # threshold base value at no activity
-A=0.1e-9 # current amplitude
+V0 = -78e-3  # reverse potential
+C_m = 200e-12 # capacitance
+vr = V0 # reset potential after postsynaptic AP
+gL = 1/(50.29e6) # 15e-9  # leak conductance
+vt = -50e-3  # threshold level
+A=0.557e-9 # current amplitude
 
-# =============================================================================
-# Iext = np.zeros(int(tmax/dt))
-# Iext[int(tmax/dt*0.2):int(tmax/dt*0.6)]=A
-# res=sim(V0, len(Iext), Iext, dt, vr, rf, gL, vt, C_m)
-# t=np.linspace(0,len(Iext),len(Iext))*dt
-# 
-# plt.subplot(3,1,1)
-# plt.plot(t, Iext)
-# plt.xticks([])
-# 
-# plt.subplot(3,1,2)
-# plt.plot(t, res[0])
-# plt.xticks([])
-# =============================================================================
+Iext = geti(tmax, dt, A)
+res=sim(V0, len(Iext), Iext, dt, vr, rf, gL, vt, C_m)
+t=np.linspace(0,len(Iext),len(Iext))*dt
 
-# plt.subplot(3,1,3)
+plt.figure()
+plt.subplot(3,1,1)
+plt.plot(t, Iext*1e9)
+plt.ylabel('Current (nA)')
+plt.xticks([])
+
+plt.subplot(3,1,2)
+plt.plot(t, res[0]*1000, label='membrane potnetial')
+plt.plot(t, vt*np.ones(len(t))*1000, label='threshold potential')
+plt.ylabel('Membrane\npotential (mV)')
+plt.xlabel('Time (sec)')
+plt.legend(loc='upper right')
+plt.show()
+
+# alist=np.arange(-0.1, 0.3, 0.05)
+alist=[-0.1, -0.05, 0.05, 0.1, 0.15, 0.2, 0.25]
+alist = np.array([a*1e-9 for a in alist if a!=0])
+ilist = [geti(tmax, dt, a) for a in alist]
+vlist = [sim(V0, len(i), i, dt, vr, rf, gL, vt, C_m)[0] for i in ilist]
+
+plt.figure()
+plt.subplot(1,2,1)
+for i in range(len(vlist)):
+    plt.plot(t, ilist[i]*1e9)
+plt.xlabel('Time (sec)')
+plt.ylabel('Current (nA)')
+plt.subplot(1,2,2)
+for i in range(len(vlist)):
+    plt.plot(t, vlist[i]*1e3)
+plt.xlabel('Time (sec)')
+plt.ylabel('Membrane potential (mV)')
+plt.tight_layout()
+plt.show()
+    
+#%%
+
+tmax = 1.5  # <----------------- simulation run time
+dt = 1e-4 # sample rate
+rf = 1e-3  # refractory period
+
+V0 = -78e-3  # reverse potential
+C_m = 250e-12 # capacitance
+vr = V0 # reset potential after postsynaptic AP
+gL = 1/(50.29e6) # 15e-9  # leak conductance
+vt = -62e-3  # threshold level
+
 alist=data[:,0]
 fouts=[]
 for a in alist:
-    Iext = np.zeros(int(tmax/dt))
-    Iext[int(tmax/dt*0.2):int(tmax/dt*0.6)]=a
+    Iext = geti(tmax, dt, a)
     res=sim(V0, len(Iext), Iext, dt, vr, rf, gL, vt, C_m)
     fouts.append(res[1])
     
     
-plt.plot(alist, data[:, 1], label='experimental')
-plt.plot(alist, fouts, label='simulation')
+plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
+plt.plot(alist*1e9, fouts, label='simulation', marker='o', alpha=0.6)
 # =============================================================================
 # plt.plot(alist, data[:, 1], label='experimental', 
 #             marker='o')
@@ -112,5 +152,73 @@ plt.plot(alist, fouts, label='simulation')
 # =============================================================================
 
 plt.ylabel('Output frequency')
+plt.xlabel('Input current amplitude (nA)')
 plt.legend()
 plt.show()
+
+#%% optimize
+from scipy.optimize import differential_evolution
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =========================
+# Objective function
+# =========================
+def mse_loss(params):
+    C_m, gL, vt = params
+    fouts = []
+
+    for a in alist:
+        Iext = geti(tmax, dt, a)
+        res = sim(V0, len(Iext), Iext, dt, vr, rf, gL, vt, C_m)
+        fouts.append(res[1])
+
+    fouts = np.array(fouts)
+    return np.mean((fouts - data[:, 1])**2)
+
+# =========================
+# Bounds
+# =========================
+bounds = [
+    (50e-12, 500e-12),     # C_m
+    (1e-9, 50e-9),         # gL
+    (-70e-3, -45e-3)       # vt
+]
+
+# =========================
+# Optimization
+# =========================
+result = differential_evolution(
+    mse_loss,
+    bounds,
+    strategy='best1bin',
+    popsize=15,
+    tol=1e-4,
+    polish=True
+)
+
+C_m_opt, gL_opt, vt_opt = result.x
+
+print("Optimized parameters:")
+print("C_m =", C_m_opt)
+print("gL  =", gL_opt)
+print("vt  =", vt_opt)
+print("Final MSE =", result.fun)
+
+# =========================
+# Plot optimized output
+# =========================
+fouts_opt = []
+for a in alist:
+    Iext = geti(tmax, dt, a)
+    res = sim(V0, len(Iext), Iext, dt, vr, rf, gL_opt, vt_opt, C_m_opt)
+    fouts_opt.append(res[1])
+
+plt.figure()
+plt.plot(alist * 1e9, data[:, 1], 'o', label='experimental')
+plt.plot(alist * 1e9, fouts_opt, 'o-', label='optimized simulation', alpha=0.7)
+plt.xlabel('Input current amplitude (nA)')
+plt.ylabel('Output frequency')
+plt.legend()
+plt.show()
+
