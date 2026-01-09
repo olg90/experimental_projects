@@ -5045,29 +5045,100 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Closest exc fits so far - ORIGINAL, GOOD
+# =============================================================================
+# # Closest exc fits so far - ORIGINAL, GOOD
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -51.5e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# vi2=-40e-3
+# # at = 1
+# # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# at = np.array([1, 0.2, 0.5])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# 
+# alpha = [2e-3, 0.05e-3, 0.1e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# =============================================================================
+# # Old fits - larger capacitance
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 45e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -46e-3  # threshold base value at no activity
+# vi = -55e-3  # threshold increases when the membrane potential is above this level
+# vi2=-40e-3
+# # at = 1
+# # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# at = np.array([0.85, 0, 0*0.5])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# 
+# alpha = [7e-3, 0*0.05e-3, 0*0.1e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -60.1e-3  # the threshold will not lower below this voltage
+# vtmin = -51e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# =============================================================================
+# # Testing
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -52.9e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# vi2=-40e-3
+# # at = 1
+# # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# at = np.array([1, 0.2, 0.5])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# 
+# alpha = [2e-3, 0.05e-3, 0.1e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# =============================================================================
+# # Old fits - Smaller capacitance new, ok fits to exc, bad in inh
+# tautheta1 = 0.8e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 20e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -48e-3  # threshold base value at no activity
+# vi = -50e-3  # threshold increases when the membrane potential is above this level
+# vi2=-49e-3
+# # at = 1
+# # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# at = np.array([1.3, 0.1, 0*0.1]) # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# alpha = [0.2e-3, 0.1e-3, 1e-3] # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -60.1e-3  # the threshold will not lower below this voltage
+# vtmin = -51e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Testing
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -51.5e-3  # threshold base value at no activity
+vt = -52.9e-3  # threshold base value at no activity
 vi = -59e-3  # threshold increases when the membrane potential is above this level
 vi2=-40e-3
 # at = 1
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
 at = np.array([1, 0.2, 0.5])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-
 alpha = [2e-3, 0.05e-3, 0.1e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
-ttype = 1   # <----------------------------------- test type
+
+ttype = 100 # <----------------------------------- test type
 xtype = 10 # 1-exc or 10-exc/inh
-enum = 0  # 0-1nS, 1-4nS, 2-10nS - For xtype==10
-tmax = 10 # <----------------- TMAX
+enum = 2 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
+tmax = 1 #   <----------------- TMAX
 
 f = 300 # exc
-fi = 300 # inh
+fi = 150 # inh
 
 # Simulation parameters
 dt = 1e-4
