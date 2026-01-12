@@ -18,9 +18,9 @@ dnames = ['BigroomData', 'CircleData', 'HalfroomData',
 
 location=0
 if location==0:
-    dir1 = r'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{}'.format(dnames[dnametype])
+    dir1 = r'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{}'.format(dnames[dnametype])
 if location==1:
-    dir1 = r'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
+    dir1 = r'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\BigroomData'
 os.chdir(dir1)
 dir2 = os.listdir(dir1)
 
@@ -2911,9 +2911,9 @@ for dnametype in range(len(dnames)):
 
     # Set data directory
     if location == 0:
-        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
     elif location == 1:
-        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
     
     dir2 = os.listdir(dir1)
 
@@ -3031,6 +3031,62 @@ for neuron_map in bigroom_maps:
 
 # distances_to_edge[i][j] = distance of j-th centroid in i-th neuron to nearest edge
 
+#%% Harmonic mean of all four distances to the nearest wall
+
+import numpy as np
+from scipy.ndimage import label, center_of_mass
+
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+# Get the Bigroom place maps
+bigroom_maps = plist[0]  # list of neurons
+
+# 8-connectivity
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# List to store distances per neuron
+distances_to_edge = []
+
+for neuron_map in bigroom_maps:
+    # Convert nonzero to 1
+    binary_map = 1 * (neuron_map > 0)
+    
+    # Label contiguous patches
+    labeled_array, num_features = label(binary_map, structure=structure)
+    
+    # Compute centroids
+    centroids_list = center_of_mass(
+        binary_map, labeled_array, range(1, num_features + 1)
+    )
+    
+    # Get map dimensions
+    h, w = binary_map.shape
+    
+    # Compute harmonic mean distance to four edges for each centroid
+    neuron_distances = []
+    for c in centroids_list:
+        row, col = c
+        
+        eps = 1e-6  # avoid division by zero
+        dists = np.array([
+            row,            # top
+            h - 1 - row,    # bottom
+            col,            # left
+            w - 1 - col     # right
+        ]) + eps
+        
+        harmonic_distance = 4.0 / np.sum(1.0 / dists)
+        neuron_distances.append(harmonic_distance)
+    
+    distances_to_edge.append(neuron_distances)
+
+# distances_to_edge[i][j] =
+# harmonic mean distance of j-th centroid in i-th neuron to the four walls
+
+
 #%% CDF
 
 import numpy as np
@@ -3075,6 +3131,62 @@ plt.xlabel('Distance to nearest edge')
 plt.ylabel('CDF')
 plt.title('CDF of all centroids of placemaps in BigroomData')
 plt.show()
+
+#%% CDF harmonic
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# Get Bigroom place maps
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# Collect all distances
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    for c in centroids_list:
+        row, col = c
+
+        # ---- Nearest-wall distance (commented out) ----
+        # distance = min(row, h-1-row, col, w-1-col)
+
+        # ---- Harmonic mean distance to four walls ----
+        eps = 1e-6
+        distance = 4.0 / (1.0/(row+eps) +
+                          1.0/(h-1-row+eps) +
+                          1.0/(col+eps) +
+                          1.0/(w-1-col+eps))
+
+        all_distances.append(distance)
+
+# Convert to numpy array
+all_distances = np.array(all_distances)
+
+# Sort distances
+sorted_distances = np.sort(all_distances)
+
+# Compute CDF
+cdf = np.arange(1, len(sorted_distances)+1) / len(sorted_distances)
+
+# Plot
+plt.figure(figsize=(6,4))
+plt.step(sorted_distances, cdf, where='post')
+plt.xlabel('Harmonic mean distance to walls')
+plt.ylabel('CDF')
+plt.title('CDF of all centroids of placemaps in BigroomData')
+plt.show()
+
 
 #%% Beta CDF
 
@@ -3197,6 +3309,92 @@ plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
 
+#%% Beta CDF harmonic
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy import stats
+
+# ===================== Get Bigroom place maps =====================
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# ===================== Collect distances =====================
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(
+        binary_map, labeled_array, range(1, num_features + 1)
+    )
+    
+    h, w = binary_map.shape
+    max_dist = min(h, w) / 2  # normalization scale (same as before)
+
+    for c in centroids_list:
+        row, col = c
+
+        # ---- Nearest-wall distance (commented out) ----
+        # distance = min(row, h-1-row, col, w-1-col)
+
+        # ---- Harmonic mean distance to four walls ----
+        eps = 1e-6
+        dists = np.array([
+            row,
+            h - 1 - row,
+            col,
+            w - 1 - col
+        ]) + eps
+
+        distance = 4.0 / np.sum(1.0 / dists)
+
+        # Normalize to [0, 1]
+        all_distances.append(distance / max_dist)
+
+all_distances = np.array(all_distances)
+
+# ===================== Fit Beta distribution =====================
+epsilon = 1e-6
+all_distances_clipped = np.clip(all_distances, epsilon, 1 - epsilon)
+
+a, b, loc, scale = stats.beta.fit(
+    all_distances_clipped, floc=0, fscale=1
+)
+
+beta_mean = stats.beta.mean(a, b, loc=loc, scale=scale)
+beta_var = stats.beta.var(a, b, loc=loc, scale=scale)
+beta_cv2 = beta_var / beta_mean**2
+
+# ===================== Compute empirical CDF =====================
+sorted_distances = np.sort(all_distances)
+empirical_cdf = np.arange(1, len(sorted_distances) + 1) / len(sorted_distances)
+
+# Beta CDF
+x = np.linspace(0, 1, 300)
+beta_cdf = stats.beta.cdf(x, a, b, loc=loc, scale=scale)
+
+# ===================== Plot =====================
+plt.figure(figsize=(6,4))
+plt.step(sorted_distances, empirical_cdf, where='post', label='Empirical CDF')
+plt.plot(
+    x, beta_cdf, 'r-', lw=2,
+    label=f'Beta fit\nmean={beta_mean:.2f}, CV²={beta_cv2:.2f}'
+)
+
+plt.xlabel('Normalized harmonic mean distance to walls')
+plt.ylabel('CDF')
+plt.title('CDF of normalized centroid distances with Beta fit')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+
 
 #%% Histogram PDF (nearest wall)
 import numpy as np
@@ -3282,6 +3480,115 @@ plt.legend()
 plt.grid(alpha=0.3)
 plt.show()
 
+#%% Histogram PDF harmonic
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy import stats
+from scipy.special import gamma as gamma_func  # continuous gamma function
+
+# ===================== Get Bigroom place maps =====================
+bigroom_maps = plist[0]
+
+# 8-connectivity structure
+structure = np.array([[1,1,1],
+                      [1,1,1],
+                      [1,1,1]])
+
+# ===================== Collect distances =====================
+all_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(
+        binary_map, labeled_array, range(1, num_features + 1)
+    )
+    
+    h, w = binary_map.shape
+    for c in centroids_list:
+        row, col = c
+
+        # ---- Nearest-wall distance (commented out) ----
+        # distance = min(row, h - 1 - row, col, w - 1 - col)
+
+        # ---- Harmonic mean distance to four walls ----
+        eps = 1e-6
+        dists = np.array([
+            row,
+            h - 1 - row,
+            col,
+            w - 1 - col
+        ]) + eps
+
+        distance = 4.0 / np.sum(1.0 / dists)
+        all_distances.append(distance)
+
+all_distances = np.array(all_distances)
+
+# ===================== Fit Gamma distribution =====================
+gamma_params = stats.gamma.fit(all_distances)
+gamma_dist = stats.gamma(*gamma_params)
+gamma_mean = gamma_dist.mean()
+gamma_std = gamma_dist.std()
+gamma_cv2 = (gamma_std / gamma_mean)**2
+gamma_loglik = np.sum(gamma_dist.logpdf(all_distances))
+gamma_aic = 2 * len(gamma_params) - 2 * gamma_loglik
+
+# ===================== Fit continuous Negative Binomial (Gamma-Poisson) =====================
+mean_dist = np.mean(all_distances)
+var_dist = np.var(all_distances)
+
+r_cont = mean_dist**2 / (var_dist - mean_dist)
+p_cont = r_cont / (r_cont + mean_dist)
+
+# Continuous Negative Binomial PDF
+def cont_nbinom_pdf(x, r, p):
+    return (gamma_func(x + r) /
+            (gamma_func(x + 1) * gamma_func(r))) * (p**r) * ((1 - p)**x)
+
+# Mean, CV², approximate log-likelihood & AIC
+nb_mean = r_cont * (1 - p_cont) / p_cont
+nb_std = np.sqrt(r_cont * (1 - p_cont) / p_cont**2)
+nb_cv2 = (nb_std / nb_mean)**2
+nb_loglik = np.sum(np.log(cont_nbinom_pdf(all_distances, r_cont, p_cont)))
+nb_aic = 2 * 2 - 2 * nb_loglik  # 2 parameters: r, p
+
+# ===================== Plot histogram and fits =====================
+plt.figure(figsize=(6,4))
+
+bin_count = 40
+counts, bins, _ = plt.hist(
+    all_distances, bins=bin_count, density=False,
+    alpha=0.6, color='skyblue', edgecolor='black', label='Data'
+)
+
+bin_width = bins[1] - bins[0]
+x_vals = np.linspace(min(all_distances), max(all_distances), 300)
+
+# Scale PDFs to match histogram counts
+pdf_gamma_scaled = gamma_dist.pdf(x_vals) * len(all_distances) * bin_width
+pdf_nb_scaled = cont_nbinom_pdf(x_vals, r_cont, p_cont) * len(all_distances) * bin_width
+
+plt.plot(
+    x_vals, pdf_gamma_scaled, 'r-', lw=2,
+    label=f'Gamma fit\nmean={gamma_mean:.2f}, CV²={gamma_cv2:.2f}, AIC={gamma_aic:.1f}'
+)
+
+plt.plot(
+    x_vals, pdf_nb_scaled, 'g-', lw=2,
+    label=f'Gamma-Poisson fit\nmean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}'
+)
+
+plt.xlabel('Harmonic mean distance to walls (pixels)')
+plt.ylabel('Counts')
+plt.title('Histogram of place field centroid distances (Bigroom)')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
+
+
 #%% All CDFs together of distances to the nearest wall 
 
 import numpy as np
@@ -3327,6 +3634,66 @@ plt.grid(alpha=0.3)
 plt.legend(fontsize=6, ncol=2)  # adjust legend
 plt.tight_layout()
 plt.show()
+
+#%% All CDFs together of harmonic distance to walls
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]  # list of neuron maps
+structure = np.ones((3, 3))  # 8-connectivity
+
+# ===================== Plot setup =====================
+plt.figure(figsize=(8,5))
+
+# ===================== Loop over neurons =====================
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(
+        binary_map, labeled_array, range(1, num_features + 1)
+    )
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+
+        # ---- Nearest-wall distance (commented out) ----
+        # dist_to_wall = min(row, h-1-row, col, w-1-col)
+
+        # ---- Harmonic mean distance to four walls ----
+        eps = 1e-6
+        dists = np.array([
+            row,
+            h - 1 - row,
+            col,
+            w - 1 - col
+        ]) + eps
+
+        dist_to_wall = 4.0 / np.sum(1.0 / dists)
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) == 0:
+        continue  # skip neurons with no centroids
+    
+    # empirical CDF
+    sorted_dist = np.sort(distances)
+    cdf = np.arange(1, len(sorted_dist) + 1) / len(sorted_dist)
+    
+    # plot CDF
+    plt.step(sorted_dist, cdf, where='post', alpha=0.6)
+
+# ===================== Final touches =====================
+plt.xlabel('Harmonic mean distance to walls (pixels)')
+plt.ylabel('CDF')
+plt.title('CDF of harmonic distance to walls for each neuron')
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
 
 
 #%% All CDF interdistances
@@ -3377,6 +3744,66 @@ plt.grid(alpha=0.3)
 plt.legend(fontsize=6, ncol=2)
 plt.tight_layout()
 plt.show()
+
+#%% All CDF interdistances (harmonic wall distance)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+
+plt.figure(figsize=(8,5))
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1 * (neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    centroids_list = center_of_mass(
+        binary_map, labeled_array, range(1, num_features + 1)
+    )
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+
+        # ---- Harmonic mean distance to four walls ----
+        eps = 1e-6
+        dists = np.array([
+            row,
+            h - 1 - row,
+            col,
+            w - 1 - col
+        ]) + eps
+
+        dist_to_wall = 4.0 / np.sum(1.0 / dists)
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue  # need at least 2 centroids
+    
+    # sort distances
+    distances_sorted = np.sort(distances)
+    
+    # compute inter-distance intervals
+    inter_distances = np.diff(distances_sorted)
+    
+    # empirical CDF of inter-distances
+    sorted_inter = np.sort(inter_distances)
+    cdf = np.arange(1, len(sorted_inter) + 1) / len(sorted_inter)
+    
+    # plot CDF
+    plt.step(sorted_inter, cdf, where='post', alpha=0.6)
+
+plt.xlabel('Inter-distance of harmonic wall distances (pixels)')
+plt.ylabel('CDF')
+plt.title('CDF of inter-centroid harmonic distances for each neuron')
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
 
 
 #%% CDF of interdistances for each neuron and best fit
@@ -3555,6 +3982,198 @@ if best_inter_distances is not None:
     plt.grid(alpha=0.3)
     plt.show()
     
+#%% CDF of interdistances for each neuron and best fit (harmonic distance)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, weibull_min, lognorm, norm
+from scipy.optimize import minimize
+
+# ===================== Parameters =====================
+bigroom_maps = plist[0]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 8  # only include neurons with more than this many place fields
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def negloglik_dist(params, data, dist_name):
+    """Negative log-likelihood for different distributions."""
+    try:
+        if dist_name == 'expon':
+            scale = params[0]
+            pdf_vals = expon.pdf(data, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            pdf_vals = gamma.pdf(data, a=a, scale=scale)
+        elif dist_name == 'weibull':
+            c, scale = params
+            pdf_vals = weibull_min.pdf(data, c=c, scale=scale)
+        elif dist_name == 'lognorm':
+            s, scale = params
+            pdf_vals = lognorm.pdf(data, s=s, scale=scale)
+        elif dist_name == 'norm':
+            mu, sigma = params
+            pdf_vals = norm.pdf(data, loc=mu, scale=sigma)
+        else:
+            return np.inf
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    except Exception:
+        return np.inf
+
+def fit_distribution(data, dist_name):
+    """Fit a single distribution to data and return AIC and params."""
+    if dist_name == 'expon':
+        x0 = [np.mean(data)]
+        bounds = [(1e-6, None)]
+        k = 1
+    elif dist_name == 'gamma':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'weibull':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'lognorm':
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    elif dist_name == 'norm':
+        x0 = [np.mean(data), np.std(data)]
+        bounds = [(None, None), (1e-6, None)]
+        k = 2
+    else:
+        raise ValueError("Unknown distribution")
+    
+    res = minimize(negloglik_dist, x0=x0, args=(data, dist_name), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, k)
+    return res.x, aic
+
+# ===================== Main loop: plot all neurons =====================
+best_counts = {'expon':0}
+all_dist_aics = []
+
+plt.figure(figsize=(8,5))
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue  # skip neurons with too few place fields
+    
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+        # -------- Harmonic mean distance to four walls --------
+        eps = 1e-6
+        dists = np.array([row, h-1-row, col, w-1-col]) + eps
+        dist_to_wall = 4.0 / np.sum(1.0 / dists)
+        
+        # Original min distance (commented)
+        # dist_to_wall = min(row, h-1-row, col, w-1-col)
+        
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue
+    
+    # sorted distances and inter-distance intervals
+    distances_sorted = np.sort(distances)
+    inter_distances = np.diff(distances_sorted)
+    
+    # fit all distributions
+    dist_names = ['expon','gamma','weibull','lognorm','norm']
+    aics = {}
+    for dist_name in dist_names:
+        _, aic = fit_distribution(inter_distances, dist_name)
+        aics[dist_name] = aic
+    
+    # count if exponential is best
+    best_dist = min(aics, key=aics.get)
+    if best_dist == 'expon':
+        best_counts['expon'] += 1
+    
+    all_dist_aics.append(aics)
+    
+    # plot empirical CDF
+    sorted_inter = np.sort(inter_distances)
+    cdf = np.arange(1, len(sorted_inter)+1)/len(sorted_inter)
+    plt.step(sorted_inter, cdf, where='post', alpha=0.5)
+
+plt.xlabel('Inter-distance of harmonic wall distances (pixels)')
+plt.ylabel('CDF')
+plt.title(f'CDF of inter-centroid harmonic distances (neurons with >{min_fields} place fields)')
+plt.grid(alpha=0.3)
+plt.show()
+
+# ===================== Summary =====================
+num_neurons = len(all_dist_aics)
+print(f"Number of neurons considered: {num_neurons}")
+print(f"Number of neurons where Exponential is best fit: {best_counts['expon']}")
+print(f"Fraction best fit by Exponential: {best_counts['expon']/num_neurons:.2f}")
+
+# ===================== New figure: plot best exponential fit =====================
+best_aic = np.inf
+best_inter_distances = None
+best_scale = None
+
+for neuron_idx, neuron_map in enumerate(bigroom_maps):
+    binary_map = 1*(neuron_map>0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue
+
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    h, w = binary_map.shape
+    # Harmonic distance
+    distances = []
+    for row, col in centroids_list:
+        eps = 1e-6
+        dists = np.array([row, h-1-row, col, w-1-col]) + eps
+        dist_to_wall = 4.0 / np.sum(1.0 / dists)
+        distances.append(dist_to_wall)
+    
+    distances = np.array(distances)
+    if len(distances) < 2:
+        continue
+
+    inter_distances = np.diff(np.sort(distances))
+
+    # Fit exponential
+    scale, aic_expon = fit_distribution(inter_distances, 'expon')
+
+    # Keep neuron with lowest exponential AIC
+    if aic_expon < best_aic:
+        best_aic = aic_expon
+        best_inter_distances = inter_distances
+        best_scale = scale[0]  # scale parameter of the exponential
+
+# Plot empirical CDF and best-fit exponential CDF
+if best_inter_distances is not None:
+    sorted_inter = np.sort(best_inter_distances)
+    cdf_emp = np.arange(1, len(sorted_inter)+1)/len(sorted_inter)
+
+    x_vals = np.linspace(0, sorted_inter.max(), 200)
+    cdf_expon = 1 - np.exp(-x_vals / best_scale)
+
+    plt.figure(figsize=(7,4))
+    plt.step(sorted_inter, cdf_emp, where='post', label='Empirical CDF')
+    plt.plot(x_vals, cdf_expon, 'r-', lw=2, label=f'Exponential fit\nscale={best_scale:.2f}, AIC={best_aic:.1f}')
+    plt.xlabel('Inter-distance of harmonic wall distances (pixels)')
+    plt.ylabel('CDF')
+    plt.title('Neuron with Best Exponential Fit (Harmonic)')
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.show()
+
+    
 #%% Distance to the first centroid from the wall for each neuron CDF
 
 import numpy as np
@@ -3684,6 +4303,148 @@ for dist_name, info in fit_results.items():
     plt.plot(x_vals, cdf_fit, lw=2, label=f'{dist_name}\nmean={mean:.2f}, CV²={cv2:.4f}')
 
 plt.xlabel('Distance between the wall and the closest centroid')
+plt.ylabel('Cumulative distribution function')
+plt.title('{}'.format(dnames[dind]), fontsize=20)
+plt.legend(fontsize=8)
+plt.grid(alpha=0.3)
+plt.show()
+
+#%% Harmonic distance to the first centroid from the wall for each neuron CDF
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import expon, gamma, lomax
+from scipy.optimize import minimize
+
+# ===================== Parameters =====================
+dind = 0
+bigroom_maps = plist[dind]
+structure = np.ones((3, 3))  # 8-connectivity
+min_fields = 0  # minimum place fields to include neuron
+
+# ===================== Helper functions =====================
+def compute_aic(loglik, k):
+    return 2*k - 2*loglik
+
+def negloglik_dist(params, data, dist_name):
+    try:
+        if dist_name == 'expon':
+            scale = params[0]
+            if scale <= 0: return np.inf
+            pdf_vals = expon.pdf(data, scale=scale)
+        elif dist_name == 'gamma':
+            a, scale = params
+            if a <= 0 or scale <= 0: return np.inf
+            pdf_vals = gamma.pdf(data, a=a, scale=scale)
+        elif dist_name == 'lomax':
+            c, scale = params
+            if c <= 0 or scale <= 0: return np.inf
+            pdf_vals = lomax.pdf(data, c=c, scale=scale)
+        else:
+            return np.inf
+        return -np.sum(np.log(pdf_vals + 1e-12))
+    except:
+        return np.inf
+
+def fit_distribution(data, dist_name):
+    if dist_name == 'expon':
+        x0 = [np.mean(data)]
+        bounds = [(1e-6, None)]
+        k = 1
+    elif dist_name in ['gamma', 'lomax']:
+        x0 = [1, np.mean(data)]
+        bounds = [(1e-6, None), (1e-6, None)]
+        k = 2
+    else:
+        raise ValueError("Unknown distribution")
+    
+    res = minimize(negloglik_dist, x0=x0, args=(data, dist_name), bounds=bounds)
+    loglik = -res.fun
+    aic = compute_aic(loglik, k)
+    return res.x, aic
+
+def mean_cv2(dist_name, params):
+    if dist_name == 'expon':
+        mean = params[0]
+        cv2 = 1.0
+    elif dist_name == 'gamma':
+        a, scale = params
+        mean = a * scale
+        cv2 = 1 / a
+    elif dist_name == 'lomax':
+        c, scale = params
+        if c <= 1:
+            mean = np.inf
+        else:
+            mean = scale / (c - 1)
+        if c <= 2:
+            cv2 = np.inf
+        else:
+            cv2 = 1 / (c - 2)
+    return mean, cv2
+
+# ===================== Collect harmonic minimum distances =====================
+min_distances = []
+
+for neuron_map in bigroom_maps:
+    binary_map = 1*(neuron_map > 0)
+    labeled_array, num_features = label(binary_map, structure=structure)
+    if num_features <= min_fields:
+        continue
+    centroids_list = center_of_mass(binary_map, labeled_array, range(1, num_features+1))
+    h, w = binary_map.shape
+    distances = []
+    for row, col in centroids_list:
+        eps = 1e-6
+        dists = np.array([row, h-1-row, col, w-1-col]) + eps
+        dist_to_wall = 4.0 / np.sum(1.0 / dists)  # harmonic mean
+        # Original min distance (commented)
+        # dist_to_wall = min(row, h-1-row, col, w-1-col)
+        distances.append(dist_to_wall)
+    if len(distances) < 1:
+        continue
+    min_distances.append(np.min(distances))
+
+min_distances = np.array(min_distances)
+if len(min_distances) == 0:
+    raise ValueError("No neurons passed the min_fields criterion")
+
+# ===================== Empirical CDF =====================
+sorted_data = np.sort(min_distances)
+cdf_emp = np.arange(1, len(sorted_data)+1) / len(sorted_data)
+
+# ===================== Fit distributions =====================
+dist_names = [
+    # 'expon', 
+    # 'gamma', 
+    'lomax']
+fit_results = {}
+x_vals = np.linspace(0, sorted_data.max()*1.1, 500)
+
+for dist_name in dist_names:
+    params, aic = fit_distribution(min_distances, dist_name)
+    mean, cv2 = mean_cv2(dist_name, params)
+    fit_results[dist_name] = {'params': params, 'aic': aic, 'mean': mean, 'cv2': cv2}
+
+# ===================== Plot =====================
+plt.figure(figsize=(8,5))
+plt.step(sorted_data, cdf_emp, where='post', color='black', label='Empirical CDF')
+
+for dist_name, info in fit_results.items():
+    params = info['params']
+    aic = info['aic']
+    mean = info['mean']
+    cv2 = info['cv2']
+    if dist_name == 'expon':
+        cdf_fit = expon.cdf(x_vals, scale=params[0])
+    elif dist_name == 'gamma':
+        cdf_fit = gamma.cdf(x_vals, a=params[0], scale=params[1])
+    elif dist_name == 'lomax':
+        cdf_fit = lomax.cdf(x_vals, c=params[0], scale=params[1])
+    plt.plot(x_vals, cdf_fit, lw=2, label=f'{dist_name}\nmean={mean:.2f}, CV²={cv2:.4f}')
+
+plt.xlabel('Harmonic distance between the wall and the closest centroid')
 plt.ylabel('Cumulative distribution function')
 plt.title('{}'.format(dnames[dind]), fontsize=20)
 plt.legend(fontsize=8)
@@ -5938,9 +6699,9 @@ for dnametype in range(len(dnames)):
 
     # Set directory
     if location == 0:
-        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
     elif location == 1:
-        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
 
     dir2 = os.listdir(dir1)
 
@@ -6306,50 +7067,80 @@ def plot_histogram_neuron(nlist_data):
 def plot_histogram_pixel_with_distributions(summed_matrix):
     data = summed_matrix.flatten()
     hist, bin_centers = hist_with_bins(data)
-    x_fit = np.arange(int(max(data))+1)
+    x_fit = np.arange(int(max(data)) + 1)
 
-    # NB
+    # ----------------- Negative Binomial -----------------
     r, p = fit_negative_binomial(data)
-    nb_pmf = nbinom.pmf(x_fit, r, p)*len(data)
-    nb_mean = r*(1-p)/p
-    nb_std = np.sqrt(r*(1-p)/(p**2))
-    nb_cv2 = (nb_std/nb_mean)**2
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r * (1 - p) / p
+    nb_std = np.sqrt(r * (1 - p) / (p**2))
+    nb_cv2 = (nb_std / nb_mean) ** 2
     nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
 
-    # Binomial Mixture
+    # ----------------- Binomial Mixture -----------------
     bm_params, bm_nll, n_max = fit_binomial_mixture(data)
     f_bm, p1_bm, p2_bm = bm_params
-    bm_pmf = (f_bm*binom.pmf(x_fit, n_max, p1_bm) + (1-f_bm)*binom.pmf(x_fit, n_max, p2_bm))*len(data)
-    bm_mean = f_bm*n_max*p1_bm + (1-f_bm)*n_max*p2_bm
-    bm_var = f_bm*n_max*p1_bm*(1-p1_bm) + (1-f_bm)*n_max*p2_bm*(1-p2_bm) + f_bm*(1-f_bm)*(n_max*(p1_bm-p2_bm))**2
-    bm_cv2 = bm_var/bm_mean**2
-    bm_aic = 2*3 - 2*(-bm_nll)
+    bm_pmf = (f_bm * binom.pmf(x_fit, n_max, p1_bm) + (1 - f_bm) * binom.pmf(x_fit, n_max, p2_bm)) * len(data)
+    bm_mean = f_bm * n_max * p1_bm + (1 - f_bm) * n_max * p2_bm
+    bm_var = (
+        f_bm * n_max * p1_bm * (1 - p1_bm) +
+        (1 - f_bm) * n_max * p2_bm * (1 - p2_bm) +
+        f_bm * (1 - f_bm) * (n_max * (p1_bm - p2_bm))**2
+    )
+    bm_cv2 = bm_var / bm_mean**2
+    bm_aic = 2*3 - 2 * (-bm_nll)
 
-    # Beta-Binomial Mixture
+    # ----------------- Beta-Binomial Mixture -----------------
     bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
     f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+
+    # PMFs
     pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
     pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
-    bb_pmf = (f_bb*pmf1 + (1-f_bb)*pmf2)*len(data)
-    bb_mean = f_bb*a1_bb/(a1_bb+b1_bb)*n_max + (1-f_bb)*a2_bb/(a2_bb+b2_bb)*n_max
-    var1 = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
-    var2 = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
-    bb_var = f_bb*var1 + (1-f_bb)*var2
-    bb_cv2 = bb_var/bb_mean**2
-    bb_aic = 2*5 - 2*(-bb_nll)
+    bb_pmf = (f_bb * pmf1 + (1 - f_bb) * pmf2) * len(data)
 
+    # Component means
+    mu1 = n_max * a1_bb / (a1_bb + b1_bb)
+    mu2 = n_max * a2_bb / (a2_bb + b2_bb)
+
+    # Component variances
+    var1 = n_max * a1_bb * b1_bb * (n_max + a1_bb + b1_bb) / ((a1_bb + b1_bb)**2 * (a1_bb + b1_bb + 1))
+    var2 = n_max * a2_bb * b2_bb * (n_max + a2_bb + b2_bb) / ((a2_bb + b2_bb)**2 * (a2_bb + b2_bb + 1))
+
+    # Component CV²
+    cv2_1 = var1 / mu1**2
+    cv2_2 = var2 / mu2**2
+
+    # Mixture mean and CV²
+    bb_mean = f_bb * mu1 + (1 - f_bb) * mu2
+    bb_var = f_bb * var1 + (1 - f_bb) * var2 + f_bb * (1 - f_bb) * (mu1 - mu2)**2
+    bb_cv2 = bb_var / bb_mean**2
+    bb_aic = 2*5 - 2 * (-bb_nll)
+
+    # ----------------- Plot -----------------
+    fs = 15
     plt.figure(figsize=(9,6))
     plt.bar(bin_centers, hist, width=0.8, align='center', color='lightblue', edgecolor='black', linewidth=1, label='Data')
     plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
     plt.plot(x_fit, bm_pmf, 'g-s', label=f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, mean={bm_mean:.2f}, CV²={bm_cv2:.2f}, AIC={bm_aic:.1f}')
-    plt.plot(x_fit, bb_pmf, 'm-^', label=f'Beta-Bin Mix: f={f_bb:.2f}, a1={a1_bb:.2f}, b1={b1_bb:.2f}, a2={a2_bb:.2f}, b2={b2_bb:.2f}, mean={bb_mean:.2f}, CV²={bb_cv2:.2f}, AIC={bb_aic:.1f}')
-    plt.xlabel("Number of place fields per pixel")
-    plt.ylabel("Number of pixels")
+    plt.plot(
+        x_fit, bb_pmf, 'm-^',
+        label=(
+            f'Beta-Bin Mix: f={f_bb:.2f}, '
+            f'μ1={mu1:.2f}, CV²₁={cv2_1:.2f}, '
+            f'μ2={mu2:.2f}, CV²₂={cv2_2:.2f}, '
+            f'AIC={bb_aic:.1f}'
+        )
+    )
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
     plt.title("Histogram of Place Fields per Pixel with Distributions")
     plt.xticks(bin_centers.astype(int))
     plt.grid(axis='y', linestyle='--', alpha=0.7)
-    plt.legend(fontsize=8)
+    plt.legend(fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
     plt.show()
+
 
 def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
     r, p = fit_negative_binomial(nlist)
@@ -7215,9 +8006,9 @@ for dnametype in range(len(dnames)):
 
     # Set directory
     if location == 0:
-        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
     elif location == 1:
-        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
 
     dir2 = os.listdir(dir1)
 
@@ -7424,44 +8215,64 @@ def plot_histogram_neuron(nlist_data):
 def plot_histogram_pixel_with_distributions(summed_matrix):
     data = summed_matrix.flatten()
     hist, bin_centers = hist_with_bins(data)
-    x_fit = np.arange(int(max(data))+1)
+    x_fit = np.arange(int(max(data)) + 1)
 
-    # NB
+    # ------------------ Negative Binomial ------------------
     r, p = fit_negative_binomial(data)
-    nb_pmf = nbinom.pmf(x_fit, r, p)*len(data)
-    nb_mean = r*(1-p)/p
-    nb_std = np.sqrt(r*(1-p)/(p**2))
-    nb_cv2 = (nb_std/nb_mean)**2
-    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r * (1 - p) / p
+    nb_std = np.sqrt(r * (1 - p) / (p ** 2))
+    nb_cv2 = (nb_std / nb_mean) ** 2
+    nb_aic = 2 * 2 - 2 * np.sum(nbinom.logpmf(data, r, p))
 
-    # Binomial Mixture
+    # ------------------ Binomial Mixture ------------------
     bm_params, bm_nll, n_max = fit_binomial_mixture(data)
     f_bm, p1_bm, p2_bm = bm_params
-    bm_pmf = (f_bm*binom.pmf(x_fit, n_max, p1_bm) + (1-f_bm)*binom.pmf(x_fit, n_max, p2_bm))*len(data)
-    bm_mean = f_bm*n_max*p1_bm + (1-f_bm)*n_max*p2_bm
-    bm_var = f_bm*n_max*p1_bm*(1-p1_bm) + (1-f_bm)*n_max*p2_bm*(1-p2_bm) + f_bm*(1-f_bm)*(n_max*(p1_bm-p2_bm))**2
-    bm_cv2 = bm_var/bm_mean**2
-    bm_aic = 2*3 - 2*(-bm_nll)
+    bm_pmf = (f_bm * binom.pmf(x_fit, n_max, p1_bm) + (1 - f_bm) * binom.pmf(x_fit, n_max, p2_bm)) * len(data)
 
-    # Beta-Binomial Mixture
+    # Component means and CV²
+    mean1 = n_max * p1_bm
+    cv21 = (n_max * p1_bm * (1 - p1_bm)) / mean1**2
+    mean2 = n_max * p2_bm
+    cv22 = (n_max * p2_bm * (1 - p2_bm)) / mean2**2
+    bm_aic = 2 * 3 - 2 * (-bm_nll)  # 3 parameters: f, p1, p2
+
+    # ------------------ Beta-Binomial Mixture ------------------
     bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
     f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
     pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
     pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
-    bb_pmf = (f_bb*pmf1 + (1-f_bb)*pmf2)*len(data)
-    bb_mean = f_bb*a1_bb/(a1_bb+b1_bb)*n_max + (1-f_bb)*a2_bb/(a2_bb+b2_bb)*n_max
-    var1 = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
-    var2 = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
-    bb_var = f_bb*var1 + (1-f_bb)*var2
-    bb_cv2 = bb_var/bb_mean**2
-    bb_aic = 2*5 - 2*(-bb_nll)
+    bb_pmf = (f_bb * pmf1 + (1 - f_bb) * pmf2) * len(data)
+    bb_aic = 2 * 5 - 2 * (-bb_nll)  # 5 parameters: f, a1, b1, a2, b2
 
-    fs=15
+    # Compute mean and CV² for each Beta-Binomial component
+    mean1_bb = a1_bb / (a1_bb + b1_bb) * n_max
+    var1_bb = n_max * a1_bb * b1_bb / ((a1_bb + b1_bb)**2 * (a1_bb + b1_bb + 1))
+    cv2_1 = var1_bb / mean1_bb**2
+
+    mean2_bb = a2_bb / (a2_bb + b2_bb) * n_max
+    var2_bb = n_max * a2_bb * b2_bb / ((a2_bb + b2_bb)**2 * (a2_bb + b2_bb + 1))
+    cv2_2 = var2_bb / mean2_bb**2
+
+    # ------------------ Plot ------------------
+    fs = 15
     plt.figure(figsize=(9,6))
-    plt.bar(bin_centers, hist, width=0.8, align='center', color='lightblue', edgecolor='black', linewidth=1, label='Data')
-    plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
-    plt.plot(x_fit, bm_pmf, 'g-s', label=f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, mean={bm_mean:.2f}, CV²={bm_cv2:.2f}, AIC={bm_aic:.1f}')
-    plt.plot(x_fit, bb_pmf, 'm-^', label=f'Beta-Bin Mix: f={f_bb:.2f}, mean={bb_mean:.2f}, CV²={bb_cv2:.2f}')
+    plt.bar(bin_centers, hist, width=0.8, align='center',
+            color='lightblue', edgecolor='black', linewidth=1, label='Data')
+
+    plt.plot(x_fit, nb_pmf, 'r-o',
+             label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+
+    plt.plot(x_fit, bm_pmf, 'g-s',
+             label=(f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, '
+                    f'n={n_max}, mean1={mean1:.2f}, CV²1={cv21:.2f}, '
+                    f'mean2={mean2:.2f}, CV²2={cv22:.2f}, AIC={bm_aic:.1f}'))
+
+    plt.plot(x_fit, bb_pmf, 'm-^',
+             label=(f'Beta-Bin Mix: f={f_bb:.2f}, '
+                    f'mean1={mean1_bb:.2f}, CV²1={cv2_1:.2f}, '
+                    f'mean2={mean2_bb:.2f}, CV²2={cv2_2:.2f}, AIC={bb_aic:.1f}'))
+
     plt.xlabel("Number of place fields per pixel", fontsize=fs)
     plt.ylabel("Number of pixels", fontsize=fs)
     plt.title("Histogram of Place Fields per Pixel with Distributions")
@@ -7469,8 +8280,582 @@ def plot_histogram_pixel_with_distributions(summed_matrix):
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.legend(fontsize=fs)
     plt.tick_params(axis='both', labelsize=fs)
-    plt.xlim([-1, 45+1])
     plt.show()
+
+
+
+
+
+
+def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
+    r, p = fit_negative_binomial(nlist)
+    n_fields_sampled = sample_n_fields(r, p)
+    if n_fields_sampled==0: n_fields_sampled=1
+    sample_matrix = generate_matrix(pfields, matrix_shape, n_fields_sampled)
+    
+    # Label contiguous fields
+    structure = np.ones((3,3))
+    labeled, n_features = label(sample_matrix>0, structure=structure)
+    
+    plt.figure(figsize=(6,5))
+    plt.imshow(sample_matrix, cmap='hot', origin='lower')
+    plt.colorbar(label="Firing rate (generated)")
+    plt.title(f"Sample Generated Neuron Place Map ({n_features} fields)")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    
+    # Add numbers at centroids
+    for i in range(1, n_features+1):
+        cx, cy = center_of_mass(sample_matrix, labeled, i)
+        plt.text(cy, cx, str(i), color='red', fontsize=10, ha='center', va='center')
+    plt.show()
+
+# =================== 10. Example Usage ===================
+dnum = 0
+pfields = p1[dnum]       # list of place field arrays
+nlist_data = nlist[dnum] # number of place fields per neuron
+matrix_shape = min([pf.shape for pf in pfields], key=lambda x: x[0]*x[1])
+n_matrices = 238
+
+summed_matrix = generate_nonblank_matrices(pfields, nlist_data, matrix_shape, n_matrices=n_matrices)
+
+# --- Plots ---
+plot_summed_matrix(summed_matrix)
+plot_histogram_neuron(nlist_data)
+plot_histogram_pixel_with_distributions(summed_matrix)
+plot_sample_generated_neuron(pfields, matrix_shape, nlist_data)
+
+
+#%% Shift and rotate existing place fields, then analyze
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import nbinom, binom
+from scipy.special import comb, beta as beta_func
+from scipy.optimize import minimize
+from scipy.ndimage import label, center_of_mass, rotate
+import random
+
+# =================== 1. Fit Negative Binomial ===================
+def fit_negative_binomial(data):
+    data = np.array(data)
+    mean_pf = np.mean(data)
+    var_pf = np.var(data)
+    if var_pf <= mean_pf:
+        var_pf = mean_pf + 1e-3
+    p = mean_pf / var_pf
+    r = mean_pf * p / (1 - p)
+    return r, p
+
+def transform_neuron_map(pfields, matrix_shape, max_attempts_per_field=1000):
+    H, W = matrix_shape
+    # Ensure all fields are 2D arrays
+    processed_pfields = []
+    for pf in pfields:
+        pf = np.array(pf)
+        if pf.ndim == 1:
+            pf = pf.reshape(1, -1)  # make it 2D (1 row)
+        processed_pfields.append(pf)
+    
+    while True:
+        new_matrix = np.zeros(matrix_shape)
+        success = True
+        for pf in processed_pfields:
+            h_pf, w_pf = pf.shape
+            placed = False
+            for attempt in range(max_attempts_per_field):
+                # Random rotation
+                angle = random.choice([0, 90, 180, 270])
+                rotated_pf = rotate(pf, angle, reshape=False, order=0, mode='constant', cval=0)
+                rh, rw = rotated_pf.shape
+
+                # Random placement
+                if rh > H or rw > W:
+                    continue  # skip if rotated field is too big
+                y = random.randint(0, H - rh)
+                x = random.randint(0, W - rw)
+                if np.all(new_matrix[y:y+rh, x:x+rw] == 0):
+                    new_matrix[y:y+rh, x:x+rw] = rotated_pf
+                    placed = True
+                    break
+            if not placed:
+                success = False
+                break  # restart neuron
+        if success:
+            return new_matrix
+
+# =================== 3. Generate all transformed neuron matrices ===================
+def generate_transformed_matrices(pfields_list, matrix_shape):
+    transformed_matrices = []
+    for neuron_pfields in pfields_list:
+        transformed_matrix = transform_neuron_map(neuron_pfields, matrix_shape)
+        transformed_matrices.append(transformed_matrix)
+    return transformed_matrices
+
+# =================== 4. Histogram helpers ===================
+def hist_with_bins(data):
+    max_val = int(np.max(data))
+    bins = np.arange(-0.5, max_val+1.5, 1)
+    hist, bins = np.histogram(data, bins=bins)
+    bin_centers = (bins[:-1] + bins[1:])/2
+    return hist, bin_centers
+
+# =================== 5. Beta-Binomial PMF ===================
+def beta_binomial_pmf(k, n, a, b):
+    return comb(n, k) * beta_func(k+a, n-k+b) / beta_func(a, b)
+
+# =================== 6. Fit Binomial Mixture ===================
+def binomial_mixture_nll(params, data, n_max):
+    f, p1, p2 = params
+    pmf = f*binom.pmf(data, n_max, p1) + (1-f)*binom.pmf(data, n_max, p2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 0.2, 0.8]
+    bounds = [(0,1), (0,1), (0,1)]
+    res = minimize(binomial_mixture_nll, x0, args=(data, n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+# =================== 7. Fit Beta-Binomial Mixture ===================
+def beta_binomial_mixture_nll(params, data, n_max):
+    f, a1, b1, a2, b2 = params
+    pmf = f*beta_binomial_pmf(data, n_max, a1, b1) + (1-f)*beta_binomial_pmf(data, n_max, a2, b2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_beta_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 2, 5, 5, 2]
+    bounds = [(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
+    res = minimize(beta_binomial_mixture_nll, x0, args=(data,n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+# =================== 8. Plot summed matrix ===================
+def plot_summed_matrix(matrix):
+    plt.figure(figsize=(8,6))
+    plt.imshow(matrix, cmap='viridis', origin='lower')
+    plt.colorbar(label="Number of place fields")
+    plt.title("Summed Place Fields Across Neurons (Transformed)")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.show()
+
+# =================== 9. Plot histogram per pixel ===================
+def plot_histogram_pixel_with_distributions(summed_matrix):
+    data = summed_matrix.flatten()
+    hist, bin_centers = hist_with_bins(data)
+    x_fit = np.arange(int(max(data))+1)
+
+    # Negative binomial
+    r, p = fit_negative_binomial(data)
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r * (1 - p) / p
+    nb_std = np.sqrt(r * (1 - p) / (p**2))
+    nb_cv2 = (nb_std / nb_mean)**2
+    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
+
+    # Binomial mixture
+    bm_params, bm_nll, n_max = fit_binomial_mixture(data)
+    f_bm, p1_bm, p2_bm = bm_params
+    bm_pmf = (f_bm * binom.pmf(x_fit, n_max, p1_bm) + (1-f_bm) * binom.pmf(x_fit, n_max, p2_bm)) * len(data)
+    mean1 = n_max * p1_bm
+    mean2 = n_max * p2_bm
+    cv21 = (n_max * p1_bm * (1-p1_bm))/mean1**2
+    cv22 = (n_max * p2_bm * (1-p2_bm))/mean2**2
+    bm_aic = 2*3 - 2*(-bm_nll)
+
+    # Beta-binomial mixture
+    bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
+    f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+    pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
+    pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
+    bb_pmf = (f_bb * pmf1 + (1-f_bb) * pmf2) * len(data)
+    bb_aic = 2*5 - 2*(-bb_nll)
+
+    # Component means and CV²
+    mean1_bb = a1_bb/(a1_bb+b1_bb)*n_max
+    var1_bb = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
+    cv2_1 = var1_bb/mean1_bb**2
+    mean2_bb = a2_bb/(a2_bb+b2_bb)*n_max
+    var2_bb = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
+    cv2_2 = var2_bb/mean2_bb**2
+
+    # Plot
+    fs = 14
+    plt.figure(figsize=(9,6))
+    plt.bar(bin_centers, hist, width=0.8, align='center', color='lightblue', edgecolor='black', linewidth=1, label='Data')
+    plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+    plt.plot(x_fit, bm_pmf, 'g-s', label=f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, mean1={mean1:.2f}, CV²1={cv21:.2f}, mean2={mean2:.2f}, CV²2={cv22:.2f}, AIC={bm_aic:.1f}')
+    plt.plot(x_fit, bb_pmf, 'm-^', label=f'Beta-Bin Mix: f={f_bb:.2f}, mean1={mean1_bb:.2f}, CV²1={cv2_1:.2f}, mean2={mean2_bb:.2f}, CV²2={cv2_2:.2f}, AIC={bb_aic:.1f}')
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
+    plt.title("Histogram of Place Fields per Pixel (Transformed)")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=fs)
+    plt.show()
+
+# =================== 10. Example Usage ===================
+dnum = 0
+pfields = p1[dnum]       # list of place field arrays for neurons in dataset
+matrix_shape = min([pf.shape for pf in pfields], key=lambda x: x[0]*x[1])
+
+# Transform each neuron by shifting and rotating its fields
+transformed_matrices = generate_transformed_matrices(pfields, matrix_shape)
+
+# Sum across all neurons
+summed_matrix = np.sum(transformed_matrices, axis=0)
+
+# --- Plots ---
+plot_summed_matrix(summed_matrix)
+plot_histogram_pixel_with_distributions(summed_matrix)
+
+
+# Fix 1D place fields
+def make_2d(pf):
+    pf = np.array(pf)
+    if pf.ndim == 1:
+        pf = pf.reshape(1, -1)  # make it 2D with 1 row
+    return pf
+
+# First neuron place fields
+original_neuron = np.sum([make_2d(pf) for pf in pfields[0]], axis=0)
+
+# Transform the first neuron (shift + rotate)
+transformed_neuron = transform_neuron_map(pfields[0], matrix_shape)
+
+# Plot side by side
+plt.figure(figsize=(12,5))
+
+plt.subplot(1,2,1)
+plt.imshow(original_neuron, cmap='viridis', origin='lower')
+plt.colorbar(label="Firing rate")
+plt.title("Original Neuron Place Map")
+plt.xlabel("X Position")
+plt.ylabel("Y Position")
+
+plt.subplot(1,2,2)
+plt.imshow(transformed_neuron, cmap='viridis', origin='lower')
+plt.colorbar(label="Firing rate")
+plt.title("Transformed Neuron Place Map")
+plt.xlabel("X Position")
+plt.ylabel("Y Position")
+
+plt.tight_layout()
+plt.show()
+
+#%% Setup: (Meeting 8)
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from scipy.ndimage import label
+from collections import Counter
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+shapeslist = [
+    [(65, 116), (65, 117)],                      # BigroomData
+    [(43, 53), (43, 50), (43, 57)],              # CircleData
+    [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  # HalfroomData
+    [(12, 12), (13, 13)],                        # HexagonData
+    [(24, 36), (31, 40)],                        # RectangleData
+    [(20, 20)]                                   # SquareData
+]
+
+location = 0  # 0 = Ogamb path, 1 = Olgud path
+
+# =================== Collect all data ===================
+plist = []
+nlist = []
+
+for dnametype in range(len(dnames)):
+    p = []
+    n = []
+
+    # Set directory
+    if location == 0:
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+    elif location == 1:
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+
+    dir2 = os.listdir(dir1)
+
+    for foldername in dir2:
+        dir3 = os.path.join(dir1, foldername)
+        if not os.path.isdir(dir3):
+            continue
+        dirs3 = os.listdir(dir3)
+        dirs4 = [x for x in dirs3 if x[-7] == 'm']
+        for matname in dirs4:
+            mat = loadmat(os.path.join(dir3, matname))
+            n.append(mat['numFields'][0][0])
+            p.append(mat['pfields'])
+
+    # Show dataset info
+    original_shapes = [pmap.shape for pmap in p]
+    shape_counts = Counter(original_shapes)
+    total_maps = len(original_shapes)
+    print(f"{dnames[dnametype]} ({total_maps})")
+    for shape, count in shape_counts.items():
+        proportion = count / total_maps
+        print(f"{shape}: {count} ({proportion:.2f})")
+    print()
+
+    plist.append(p)
+    nlist.append(n)
+
+# =================== Crop to smallest shape ===================
+p_cropped = [[] for _ in range(len(dnames))]
+
+for dnametype in range(len(dnames)):
+    min_x = min([xy[0] for xy in shapeslist[dnametype]])
+    min_y = min([xy[1] for xy in shapeslist[dnametype]])
+    target_shape = (min_x, min_y)
+
+    cropped_list = []
+    for pi in plist[dnametype]:
+        h, w = pi.shape
+        H, W = target_shape
+        cropped = pi[:H, :W]  # crop to smallest shape
+        cropped_list.append(cropped)
+
+    p_cropped[dnametype] = cropped_list
+
+plist = p_cropped
+
+# =================== Binarize ===================
+p1 = []
+for room in plist:
+    plistroom = []
+    for neuron in room:
+        plistroom.append(1 * (neuron > 0))
+    p1.append(plistroom)
+
+#%% Randomly swap the positions of the place fields for each neuron, and don't clip them
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import nbinom, binom
+from scipy.special import comb, beta as beta_func
+from scipy.optimize import minimize
+from scipy.ndimage import label, center_of_mass
+import random
+
+# =================== 1. Fit Negative Binomial ===================
+def fit_negative_binomial(data):
+    data = np.array(data)
+    mean_pf = np.mean(data)
+    var_pf = np.var(data)
+    if var_pf <= mean_pf:
+        var_pf = mean_pf + 1e-3
+    p = mean_pf / var_pf
+    r = mean_pf * p / (1 - p)
+    return r, p
+
+def sample_n_fields(r, p):
+    return nbinom.rvs(r, p)
+
+def generate_matrix(pfields, matrix_shape, n_fields):
+    """
+    Generate a matrix by randomly placing non-overlapping place fields.
+    If a spot is occupied, retry placement.
+    """
+    H, W = matrix_shape
+    new_matrix = np.zeros(matrix_shape)
+    chosen_pfields = random.choices(pfields, k=n_fields)
+
+    for pf in chosen_pfields:
+        h_pf, w_pf = pf.shape
+        placed = False
+        max_attempts = 1000
+
+        for _ in range(max_attempts):
+            # Choose random top-left coordinate where pf fits
+            y = random.randint(0, H - h_pf)
+            x = random.randint(0, W - w_pf)
+
+            # Check overlap
+            region = new_matrix[y:y+h_pf, x:x+w_pf]
+            if np.all(region == 0):  # no overlap
+                new_matrix[y:y+h_pf, x:x+w_pf] = pf
+                placed = True
+                break
+
+        if not placed:
+            print("Warning: could not place a field after max attempts (matrix likely full).")
+            break
+
+    return new_matrix
+
+
+
+
+
+
+# =================== 4. Generate multiple non-blank matrices and sum ===================
+def generate_nonblank_matrices(pfields, nlist, matrix_shape, n_matrices=100):
+    r, p = fit_negative_binomial(nlist)
+    summed_matrix = np.zeros(matrix_shape)
+    count = 0
+
+    while count < n_matrices:
+        n_fields_sampled = sample_n_fields(r, p)
+        if n_fields_sampled == 0:
+            continue
+        mat = generate_matrix(pfields, matrix_shape, n_fields_sampled)
+        summed_matrix += mat
+        count += 1
+
+    return summed_matrix
+
+# =================== 5. Histogram helpers ===================
+def hist_with_bins(data):
+    max_val = int(np.max(data))
+    bins = np.arange(-0.5, max_val+1.5, 1)
+    hist, bins = np.histogram(data, bins=bins)
+    bin_centers = (bins[:-1] + bins[1:])/2
+    return hist, bin_centers
+
+# =================== 6. Beta-Binomial PMF ===================
+def beta_binomial_pmf(k, n, a, b):
+    return comb(n, k) * beta_func(k+a, n-k+b) / beta_func(a, b)
+
+# =================== 7. Fit Binomial Mixture ===================
+def binomial_mixture_nll(params, data, n_max):
+    f, p1, p2 = params
+    pmf = f*binom.pmf(data, n_max, p1) + (1-f)*binom.pmf(data, n_max, p2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 0.2, 0.8]
+    bounds = [(0,1), (0,1), (0,1)]
+    res = minimize(binomial_mixture_nll, x0, args=(data, n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+# =================== 8. Fit Beta-Binomial Mixture ===================
+def beta_binomial_mixture_nll(params, data, n_max):
+    f, a1, b1, a2, b2 = params
+    pmf = f*beta_binomial_pmf(data, n_max, a1, b1) + (1-f)*beta_binomial_pmf(data, n_max, a2, b2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_beta_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 2, 5, 5, 2]
+    bounds = [(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
+    res = minimize(beta_binomial_mixture_nll, x0, args=(data,n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+# =================== 9. Plot functions ===================
+def plot_summed_matrix(matrix):
+    plt.figure(figsize=(8,6))
+    plt.imshow(matrix, cmap='viridis', origin='lower')
+    plt.colorbar(label="Number of place fields")
+    plt.title("Summed Place Fields Across Matrices")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.show()
+
+def plot_histogram_neuron(nlist_data):
+    hist, bin_centers = hist_with_bins(nlist_data)
+    plt.figure(figsize=(8,5))
+    plt.bar(bin_centers, hist, width=0.8, align='center', color='lightgreen', edgecolor='black', linewidth=1)
+    plt.xlabel("Number of place fields per neuron")
+    plt.ylabel("Number of neurons")
+    plt.title("Histogram of Place Fields per Neuron")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Fit negative binomial
+    r, p = fit_negative_binomial(nlist_data)
+    x_fit = np.arange(int(max(nlist_data))+1)
+    nb_pmf = nbinom.pmf(x_fit, r, p)*len(nlist_data)
+    nb_mean = r*(1-p)/p
+    nb_std = np.sqrt(r*(1-p)/(p**2))
+    nb_cv2 = (nb_std/nb_mean)**2
+    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(nlist_data, r, p))
+    plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+    plt.legend(fontsize=8)
+    plt.show()
+
+def plot_histogram_pixel_with_distributions(summed_matrix):
+    data = summed_matrix.flatten()
+    hist, bin_centers = hist_with_bins(data)
+    x_fit = np.arange(int(max(data)) + 1)
+
+    # ------------------ Negative Binomial ------------------
+    r, p = fit_negative_binomial(data)
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r * (1 - p) / p
+    nb_std = np.sqrt(r * (1 - p) / (p ** 2))
+    nb_cv2 = (nb_std / nb_mean) ** 2
+    nb_aic = 2 * 2 - 2 * np.sum(nbinom.logpmf(data, r, p))
+
+    # ------------------ Binomial Mixture ------------------
+    bm_params, bm_nll, n_max = fit_binomial_mixture(data)
+    f_bm, p1_bm, p2_bm = bm_params
+    bm_pmf = (f_bm * binom.pmf(x_fit, n_max, p1_bm) + (1 - f_bm) * binom.pmf(x_fit, n_max, p2_bm)) * len(data)
+
+    # Component means and CV²
+    mean1 = n_max * p1_bm
+    cv21 = (n_max * p1_bm * (1 - p1_bm)) / mean1**2
+    mean2 = n_max * p2_bm
+    cv22 = (n_max * p2_bm * (1 - p2_bm)) / mean2**2
+    bm_aic = 2 * 3 - 2 * (-bm_nll)  # 3 parameters: f, p1, p2
+
+    # ------------------ Beta-Binomial Mixture ------------------
+    bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
+    f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+    pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
+    pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
+    bb_pmf = (f_bb * pmf1 + (1 - f_bb) * pmf2) * len(data)
+    bb_aic = 2 * 5 - 2 * (-bb_nll)  # 5 parameters: f, a1, b1, a2, b2
+
+    # Compute mean and CV² for each Beta-Binomial component
+    mean1_bb = a1_bb / (a1_bb + b1_bb) * n_max
+    var1_bb = n_max * a1_bb * b1_bb / ((a1_bb + b1_bb)**2 * (a1_bb + b1_bb + 1))
+    cv2_1 = var1_bb / mean1_bb**2
+
+    mean2_bb = a2_bb / (a2_bb + b2_bb) * n_max
+    var2_bb = n_max * a2_bb * b2_bb / ((a2_bb + b2_bb)**2 * (a2_bb + b2_bb + 1))
+    cv2_2 = var2_bb / mean2_bb**2
+
+    # ------------------ Plot ------------------
+    fs = 15
+    plt.figure(figsize=(9,6))
+    plt.bar(bin_centers, hist, width=0.8, align='center',
+            color='lightblue', edgecolor='black', linewidth=1, label='Data')
+
+    plt.plot(x_fit, nb_pmf, 'r-o',
+             label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+
+    plt.plot(x_fit, bm_pmf, 'g-s',
+             label=(f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, '
+                    f'n={n_max}, mean1={mean1:.2f}, CV²1={cv21:.2f}, '
+                    f'mean2={mean2:.2f}, CV²2={cv22:.2f}, AIC={bm_aic:.1f}'))
+
+    plt.plot(x_fit, bb_pmf, 'm-^',
+             label=(f'Beta-Bin Mix: f={f_bb:.2f}, '
+                    f'mean1={mean1_bb:.2f}, CV²1={cv2_1:.2f}, '
+                    f'mean2={mean2_bb:.2f}, CV²2={cv2_2:.2f}, AIC={bb_aic:.1f}'))
+
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
+    plt.title("Histogram of Place Fields per Pixel with Distributions")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.show()
+
+
+
+
 
 
 def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
