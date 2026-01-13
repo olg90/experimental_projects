@@ -8283,10 +8283,6 @@ def plot_histogram_pixel_with_distributions(summed_matrix):
     plt.show()
 
 
-
-
-
-
 def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
     r, p = fit_negative_binomial(nlist)
     n_fields_sampled = sample_n_fields(r, p)
@@ -8635,17 +8631,17 @@ for room in plist:
         plistroom.append(1 * (neuron > 0))
     p1.append(plistroom)
 
-#%% Randomly swap the positions of the place fields for each neuron (centroid-based swapping)
+#%% Place place fields from the same place map at random 
+#   locations inside the place map
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import label
 from scipy.stats import nbinom, binom
 from scipy.special import comb, beta as beta_func
 from scipy.optimize import minimize
-from scipy.ndimage import label, center_of_mass
-import itertools
 import random
 
-# =================== 1. Fit Negative Binomial ===================
+# ================== Distribution helpers ==================
 def fit_negative_binomial(data):
     data = np.array(data)
     mean_pf = np.mean(data)
@@ -8656,387 +8652,176 @@ def fit_negative_binomial(data):
     r = mean_pf * p / (1 - p)
     return r, p
 
-def sample_n_fields(r, p):
-    return nbinom.rvs(r, p)
-
-# =================== 2. Generate matrix ===================
-def generate_matrix(pfields, matrix_shape, n_fields):
-    H, W = matrix_shape
-    new_matrix = np.zeros(matrix_shape)
-    chosen_pfields = random.choices(pfields, k=n_fields)
-
-    for pf in chosen_pfields:
-        h_pf, w_pf = pf.shape
-        placed = False
-
-        for _ in range(1000):
-            y = random.randint(0, H - h_pf)
-            x = random.randint(0, W - w_pf)
-            region = new_matrix[y:y+h_pf, x:x+w_pf]
-
-            if np.all(region == 0):
-                new_matrix[y:y+h_pf, x:x+w_pf] = pf
-                placed = True
-                break
-
-        if not placed:
-            break
-
-    return new_matrix
-
-# =================== 3. Swap place fields by centroid ===================
-def swap_place_fields_by_centroid(neuron_matrix):
-    H, W = neuron_matrix.shape
-    structure = np.ones((3,3))
-    labeled, n_fields = label(neuron_matrix > 0, structure=structure)
-
-    if n_fields <= 1:
-        return neuron_matrix.copy()
-
-    fields = []
-    centroids = []
-
-    for i in range(1, n_fields + 1):
-        mask = (labeled == i)
-        field = neuron_matrix * mask
-        field = field[np.any(field, axis=1)][:, np.any(field, axis=0)]
-        fields.append(field)
-        centroids.append(center_of_mass(mask))
-
-    indices = list(range(n_fields))
-    random.shuffle(indices)
-
-    for perm in itertools.permutations(indices):
-        new_matrix = np.zeros_like(neuron_matrix)
-        success = True
-
-        for src_idx, tgt_idx in enumerate(perm):
-            pf = fields[src_idx]
-            h, w = pf.shape
-            cy, cx = centroids[tgt_idx]
-
-            top = int(round(cy - h / 2))
-            left = int(round(cx - w / 2))
-
-            if top < 0 or left < 0 or top + h > H or left + w > W:
-                success = False
-                break
-
-            region = new_matrix[top:top+h, left:left+w]
-            if np.any(region > 0):
-                success = False
-                break
-
-            new_matrix[top:top+h, left:left+w] += pf
-
-        if success:
-            return new_matrix
-
-    # No valid permutation → ignore swap
-    return neuron_matrix.copy()
-
-# =================== 4. Generate multiple matrices ===================
-def generate_nonblank_matrices(pfields, nlist, matrix_shape, n_matrices=100):
-    r, p = fit_negative_binomial(nlist)
-    summed_matrix = np.zeros(matrix_shape)
-    count = 0
-
-    while count < n_matrices:
-        n_fields_sampled = sample_n_fields(r, p)
-        if n_fields_sampled == 0:
-            continue
-
-        mat = generate_matrix(pfields, matrix_shape, n_fields_sampled)
-        mat = swap_place_fields_by_centroid(mat)
-
-        summed_matrix += mat
-        count += 1
-
-    return summed_matrix
-
-# =================== 5. Histogram helpers ===================
 def hist_with_bins(data):
     max_val = int(np.max(data))
-    bins = np.arange(-0.5, max_val + 1.5, 1)
+    bins = np.arange(-0.5, max_val+1.5, 1)
     hist, bins = np.histogram(data, bins=bins)
-    bin_centers = (bins[:-1] + bins[1:]) / 2
+    bin_centers = (bins[:-1] + bins[1:])/2
     return hist, bin_centers
 
-# =================== 6. Beta-Binomial ===================
 def beta_binomial_pmf(k, n, a, b):
-    return comb(n, k) * beta_func(k + a, n - k + b) / beta_func(a, b)
+    return comb(n, k) * beta_func(k+a, n-k+b) / beta_func(a, b)
 
-# =================== 7. Binomial Mixture ===================
 def binomial_mixture_nll(params, data, n_max):
     f, p1, p2 = params
-    pmf = f * binom.pmf(data, n_max, p1) + (1 - f) * binom.pmf(data, n_max, p2)
+    pmf = f*binom.pmf(data, n_max, p1) + (1-f)*binom.pmf(data, n_max, p2)
     pmf = np.clip(pmf, 1e-10, None)
     return -np.sum(np.log(pmf))
 
 def fit_binomial_mixture(data):
     n_max = max(int(max(data)), 1)
-    res = minimize(
-        binomial_mixture_nll,
-        [0.5, 0.2, 0.8],
-        args=(data, n_max),
-        bounds=[(0,1),(0,1),(0,1)]
-    )
+    x0 = [0.5, 0.2, 0.8]
+    bounds = [(0,1), (0,1), (0,1)]
+    res = minimize(binomial_mixture_nll, x0, args=(data, n_max), bounds=bounds)
     return res.x, res.fun, n_max
 
-# =================== 8. Beta-Binomial Mixture ===================
 def beta_binomial_mixture_nll(params, data, n_max):
     f, a1, b1, a2, b2 = params
-    pmf = (
-        f * beta_binomial_pmf(data, n_max, a1, b1)
-        + (1 - f) * beta_binomial_pmf(data, n_max, a2, b2)
-    )
+    pmf = f*beta_binomial_pmf(data, n_max, a1, b1) + (1-f)*beta_binomial_pmf(data, n_max, a2, b2)
     pmf = np.clip(pmf, 1e-10, None)
     return -np.sum(np.log(pmf))
 
 def fit_beta_binomial_mixture(data):
     n_max = max(int(max(data)), 1)
-    res = minimize(
-        beta_binomial_mixture_nll,
-        [0.5, 2, 5, 5, 2],
-        args=(data, n_max),
-        bounds=[(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
-    )
+    x0 = [0.5, 2, 5, 5, 2]
+    bounds = [(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
+    res = minimize(beta_binomial_mixture_nll, x0, args=(data,n_max), bounds=bounds)
     return res.x, res.fun, n_max
 
-# =================== 9. Plotting ===================
-def plot_summed_matrix(matrix):
-    plt.figure(figsize=(8,6))
-    plt.imshow(matrix, origin='lower')
-    plt.colorbar()
-    plt.title("Summed Place Fields")
-    plt.show()
-
-def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
-    r, p = fit_negative_binomial(nlist)
-    n_fields = max(1, sample_n_fields(r, p))
-    mat = generate_matrix(pfields, matrix_shape, n_fields)
-    mat = swap_place_fields_by_centroid(mat)
-
-    labeled, n_feat = label(mat > 0)
-    plt.figure(figsize=(6,5))
-    plt.imshow(mat, origin='lower')
-    plt.title(f"Sample neuron ({n_feat} fields)")
-    for i in range(1, n_feat + 1):
-        cy, cx = center_of_mass(mat, labeled, i)
-        plt.text(cx, cy, str(i), color='red')
-    plt.show()
-
-# =================== 10. Example usage ===================
-dnum = 0
-pfields = p1[dnum]
-nlist_data = nlist[dnum]
-matrix_shape = min([pf.shape for pf in pfields], key=lambda x: x[0]*x[1])
-
-summed_matrix = generate_nonblank_matrices(
-    pfields,
-    nlist_data,
-    matrix_shape,
-    n_matrices=238
-)
-
-plot_summed_matrix(summed_matrix)
-plot_sample_generated_neuron(pfields, matrix_shape, nlist_data)
-
-#%% Randomly swap the positions of the place fields for each neuron (centroid-based swapping)
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import nbinom, binom
-from scipy.special import comb, beta as beta_func
-from scipy.optimize import minimize
-from scipy.ndimage import label, center_of_mass
-import itertools
-import random
-from tqdm import tqdm
-
-# =================== 1. Fit Negative Binomial ===================
-def fit_negative_binomial(data):
-    data = np.array(data)
-    mean_pf = np.mean(data)
-    var_pf = np.var(data)
-    if var_pf <= mean_pf:
-        var_pf = mean_pf + 1e-3
-    p = mean_pf / var_pf
-    r = mean_pf * p / (1 - p)
-    return r, p
-
-def sample_n_fields(r, p):
-    return nbinom.rvs(r, p)
-
-# =================== 2. Generate matrix ===================
-def generate_matrix(pfields, matrix_shape, n_fields):
-    H, W = matrix_shape
-    new_matrix = np.zeros(matrix_shape)
-    chosen_pfields = random.choices(pfields, k=n_fields)
-
-    for pf in chosen_pfields:
-        h_pf, w_pf = pf.shape
-        placed = False
-
-        for _ in range(1000):
-            y = random.randint(0, H - h_pf)
-            x = random.randint(0, W - w_pf)
-            region = new_matrix[y:y+h_pf, x:x+w_pf]
-
-            if np.all(region == 0):
-                new_matrix[y:y+h_pf, x:x+w_pf] = pf
-                placed = True
-                break
-
-        if not placed:
-            break
-
-    return new_matrix
-
-# =================== 3. Swap place fields by centroid ===================
-def swap_place_fields_by_centroid(neuron_matrix):
-    H, W = neuron_matrix.shape
+# ================== Place field extraction & shuffling ==================
+def extract_place_fields(place_map):
+    """Extract all contiguous place fields from a place map."""
     structure = np.ones((3,3))
-    labeled, n_fields = label(neuron_matrix > 0, structure=structure)
-
-    if n_fields <= 1:
-        return neuron_matrix.copy()
-
+    labeled, n_fields = label(place_map>0, structure=structure)
     fields = []
-    centroids = []
-
-    for i in range(1, n_fields + 1):
+    for i in range(1, n_fields+1):
         mask = (labeled == i)
-        field = neuron_matrix * mask
-        field = field[np.any(field, axis=1)][:, np.any(field, axis=0)]
-        fields.append(field)
-        centroids.append(center_of_mass(mask))
+        ys, xs = np.where(mask)
+        h, w = ys.max()-ys.min()+1, xs.max()-xs.min()+1
+        field_array = np.zeros((h, w))
+        field_array[ys-ys.min(), xs-xs.min()] = place_map[ys, xs]
+        fields.append(field_array)
+    return fields
 
-    indices = list(range(n_fields))
-    random.shuffle(indices)
+def place_field_randomly(matrix, field, max_attempts=500):
+    """Try to place a field randomly inside matrix without overlap."""
+    H, W = matrix.shape
+    h, w = field.shape
+    if h > H or w > W:
+        return False
+    for _ in range(max_attempts):
+        y = random.randint(0, H-h)
+        x = random.randint(0, W-w)
+        if np.all(matrix[y:y+h, x:x+w] == 0):
+            matrix[y:y+h, x:x+w] = field
+            return True
+    return False
 
-    for perm in itertools.permutations(indices):
-        new_matrix = np.zeros_like(neuron_matrix)
-        success = True
+def shuffle_place_map(place_map):
+    """Shuffle all fields in a single place map."""
+    fields = extract_place_fields(place_map)
+    random.shuffle(fields)
+    shuffled_map = np.zeros(place_map.shape)
+    for f in fields:
+        if not place_field_randomly(shuffled_map, f):
+            return None  # cannot fit all fields
+    return shuffled_map
 
-        for src_idx, tgt_idx in enumerate(perm):
-            pf = fields[src_idx]
-            h, w = pf.shape
-            cy, cx = centroids[tgt_idx]
+# ================== Apply shuffling to all place maps ==================
+def shuffle_all_place_maps(place_maps):
+    shuffled_maps = []
+    for pm in place_maps:
+        shuffled = shuffle_place_map(pm)
+        if shuffled is not None:
+            shuffled_maps.append(shuffled)
+    return shuffled_maps
 
-            top = int(round(cy - h / 2))
-            left = int(round(cx - w / 2))
-
-            if top < 0 or left < 0 or top + h > H or left + w > W:
-                success = False
-                break
-
-            region = new_matrix[top:top+h, left:left+w]
-            if np.any(region > 0):
-                success = False
-                break
-
-            new_matrix[top:top+h, left:left+w] += pf
-
-        if success:
-            return new_matrix
-
-    # No valid permutation exists → ignore swap
-    return neuron_matrix.copy()
-
-# =================== 4. Generate multiple matrices (WITH PROGRESS BAR) ===================
-def generate_nonblank_matrices(pfields, nlist, matrix_shape, n_matrices=100):
-    r, p = fit_negative_binomial(nlist)
-    summed_matrix = np.zeros(matrix_shape)
-
-    with tqdm(total=n_matrices, desc="Generating neurons", unit="neuron") as pbar:
-        count = 0
-        while count < n_matrices:
-            n_fields_sampled = sample_n_fields(r, p)
-            if n_fields_sampled == 0:
-                continue
-
-            mat = generate_matrix(pfields, matrix_shape, n_fields_sampled)
-            mat = swap_place_fields_by_centroid(mat)
-
-            summed_matrix += mat
-            count += 1
-            pbar.update(1)
-
-    return summed_matrix
-
-# =================== 5. Histogram helpers ===================
-def hist_with_bins(data):
-    max_val = int(np.max(data))
-    bins = np.arange(-0.5, max_val + 1.5, 1)
-    hist, bins = np.histogram(data, bins=bins)
-    bin_centers = (bins[:-1] + bins[1:]) / 2
-    return hist, bin_centers
-
-# =================== 6. Beta-Binomial ===================
-def beta_binomial_pmf(k, n, a, b):
-    return comb(n, k) * beta_func(k + a, n - k + b) / beta_func(a, b)
-
-# =================== 7. Plotting ===================
+# ================== Plotting ==================
 def plot_summed_matrix(matrix):
     plt.figure(figsize=(8,6))
-    plt.imshow(matrix, origin='lower')
+    plt.imshow(matrix, cmap='viridis', origin='lower')
     plt.colorbar(label="Number of place fields")
-    plt.title("Summed Place Fields Across Neurons")
-    plt.xlabel("X")
-    plt.ylabel("Y")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Summed Shuffled Place Fields")
     plt.show()
 
-def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
-    r, p = fit_negative_binomial(nlist)
-    n_fields = max(1, sample_n_fields(r, p))
+def plot_histogram_pixel_with_distributions(matrix):
+    data = matrix.flatten()
+    hist, bin_centers = hist_with_bins(data)
+    x_fit = np.arange(int(max(data))+1)
 
-    mat = generate_matrix(pfields, matrix_shape, n_fields)
-    mat = swap_place_fields_by_centroid(mat)
+    # ---------------- Negative Binomial ----------------
+    r, p = fit_negative_binomial(data)
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r*(1-p)/p
+    nb_std = np.sqrt(r*(1-p)/(p**2))
+    nb_cv2 = (nb_std/nb_mean)**2
+    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
 
-    labeled, n_feat = label(mat > 0)
-    plt.figure(figsize=(6,5))
-    plt.imshow(mat, origin='lower')
-    plt.colorbar(label="Firing rate")
-    plt.title(f"Sample neuron ({n_feat} fields)")
+    # ---------------- Binomial Mixture ----------------
+    bm_params, bm_nll, n_max = fit_binomial_mixture(data)
+    f_bm, p1_bm, p2_bm = bm_params
+    bm_pmf = (f_bm*binom.pmf(x_fit,n_max,p1_bm) + (1-f_bm)*binom.pmf(x_fit,n_max,p2_bm))*len(data)
+    mean1 = n_max*p1_bm
+    mean2 = n_max*p2_bm
+    cv21 = (n_max*p1_bm*(1-p1_bm))/mean1**2
+    cv22 = (n_max*p2_bm*(1-p2_bm))/mean2**2
+    bm_aic = 2*3 - 2*(-bm_nll)
 
-    for i in range(1, n_feat + 1):
-        cy, cx = center_of_mass(mat, labeled, i)
-        plt.text(cx, cy, str(i), color='red', ha='center', va='center')
+    # ---------------- Beta-Binomial Mixture ----------------
+    bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
+    f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+    pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
+    pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
+    bb_pmf = (f_bb*pmf1 + (1-f_bb)*pmf2)*len(data)
+    mean1_bb = a1_bb/(a1_bb+b1_bb)*n_max
+    mean2_bb = a2_bb/(a2_bb+b2_bb)*n_max
+    var1_bb = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
+    var2_bb = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
+    cv2_1 = var1_bb/mean1_bb**2
+    cv2_2 = var2_bb/mean2_bb**2
+    bb_aic = 2*5 - 2*(-bb_nll)
 
-    plt.xlabel("X")
-    plt.ylabel("Y")
+    # ---------------- Plot ----------------
+    fs = 15
+    plt.figure(figsize=(9,6))
+    plt.bar(bin_centers, hist, width=0.8, align='center', color='lightblue', edgecolor='black', label='Data')
+    plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+    plt.plot(x_fit, bm_pmf, 'g-s', label=f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, mean1={mean1:.2f}, CV²1={cv21:.2f}, mean2={mean2:.2f}, CV²2={cv22:.2f}, AIC={bm_aic:.1f}')
+    plt.plot(x_fit, bb_pmf, 'm-^', label=f'Beta-Bin Mix: f={f_bb:.2f}, mean1={mean1_bb:.2f}, CV²1={cv2_1:.2f}, mean2={mean2_bb:.2f}, CV²2={cv2_2:.2f}, AIC={bb_aic:.1f}')
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
+    plt.title("Pixel Histogram with Distributions (Shuffled)")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
     plt.show()
 
-# =================== 8. Example usage ===================
+# ================== Example usage ==================
 dnum = 0
-pfields = p1[dnum]        # list of place field arrays
-nlist_data = nlist[dnum]  # number of place fields per neuron
+place_maps = p1[dnum]  # binarized place maps
+shuffled_maps = shuffle_all_place_maps(place_maps)
 
-matrix_shape = min(
-    [pf.shape for pf in pfields],
-    key=lambda x: x[0] * x[1]
-)
-
-summed_matrix = generate_nonblank_matrices(
-    pfields,
-    nlist_data,
-    matrix_shape,
-    n_matrices=238
-)
-
-plot_summed_matrix(summed_matrix)
-plot_sample_generated_neuron(pfields, matrix_shape, nlist_data)
-
-#%% Randomly resample place fields and place by random centroid (no overlaps)
+# Compute summed shuffled matrix
+if len(shuffled_maps) > 0:
+    summed_matrix = np.sum(shuffled_maps, axis=0)
+    plot_summed_matrix(summed_matrix)
+    plot_histogram_pixel_with_distributions(summed_matrix)
+else:
+    print("No maps could be shuffled successfully.")
+    
+#%% Shuffle randomly the place fields keeping their centroids constant
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
 from scipy.stats import nbinom, binom
 from scipy.special import comb, beta as beta_func
 from scipy.optimize import minimize
-from scipy.ndimage import label, center_of_mass
 import random
 
-# =================== 1. Fit Negative Binomial ===================
+# ================== Distribution helpers ==================
 def fit_negative_binomial(data):
     data = np.array(data)
     mean_pf = np.mean(data)
@@ -9047,171 +8832,572 @@ def fit_negative_binomial(data):
     r = mean_pf * p / (1 - p)
     return r, p
 
-def sample_n_fields(r, p):
-    return nbinom.rvs(r, p)
-
-# =================== 2. Place fields by random centroid ===================
-def place_fields_random_centroid(pfields, matrix_shape, n_fields,
-                                 max_field_attempts=500,
-                                 max_matrix_attempts=50):
-
-    H, W = matrix_shape
-
-    for _ in range(max_matrix_attempts):
-        new_matrix = np.zeros(matrix_shape)
-        chosen_pfields = random.choices(pfields, k=n_fields)
-        success = True
-
-        for pf in chosen_pfields:
-            h, w = pf.shape
-            placed = False
-
-            for _ in range(max_field_attempts):
-                cy = random.uniform(0, H)
-                cx = random.uniform(0, W)
-
-                top = int(round(cy - h / 2))
-                left = int(round(cx - w / 2))
-
-                if top < 0 or left < 0 or top + h > H or left + w > W:
-                    continue
-
-                region = new_matrix[top:top+h, left:left+w]
-                if np.any(region > 0):
-                    continue
-
-                new_matrix[top:top+h, left:left+w] = pf
-                placed = True
-                break
-
-            if not placed:
-                success = False
-                break
-
-        if success:
-            return new_matrix
-
-    # Failed after many full restarts → ignore neuron
-    return None
-
-# =================== 3. Generate multiple matrices ===================
-def generate_nonblank_matrices(pfields, nlist, matrix_shape, n_matrices=100):
-    r, p = fit_negative_binomial(nlist)
-    summed_matrix = np.zeros(matrix_shape)
-    count = 0
-
-    while count < n_matrices:
-        n_fields_sampled = sample_n_fields(r, p)
-        if n_fields_sampled <= 0:
-            continue
-
-        mat = place_fields_random_centroid(
-            pfields,
-            matrix_shape,
-            n_fields_sampled
-        )
-
-        if mat is None:
-            continue
-
-        summed_matrix += mat
-        count += 1
-
-    return summed_matrix
-
-# =================== 4. Histogram helpers ===================
 def hist_with_bins(data):
     max_val = int(np.max(data))
-    bins = np.arange(-0.5, max_val + 1.5, 1)
+    bins = np.arange(-0.5, max_val+1.5, 1)
     hist, bins = np.histogram(data, bins=bins)
-    bin_centers = (bins[:-1] + bins[1:]) / 2
+    bin_centers = (bins[:-1] + bins[1:])/2
     return hist, bin_centers
 
-# =================== 5. Beta-Binomial ===================
 def beta_binomial_pmf(k, n, a, b):
-    return comb(n, k) * beta_func(k + a, n - k + b) / beta_func(a, b)
+    return comb(n, k) * beta_func(k+a, n-k+b) / beta_func(a, b)
 
-# =================== 6. Binomial Mixture ===================
 def binomial_mixture_nll(params, data, n_max):
     f, p1, p2 = params
-    pmf = f * binom.pmf(data, n_max, p1) + (1 - f) * binom.pmf(data, n_max, p2)
+    pmf = f*binom.pmf(data, n_max, p1) + (1-f)*binom.pmf(data, n_max, p2)
     pmf = np.clip(pmf, 1e-10, None)
     return -np.sum(np.log(pmf))
 
 def fit_binomial_mixture(data):
     n_max = max(int(max(data)), 1)
-    res = minimize(
-        binomial_mixture_nll,
-        [0.5, 0.2, 0.8],
-        args=(data, n_max),
-        bounds=[(0,1),(0,1),(0,1)]
-    )
+    x0 = [0.5, 0.2, 0.8]
+    bounds = [(0,1), (0,1), (0,1)]
+    res = minimize(binomial_mixture_nll, x0, args=(data, n_max), bounds=bounds)
     return res.x, res.fun, n_max
 
-# =================== 7. Beta-Binomial Mixture ===================
 def beta_binomial_mixture_nll(params, data, n_max):
     f, a1, b1, a2, b2 = params
-    pmf = (
-        f * beta_binomial_pmf(data, n_max, a1, b1)
-        + (1 - f) * beta_binomial_pmf(data, n_max, a2, b2)
-    )
+    pmf = f*beta_binomial_pmf(data, n_max, a1, b1) + (1-f)*beta_binomial_pmf(data, n_max, a2, b2)
     pmf = np.clip(pmf, 1e-10, None)
     return -np.sum(np.log(pmf))
 
 def fit_beta_binomial_mixture(data):
     n_max = max(int(max(data)), 1)
-    res = minimize(
-        beta_binomial_mixture_nll,
-        [0.5, 2, 5, 5, 2],
-        args=(data, n_max),
-        bounds=[(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
-    )
+    x0 = [0.5, 2, 5, 5, 2]
+    bounds = [(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
+    res = minimize(beta_binomial_mixture_nll, x0, args=(data,n_max), bounds=bounds)
     return res.x, res.fun, n_max
 
-# =================== 8. Plotting ===================
+# ================== Place field extraction & centroid-shuffling ==================
+def extract_fields_and_centroids(place_map):
+    """Extract all contiguous fields and their centroids."""
+    structure = np.ones((3,3))
+    labeled, n_fields = label(place_map>0, structure=structure)
+    fields = []
+    centroids = []
+    for i in range(1, n_fields+1):
+        mask = (labeled == i)
+        ys, xs = np.where(mask)
+        h, w = ys.max()-ys.min()+1, xs.max()-xs.min()+1
+        field_array = np.zeros((h, w))
+        field_array[ys-ys.min(), xs-xs.min()] = place_map[ys, xs]
+        fields.append(field_array)
+        cy, cx = center_of_mass(mask)
+        centroids.append((cy, cx))
+    return fields, centroids
+
+def place_field_at_location(matrix, field, centroid):
+    """Place field at a specific centroid location."""
+    H, W = matrix.shape
+    h, w = field.shape
+    cy, cx = centroid
+
+    top = int(round(cy - h/2))
+    left = int(round(cx - w/2))
+
+    top = max(0, min(top, H-h))
+    left = max(0, min(left, W-w))
+
+    if np.any(matrix[top:top+h, left:left+w] > 0):
+        return False
+    matrix[top:top+h, left:left+w] = field
+    return True
+
+def shuffle_fields_within_map(place_map):
+    """Shuffle fields within a place map at other centroids."""
+    fields, centroids = extract_fields_and_centroids(place_map)
+    shuffled_fields = fields.copy()
+    random.shuffle(shuffled_fields)
+    
+    shuffled_map = np.zeros(place_map.shape)
+    for field, centroid in zip(shuffled_fields, centroids):
+        if not place_field_at_location(shuffled_map, field, centroid):
+            return None
+    return shuffled_map
+
+def shuffle_all_maps_within(place_maps):
+    shuffled_maps = []
+    for pm in place_maps:
+        shuffled = shuffle_fields_within_map(pm)
+        if shuffled is not None:
+            shuffled_maps.append(shuffled)
+    return shuffled_maps
+
+# ================== Plotting ==================
 def plot_summed_matrix(matrix):
     plt.figure(figsize=(8,6))
-    plt.imshow(matrix, origin='lower')
-    plt.colorbar()
-    plt.title("Summed Place Fields")
+    plt.imshow(matrix, cmap='viridis', origin='lower')
+    plt.colorbar(label="Number of place fields")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Summed Shuffled Place Fields")
     plt.show()
 
-def plot_sample_generated_neuron(pfields, matrix_shape, nlist):
-    r, p = fit_negative_binomial(nlist)
-    n_fields = max(1, sample_n_fields(r, p))
+def plot_histogram_pixel_with_distributions(matrix):
+    data = matrix.flatten()
+    hist, bin_centers = hist_with_bins(data)
+    x_fit = np.arange(int(max(data))+1)
 
-    mat = place_fields_random_centroid(
-        pfields,
-        matrix_shape,
-        n_fields
-    )
+    # ---------------- Negative Binomial ----------------
+    r, p = fit_negative_binomial(data)
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r*(1-p)/p
+    nb_std = np.sqrt(r*(1-p)/(p**2))
+    nb_cv2 = (nb_std/nb_mean)**2
+    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
 
-    if mat is None:
-        print("Failed to generate neuron")
-        return
+    # ---------------- Binomial Mixture ----------------
+    bm_params, bm_nll, n_max = fit_binomial_mixture(data)
+    f_bm, p1_bm, p2_bm = bm_params
+    bm_pmf = (f_bm*binom.pmf(x_fit,n_max,p1_bm) + (1-f_bm)*binom.pmf(x_fit,n_max,p2_bm))*len(data)
+    mean1 = n_max*p1_bm
+    mean2 = n_max*p2_bm
+    cv21 = (n_max*p1_bm*(1-p1_bm))/mean1**2
+    cv22 = (n_max*p2_bm*(1-p2_bm))/mean2**2
+    bm_aic = 2*3 - 2*(-bm_nll)
 
-    labeled, n_feat = label(mat > 0)
-    plt.figure(figsize=(6,5))
-    plt.imshow(mat, origin='lower')
-    plt.title(f"Sample neuron ({n_feat} fields)")
-    for i in range(1, n_feat + 1):
-        cy, cx = center_of_mass(mat, labeled, i)
-        plt.text(cx, cy, str(i), color='red')
+    # ---------------- Beta-Binomial Mixture ----------------
+    bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
+    f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+    pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
+    pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
+    bb_pmf = (f_bb*pmf1 + (1-f_bb)*pmf2)*len(data)
+    mean1_bb = a1_bb/(a1_bb+b1_bb)*n_max
+    mean2_bb = a2_bb/(a2_bb+b2_bb)*n_max
+    var1_bb = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
+    var2_bb = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
+    cv2_1 = var1_bb/mean1_bb**2
+    cv2_2 = var2_bb/mean2_bb**2
+    bb_aic = 2*5 - 2*(-bb_nll)
+
+    # ---------------- Plot ----------------
+    fs = 15
+    plt.figure(figsize=(9,6))
+    plt.bar(bin_centers, hist, width=0.8, align='center', color='lightblue', edgecolor='black', label='Data')
+    plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+    plt.plot(x_fit, bm_pmf, 'g-s', label=f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, mean1={mean1:.2f}, CV²1={cv21:.2f}, mean2={mean2:.2f}, CV²2={cv22:.2f}, AIC={bm_aic:.1f}')
+    plt.plot(x_fit, bb_pmf, 'm-^', label=f'Beta-Bin Mix: f={f_bb:.2f}, mean1={mean1_bb:.2f}, CV²1={cv2_1:.2f}, mean2={mean2_bb:.2f}, CV²2={cv2_2:.2f}, AIC={bb_aic:.1f}')
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
+    plt.title("Pixel Histogram with Distributions (Shuffled)")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
     plt.show()
 
-# =================== 9. Example usage ===================
+# ================== Example usage ==================
 dnum = 0
-pfields = p1[dnum]
-nlist_data = nlist[dnum]
-matrix_shape = min([pf.shape for pf in pfields], key=lambda x: x[0]*x[1])
+place_maps = p1[dnum]  # binarized place maps
+shuffled_maps = shuffle_all_maps_within(place_maps)
 
-summed_matrix = generate_nonblank_matrices(
-    pfields,
-    nlist_data,
-    matrix_shape,
-    n_matrices=238
-)
+# Compute summed shuffled matrix
+if len(shuffled_maps) > 0:
+    summed_matrix = np.sum(shuffled_maps, axis=0)
+    plot_summed_matrix(summed_matrix)
+    plot_histogram_pixel_with_distributions(summed_matrix)
+else:
+    print("No maps could be shuffled successfully.")
 
-plot_summed_matrix(summed_matrix)
-plot_sample_generated_neuron(pfields, matrix_shape, nlist_data)
+#%% Shuffled place fields location kept clip edge cases
 
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import nbinom, binom
+from scipy.special import comb, beta as beta_func
+from scipy.optimize import minimize
+import random
+
+# ================== Distribution helpers ==================
+def fit_negative_binomial(data):
+    data = np.array(data)
+    mean_pf = np.mean(data)
+    var_pf = np.var(data)
+    if var_pf <= mean_pf:
+        var_pf = mean_pf + 1e-3
+    p = mean_pf / var_pf
+    r = mean_pf * p / (1 - p)
+    return r, p
+
+def hist_with_bins(data):
+    max_val = int(np.max(data))
+    bins = np.arange(-0.5, max_val+1.5, 1)
+    hist, bins = np.histogram(data, bins=bins)
+    bin_centers = (bins[:-1] + bins[1:])/2
+    return hist, bin_centers
+
+def beta_binomial_pmf(k, n, a, b):
+    return comb(n, k) * beta_func(k+a, n-k+b) / beta_func(a, b)
+
+def binomial_mixture_nll(params, data, n_max):
+    f, p1, p2 = params
+    pmf = f*binom.pmf(data, n_max, p1) + (1-f)*binom.pmf(data, n_max, p2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 0.2, 0.8]
+    bounds = [(0,1), (0,1), (0,1)]
+    res = minimize(binomial_mixture_nll, x0, args=(data, n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+def beta_binomial_mixture_nll(params, data, n_max):
+    f, a1, b1, a2, b2 = params
+    pmf = f*beta_binomial_pmf(data, n_max, a1, b1) + (1-f)*beta_binomial_pmf(data, n_max, a2, b2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_beta_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 2, 5, 5, 2]
+    bounds = [(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
+    res = minimize(beta_binomial_mixture_nll, x0, args=(data,n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+# ================== Place field extraction & centroid-shuffling ==================
+def extract_fields_and_centroids(place_map):
+    """Extract all contiguous fields and their centroids."""
+    structure = np.ones((3,3))
+    labeled, n_fields = label(place_map>0, structure=structure)
+    fields = []
+    centroids = []
+    for i in range(1, n_fields+1):
+        mask = (labeled == i)
+        ys, xs = np.where(mask)
+        h, w = ys.max()-ys.min()+1, xs.max()-xs.min()+1
+        field_array = np.zeros((h, w))
+        field_array[ys-ys.min(), xs-xs.min()] = place_map[ys, xs]
+        fields.append(field_array)
+        cy, cx = center_of_mass(mask)
+        centroids.append((cy, cx))
+    return fields, centroids
+
+def place_field_at_location(matrix, field, centroid):
+    """Place field at a specific centroid location, clipping at boundaries if necessary."""
+    H, W = matrix.shape
+    h, w = field.shape
+    cy, cx = centroid
+
+    top = int(round(cy - h/2))
+    left = int(round(cx - w/2))
+
+    # Clip the coordinates to matrix boundaries
+    field_top = 0
+    field_left = 0
+    field_bottom = h
+    field_right = w
+
+    if top < 0:
+        field_top = -top
+        top = 0
+    if left < 0:
+        field_left = -left
+        left = 0
+    if top + (field_bottom - field_top) > H:
+        field_bottom = h - ((top + (field_bottom - field_top)) - H)
+    if left + (field_right - field_left) > W:
+        field_right = w - ((left + (field_right - field_left)) - W)
+
+    matrix[top:top+(field_bottom-field_top), left:left+(field_right-field_left)] = \
+        field[field_top:field_bottom, field_left:field_right]
+    return True
+
+def shuffle_fields_within_map(place_map):
+    """Shuffle fields within a place map at other centroids."""
+    fields, centroids = extract_fields_and_centroids(place_map)
+    shuffled_fields = fields.copy()
+    random.shuffle(shuffled_fields)
+    
+    shuffled_map = np.zeros(place_map.shape)
+    for field, centroid in zip(shuffled_fields, centroids):
+        place_field_at_location(shuffled_map, field, centroid)
+    return shuffled_map
+
+def shuffle_all_maps_within(place_maps):
+    shuffled_maps = []
+    for pm in place_maps:
+        shuffled = shuffle_fields_within_map(pm)
+        shuffled_maps.append(shuffled)
+    return shuffled_maps
+
+# ================== Plotting ==================
+def plot_summed_matrix(matrix):
+    plt.figure(figsize=(8,6))
+    plt.imshow(matrix, cmap='viridis', origin='lower')
+    plt.colorbar(label="Number of place fields")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Summed Shuffled Place Fields")
+    plt.show()
+
+def plot_histogram_pixel_with_distributions(matrix):
+    data = matrix.flatten()
+    hist, bin_centers = hist_with_bins(data)
+    x_fit = np.arange(int(max(data))+1)
+
+    # ---------------- Negative Binomial ----------------
+    r, p = fit_negative_binomial(data)
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r*(1-p)/p
+    nb_std = np.sqrt(r*(1-p)/(p**2))
+    nb_cv2 = (nb_std/nb_mean)**2
+    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
+
+    # ---------------- Binomial Mixture ----------------
+    bm_params, bm_nll, n_max = fit_binomial_mixture(data)
+    f_bm, p1_bm, p2_bm = bm_params
+    bm_pmf = (f_bm*binom.pmf(x_fit,n_max,p1_bm) + (1-f_bm)*binom.pmf(x_fit,n_max,p2_bm))*len(data)
+    mean1 = n_max*p1_bm
+    mean2 = n_max*p2_bm
+    cv21 = (n_max*p1_bm*(1-p1_bm))/mean1**2
+    cv22 = (n_max*p2_bm*(1-p2_bm))/mean2**2
+    bm_aic = 2*3 - 2*(-bm_nll)
+
+    # ---------------- Beta-Binomial Mixture ----------------
+    bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
+    f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+    pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
+    pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
+    bb_pmf = (f_bb*pmf1 + (1-f_bb)*pmf2)*len(data)
+    mean1_bb = a1_bb/(a1_bb+b1_bb)*n_max
+    mean2_bb = a2_bb/(a2_bb+b2_bb)*n_max
+    var1_bb = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
+    var2_bb = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
+    cv2_1 = var1_bb/mean1_bb**2
+    cv2_2 = var2_bb/mean2_bb**2
+    bb_aic = 2*5 - 2*(-bb_nll)
+
+    # ---------------- Plot ----------------
+    fs = 15
+    plt.figure(figsize=(9,6))
+    plt.bar(bin_centers, hist, width=0.8, align='center', color='lightblue', edgecolor='black', label='Data')
+    plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+    plt.plot(x_fit, bm_pmf, 'g-s', label=f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, mean1={mean1:.2f}, CV²1={cv21:.2f}, mean2={mean2:.2f}, CV²2={cv22:.2f}, AIC={bm_aic:.1f}')
+    plt.plot(x_fit, bb_pmf, 'm-^', label=f'Beta-Bin Mix: f={f_bb:.2f}, mean1={mean1_bb:.2f}, CV²1={cv2_1:.2f}, mean2={mean2_bb:.2f}, CV²2={cv2_2:.2f}, AIC={bb_aic:.1f}')
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
+    plt.title("Pixel Histogram with Distributions (Shuffled)")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.show()
+
+# ================== Example usage ==================
+dnum = 0
+place_maps = p1[dnum]  # binarized place maps
+shuffled_maps = shuffle_all_maps_within(place_maps)
+
+# Compute summed shuffled matrix
+if len(shuffled_maps) > 0:
+    summed_matrix = np.sum(shuffled_maps, axis=0)
+    plot_summed_matrix(summed_matrix)
+    plot_histogram_pixel_with_distributions(summed_matrix)
+else:
+    print("No maps could be shuffled successfully.")
+
+#%% Keep all centroid positions for each place map and put any place field 
+# from the pool of all place fields at that location
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass
+from scipy.stats import nbinom, binom
+from scipy.special import comb, beta as beta_func
+from scipy.optimize import minimize
+import random
+
+# ================== Distribution helpers ==================
+def fit_negative_binomial(data):
+    data = np.array(data)
+    mean_pf = np.mean(data)
+    var_pf = np.var(data)
+    if var_pf <= mean_pf:
+        var_pf = mean_pf + 1e-3
+    p = mean_pf / var_pf
+    r = mean_pf * p / (1 - p)
+    return r, p
+
+def hist_with_bins(data):
+    max_val = int(np.max(data))
+    bins = np.arange(-0.5, max_val+1.5, 1)
+    hist, bins = np.histogram(data, bins=bins)
+    bin_centers = (bins[:-1] + bins[1:])/2
+    return hist, bin_centers
+
+def beta_binomial_pmf(k, n, a, b):
+    return comb(n, k) * beta_func(k+a, n-k+b) / beta_func(a, b)
+
+def binomial_mixture_nll(params, data, n_max):
+    f, p1, p2 = params
+    pmf = f*binom.pmf(data, n_max, p1) + (1-f)*binom.pmf(data, n_max, p2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 0.2, 0.8]
+    bounds = [(0,1), (0,1), (0,1)]
+    res = minimize(binomial_mixture_nll, x0, args=(data, n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+def beta_binomial_mixture_nll(params, data, n_max):
+    f, a1, b1, a2, b2 = params
+    pmf = f*beta_binomial_pmf(data, n_max, a1, b1) + (1-f)*beta_binomial_pmf(data, n_max, a2, b2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_beta_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 2, 5, 5, 2]
+    bounds = [(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
+    res = minimize(beta_binomial_mixture_nll, x0, args=(data,n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+# ================== Place field extraction & reshuffling ==================
+def extract_fields_and_centroids(place_map):
+    """Extract all contiguous fields and their centroids."""
+    structure = np.ones((3,3))
+    labeled, n_fields = label(place_map>0, structure=structure)
+    fields = []
+    centroids = []
+    for i in range(1, n_fields+1):
+        mask = (labeled == i)
+        ys, xs = np.where(mask)
+        h, w = ys.max()-ys.min()+1, xs.max()-xs.min()+1
+        field_array = np.zeros((h, w))
+        field_array[ys-ys.min(), xs-xs.min()] = place_map[ys, xs]
+        fields.append(field_array)
+        cy, cx = center_of_mass(mask)
+        centroids.append((cy, cx))
+    return fields, centroids
+
+def place_field_at_location(matrix, field, centroid):
+    """Place field at a specific centroid location, clipping at boundaries if necessary."""
+    H, W = matrix.shape
+    h, w = field.shape
+    cy, cx = centroid
+
+    top = int(round(cy - h/2))
+    left = int(round(cx - w/2))
+
+    # Clip the coordinates to matrix boundaries
+    field_top = 0
+    field_left = 0
+    field_bottom = h
+    field_right = w
+
+    if top < 0:
+        field_top = -top
+        top = 0
+    if left < 0:
+        field_left = -left
+        left = 0
+    if top + (field_bottom - field_top) > H:
+        field_bottom = h - ((top + (field_bottom - field_top)) - H)
+    if left + (field_right - field_left) > W:
+        field_right = w - ((left + (field_right - field_left)) - W)
+
+    matrix[top:top+(field_bottom-field_top), left:left+(field_right-field_left)] = \
+        field[field_top:field_bottom, field_left:field_right]
+    return True
+
+def reshuffle_fields_at_centroids(place_map):
+    """
+    For a given place map:
+    - Extract all fields and centroids
+    - Randomly assign different fields to the same centroids
+    """
+    fields, centroids = extract_fields_and_centroids(place_map)
+    fields_pool = fields.copy()
+    random.shuffle(fields_pool)
+    
+    reshuffled_map = np.zeros(place_map.shape)
+    for centroid, field in zip(centroids, fields_pool):
+        place_field_at_location(reshuffled_map, field, centroid)
+    return reshuffled_map
+
+def reshuffle_all_maps(place_maps):
+    reshuffled_maps = []
+    for pm in place_maps:
+        reshuffled_map = reshuffle_fields_at_centroids(pm)
+        reshuffled_maps.append(reshuffled_map)
+    return reshuffled_maps
+
+# ================== Plotting ==================
+def plot_summed_matrix(matrix):
+    plt.figure(figsize=(8,6))
+    plt.imshow(matrix, cmap='viridis', origin='lower')
+    plt.colorbar(label="Number of place fields")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Summed Shuffled Place Fields")
+    plt.show()
+
+def plot_histogram_pixel_with_distributions(matrix):
+    data = matrix.flatten()
+    hist, bin_centers = hist_with_bins(data)
+    x_fit = np.arange(int(max(data))+1)
+
+    # ---------------- Negative Binomial ----------------
+    r, p = fit_negative_binomial(data)
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r*(1-p)/p
+    nb_std = np.sqrt(r*(1-p)/(p**2))
+    nb_cv2 = (nb_std/nb_mean)**2
+    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
+
+    # ---------------- Binomial Mixture ----------------
+    bm_params, bm_nll, n_max = fit_binomial_mixture(data)
+    f_bm, p1_bm, p2_bm = bm_params
+    bm_pmf = (f_bm*binom.pmf(x_fit,n_max,p1_bm) + (1-f_bm)*binom.pmf(x_fit,n_max,p2_bm))*len(data)
+    mean1 = n_max*p1_bm
+    mean2 = n_max*p2_bm
+    cv21 = (n_max*p1_bm*(1-p1_bm))/mean1**2
+    cv22 = (n_max*p2_bm*(1-p2_bm))/mean2**2
+    bm_aic = 2*3 - 2*(-bm_nll)
+
+    # ---------------- Beta-Binomial Mixture ----------------
+    bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
+    f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+    pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
+    pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
+    bb_pmf = (f_bb*pmf1 + (1-f_bb)*pmf2)*len(data)
+    mean1_bb = a1_bb/(a1_bb+b1_bb)*n_max
+    mean2_bb = a2_bb/(a2_bb+b2_bb)*n_max
+    var1_bb = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
+    var2_bb = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
+    cv2_1 = var1_bb/mean1_bb**2
+    cv2_2 = var2_bb/mean2_bb**2
+    bb_aic = 2*5 - 2*(-bb_nll)
+
+    # ---------------- Plot ----------------
+    fs = 15
+    plt.figure(figsize=(9,6))
+    plt.bar(bin_centers, hist, width=0.8, align='center', color='lightblue', edgecolor='black', label='Data')
+    plt.plot(x_fit, nb_pmf, 'r-o', label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+    plt.plot(x_fit, bm_pmf, 'g-s', label=f'Binom Mix: f={f_bm:.2f}, p1={p1_bm:.2f}, p2={p2_bm:.2f}, mean1={mean1:.2f}, CV²1={cv21:.2f}, mean2={mean2:.2f}, CV²2={cv22:.2f}, AIC={bm_aic:.1f}')
+    plt.plot(x_fit, bb_pmf, 'm-^', label=f'Beta-Bin Mix: f={f_bb:.2f}, mean1={mean1_bb:.2f}, CV²1={cv2_1:.2f}, mean2={mean2_bb:.2f}, CV²2={cv2_2:.2f}, AIC={bb_aic:.1f}')
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
+    plt.title("Pixel Histogram with Distributions (Reshuffled)")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.show()
+
+# ================== Example usage ==================
+dnum = 0
+place_maps = p1[dnum]  # binarized place maps
+reshuffled_maps = reshuffle_all_maps(place_maps)
+
+# Compute summed reshuffled matrix
+if len(reshuffled_maps) > 0:
+    summed_matrix = np.sum(reshuffled_maps, axis=0)
+    plot_summed_matrix(summed_matrix)
+    plot_histogram_pixel_with_distributions(summed_matrix)
+else:
+    print("No maps could be reshuffled successfully.")
