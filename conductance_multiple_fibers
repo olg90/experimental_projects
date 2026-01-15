@@ -5134,32 +5134,32 @@ gL = 25e-9  # leak conductance nS
 # vin = -60e-3  # voltage at which the threshold resting value lowers
 # vin2 = -61e-3  # the threshold will not lower below this voltage
 # vtmin = vt #-59e-3  # the lower value of the threshold potential
+# 
 # =============================================================================
-
 # Idea lower tautheta2 and then raise other things to
 # overshoot then undershoot
 
 # Testing 2
-tautheta1 = 1e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 120e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -35e-3  # threshold base value at no activity
-vi = -54e-3  # threshold increases when the membrane potential is above this level
+tautheta1 = 0.8e-3  # time constant of the threshold change to the infinite value
+tautheta2 = 4e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -49e-3  # threshold base value at no activity
+vi = -55.3e-3  # threshold increases when the membrane potential is above this level
 vi2 = -35e-3
 # at = 1
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-at = np.array([0*1, 0.03, 0.1])  # 0-slope, 1-scale, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-alpha = [5e-3, 0*0.01e-3, 0*0.01e-3]  # jump size
+at = np.array([0.85, 0.03, 0.1])  # 0-slope, 1-scale, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+alpha = [10e-3, 0*0.01e-3, 0*0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -61e-3  # the threshold will not lower below this voltage
 vtmin = vt #-59e-3  # the lower value of the threshold potential
 
-ttype = 100 # <----------------------------------- test type, 1-sim, 100-3 curves
+ttype = 100 # <------------------------------- test type, 1-sim, 100-3 curves
 xtype = 1 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
-tmax = 20 #   <----------------- TMAX
+tmax = 10 #   <----------------- TMAX
 
-f = 300 # exc
+f = 500 # exc
 fi = 150 # inh
 
 # Simulation parameters
@@ -5204,6 +5204,8 @@ if xtype==1:
                  color='green', alpha=0.5, label='vi')
         plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.',
                  color='red', alpha=0.5, label='vin')
+        plt.plot(t * dt, vt * np.ones(len(t)), linestyle='--',
+                 color='purple', alpha=0.9, label='vt')
     
         plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
         plt.xlabel('Time (sec)', fontsize=fs)
@@ -5286,7 +5288,7 @@ if xtype==1:
         plt.tick_params(axis='both', labelsize=fs)
         plt.legend(fontsize=fs-3)
         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
-        # plt.ylim([0,10])
+        plt.ylim([0,10])
         plt.show()
         
 if xtype==10:
@@ -5328,6 +5330,9 @@ if xtype==10:
                  color='orange', alpha=0.5, label='vin2')
         plt.plot(t * dt, vtmin * np.ones(len(t)), linestyle='-',
                  color='purple', alpha=0.5, label='vtmin')
+        plt.plot(t * dt, vt * np.ones(len(t)), linestyle='--',
+                 color='purple', alpha=0.5, label='vt')
+    
     
         plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
         plt.xlabel('Time (sec)', fontsize=fs)
