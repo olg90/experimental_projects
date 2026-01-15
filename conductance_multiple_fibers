@@ -5154,21 +5154,40 @@ gL = 25e-9  # leak conductance nS
 # vtmin = vt #-59e-3  # the lower value of the threshold potential
 # =============================================================================
 
+
+# =============================================================================
+# # Original parameters for the next idea in "Have to lower the curl-down..."
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -52.7e-3  # threshold base value at no activity
+# vi = -59e-3  # threshold increases when the membrane potential is above this level
+# vi2=-40e-3
+# at = np.array([1, 0, 0])  ## 0-slope, 1-scale, 2-rate 
+# alpha = [2e-3, 0*0.03e-3, 0e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = -59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Idea: Increase vth and increasealpha and tautheta2
+# or increase vi and then increase at and vi2
+
 # Have to lower the curl-down rate of the exc=1 curve
 tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 18e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -52.7e-3  # threshold base value at no activity
-vi = -59e-3  # threshold increases when the membrane potential is above this level
+tautheta2 = 20e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -53e-3  # threshold base value at no activity
+vi = -57e-3  # threshold increases when the membrane potential is above this level
 vi2=-40e-3
-at = [0.99, 0, 0]  ## 0-slope, 1-scale, 2-rate 
-alpha = [2e-3, 0.07e-3, 0e-3]  # jump size
+at = np.array([1, 0, 0])  ## 0-slope, 1-scale, 2-rate 
+alpha = [2e-3, 0*0.03e-3, 0e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
 
-ttype = 100 # <------------------------------- test type, 1-sim, 100-3 curves
+ttype = 1000 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
 xtype = 1 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
 tmax = 10 #   <----------------- TMAX
@@ -5203,12 +5222,13 @@ if xtype==1:
         fs = 15
         plt.figure()
         plt.subplot(2, 1, 1)
+        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
         plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
         plt.ylabel('Conductance', fontsize=fs)
         plt.xticks([], fontsize=fs)
         plt.yticks(fontsize=fs)
         plt.legend(loc='upper right', fontsize=fs)
-        plt.title('exc={} nS'.format(strengths[enum]))
+        
     
         plt.subplot(2, 1, 2)
         plt.plot(t * dt, V, label='V')
@@ -5229,7 +5249,7 @@ if xtype==1:
         plt.xticks(fontsize=fs)
         plt.plot(t*dt, vthlist, label='vth', color='k')
         plt.legend(loc='upper right', fontsize=fs-4)
-        plt.title('fout={}'.format(fout))
+        plt.title('exc={} nS, fout={}'.format(strengths[enum], fout))
         plt.show()
         print(fout)
     
@@ -5286,29 +5306,52 @@ if xtype==1:
                     foutsj.append(fout)
                 foutlist.append(np.mean(foutsj))
             foutlists.append(foutlist)
+            
     
-# =============================================================================
-#         fs = 15
-#         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-#         
-#         for i in range(3):
-#             plt.plot(flist, edata[2-i], marker='o',
-#                      label='exc={}'.format(strengths[2-i]),
-#                      color=cs[i])
-#             ptype = 0
-#             if ptype == 0:
-#                 plt.plot(flist, np.array(foutlists[2-i]), marker='o',
-#                          label='simulation',
-#                          color=cs[i], linestyle='--')
-#     
-#         plt.ylabel('Steady state mean firing rate', fontsize=fs)
-#         plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
-#         plt.tick_params(axis='both', labelsize=fs)
-#         plt.legend(fontsize=fs-3)
-#         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
-#         # plt.ylim([0,10])
-#         plt.show()
-# =============================================================================
+    
+        fs = 15
+        cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+        
+        for i in range(3):
+            plt.plot(flist, edata[2-i], marker='o',
+                     label='exc={}'.format(strengths[2-i]),
+                     color=cs[i])
+            ptype = 0
+            if ptype == 0:
+                plt.plot(flist, np.array(foutlists[2-i]), marker='o',
+                         label='simulation',
+                         color=cs[i], linestyle='--')
+    
+        plt.ylabel('Steady state mean firing rate', fontsize=fs)
+        plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
+        plt.tick_params(axis='both', labelsize=fs)
+        plt.legend(fontsize=fs-3)
+        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
+        # plt.ylim([0,10])
+        plt.show()
+        
+        
+    if ttype == 1000:
+        
+        foutlists = []
+        count = 0
+        for i1, nef in enumerate(nfibers):
+            foutlist = []
+            for i, f in enumerate(flist):
+                foutsj = []
+                for j in range(navgs):
+                    print(i1, len(nfibers), i, len(flist), j, navgs)
+                    count += 1
+                    print(count/(len(nfibers)*len(flist)*navgs))
+                    tliste, Gexc, tempe = geti2(f, nef, strength, tde, tre, tmax, dt)
+                    vlen = len(tliste)
+                    V, t, iexc, iinh, aplist, vthlist, fout = \
+                        sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
+                             vi, vin, vin2, vi2, tautheta1, tautheta2,
+                             vt, vtmin, at, alpha, 1)
+                    foutsj.append(fout)
+                foutlist.append(np.mean(foutsj))
+            foutlists.append(foutlist)
         
         fs = 15
         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
@@ -5335,6 +5378,7 @@ if xtype==1:
                 plt.xticks([])
             plt.legend()
         plt.show()
+        
         
 if xtype==10:
     
