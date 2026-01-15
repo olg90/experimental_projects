@@ -5187,8 +5187,8 @@ vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = -59e-3  # the lower value of the threshold potential
 
 
-ttype = 1000 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
-xtype = 1 # 1-exc or 10-exc/inh
+ttype = 100 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
+xtype = 10 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
 tmax = 10 #   <----------------- TMAX
 
