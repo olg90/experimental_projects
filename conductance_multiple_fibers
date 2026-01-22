@@ -5510,7 +5510,6 @@ if xtype==10:
         plt.show()
 
 #%% Just exc=1 inh = 8
-#%% Combined exc and exc+inh
 
 from tqdm import tqdm
 from scipy.optimize import minimize
@@ -6010,13 +6009,28 @@ gL = 25e-9  # leak conductance nS
 # vtmin = vt #-59e-3  # the lower value of the threshold potential
 # =============================================================================
 
+# =============================================================================
+# # Almost good just need to 
+# tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 5e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -43e-3  # threshold base value at no activity
+# vi = -53e-3  # threshold increases when the membrane potential is above this level
+# vi2 = -40e-3
+# at = np.array([0.65, 0.2, 1.3])  ## 0-slope, 1-scale, 2-rate
+# alpha = [100e-3, 0e-3, 0e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = vt  # the lower value of the threshold potential
+# =============================================================================
+
 # Testing
-tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+tautheta1 = 10e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 5e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -43e-3  # threshold base value at no activity
-vi = -53e-3  # threshold increases when the membrane potential is above this level
+vi = -51e-3  # threshold increases when the membrane potential is above this level
 vi2 = -40e-3
-at = np.array([0.65, 0.2, 1.3])  ## 0-slope, 1-scale, 2-rate
+at = np.array([0.65, 0.3, 1.3])  ## 0-slope, 1-scale, 2-rate
 alpha = [100e-3, 0e-3, 0e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
@@ -6024,9 +6038,9 @@ vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = vt  # the lower value of the threshold potential
 
 ttype = 10 # <------- test type, 1-sim, 10-3 curves
-tmax = 10 # <----------------- TMAX
+tmax = 5 # <----------------- TMAX
 
-f = 300 # exc
+f = 100 # exc
 fi = 150 # inh
 
 # Simulation parameters
@@ -6191,238 +6205,3 @@ if xtype==1:
         plt.legend(fontsize=fs-3)
         plt.tight_layout()
         plt.show()
-        
-        
-
-
-# =============================================================================
-# if xtype==1: 
-#     if ttype == 1:
-#     
-#         tliste, Gexc, tempe = geti2(f, nfibers[enum], strength, tde, tre, tmax, dt)
-#     
-#         vlen = len(tliste)
-#         V, t, iexc, iinh, aps, vthlist, fout = sima(vlen, V0, Gexc, 0*Gexc, dt, vr,
-#                             rf, gL, vi, vin, vin2, vi2, tautheta1, tautheta2,
-#                             vt, vtmin, at, alpha, navgs)
-#     
-#         fs = 15
-#         plt.figure()
-#         plt.subplot(2, 1, 1)
-#         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
-#         plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
-#         plt.ylabel('Conductance', fontsize=fs)
-#         plt.xticks([], fontsize=fs)
-#         plt.yticks(fontsize=fs)
-#         plt.legend(loc='upper right', fontsize=fs)
-#         
-#     
-#         plt.subplot(2, 1, 2)
-#         
-#         plt.plot(t * dt, V, label='V')
-#         plt.plot(t*dt, vthlist, label='vth', color='k')
-#         plt.plot(t * dt, vr * np.ones(len(t)), linestyle='-',
-#                  color='gray', alpha=0.5, label='vr')
-#         plt.plot(t * dt, vi * np.ones(len(t)), linestyle='--',
-#                  color='green', alpha=0.5, label='vi')
-#         plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.',
-#                  color='red', alpha=0.5, label='vin')
-#         plt.plot(t * dt, vt * np.ones(len(t)), linestyle='--',
-#                  color='purple', alpha=0.9, label='vt')
-#         plt.plot(t * dt, vi2 * np.ones(len(t)), linestyle='--',
-#                  color='red', alpha=0.9, label='vi2')
-#     
-#         plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
-#         plt.xlabel('Time (sec)', fontsize=fs)
-#         plt.yticks(fontsize=fs)
-#         plt.xticks(fontsize=fs)
-#         
-#         plt.legend(loc='upper right', fontsize=fs-4)
-#         plt.title('exc={} nS, fout={}'.format(strengths[enum], fout))
-#         plt.show()
-#         print(fout)
-#     
-#     if ttype == 10:
-#         
-#         foutlist = np.zeros(len(flist))
-#         for i, f in enumerate(flist):
-#             foutj=np.zeros(navgs)
-#             for j in range(navgs):
-#                 print(i, len(flist), j, navgs)
-#                 tliste, Gexc, tempe = geti2(
-#                     f, nfibers[enum], strength, tde, tre, tmax, dt)
-#         
-#                 vlen = len(tliste)
-#                 V, t, iexc, iinh, aplist, vthlist, fout = \
-#                     sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
-#                          vi, vin, vin2, vi2, tautheta1, tautheta2,
-#                          vt, vtmin, at, alpha, 1)
-#                 foutj[j]=fout
-#             foutlist[i]=np.mean(foutj)
-#             
-#         fs = 15
-#         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-#         for i in range(3):
-#             plt.plot(flist, edata[i], marker='o',
-#                      label='exc={}'.format(strengths[i]),
-#                      color=cs[i])
-#         plt.ylabel('Steady state mean firing rate', fontsize=fs)
-#         plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
-#         plt.tick_params(axis='both', labelsize=fs)
-#         plt.plot(flist, foutlist, marker='o',
-#                  label='sim {}'.format(strengths[enum]), color='k')
-#         plt.legend(fontsize=fs-3)
-#         plt.show()
-#     
-#     if ttype == 100:
-# 
-#         foutlist = []
-#         count=0
-#         for i, f in enumerate(flist):
-#             foutsj = []
-#             for j in range(navgs):
-#                 print(i, len(flist), j, navgs)
-#                 count += 1
-#                 print(count/(len(flist)*navgs))
-#                 tliste, Gexc, tempe = geti2(f, nfibers[0], strength, tde, tre, tmax, dt)
-#                 vlen = len(tliste)
-#                 V, t, iexc, iinh, aplist, vthlist, fout = \
-#                     sima(vlen, V0, Gexc, 0*Gexc, dt, vr, rf, gL,
-#                          vi, vin, vin2, vi2, tautheta1, tautheta2,
-#                          vt, vtmin, at, alpha, 1)
-#                 foutsj.append(fout)
-#             foutlist.append(np.mean(foutsj))
-# 
-#         fs = 15
-#         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-#         
-#         plt.plot(flist, edata[0], marker='o',
-#                  label='exc={}'.format(strengths[0]),
-#                  color=cs[0])
-#         ptype = 0
-#         if ptype == 0:
-#             plt.plot(flist, np.array(foutlist), marker='o',
-#                      label='simulation',
-#                      color=cs[0], linestyle='--')
-#     
-#         plt.ylabel('Steady state mean firing rate', fontsize=fs)
-#         plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
-#         plt.tick_params(axis='both', labelsize=fs)
-#         plt.legend(fontsize=fs-3)
-#         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
-#         # plt.ylim([0,10])
-#         plt.show()
-#         
-#         
-# if xtype==10:
-#     
-# 
-#     if ttype == 1:
-#     
-#         tliste, Gexc, tempe = geti2(f, ne, ce, tde, tre, tmax, dt)
-#         tlisti, Ginh, tempi = geti2(fi, ni, ci, tdi, tri, tmax, dt)
-#     
-#         vlen = len(tliste)
-#         V, t, iexc, iinh, aps, vthlist, fout = sima(vlen, V0, Gexc, Ginh, dt, vr,
-#                                                     rf, gL, vi, vin, vin2, vi2, tautheta1, 
-#                                                     tautheta2,
-#                                                     vt, vtmin, at, alpha, navgs)
-#     
-#         fs = 15
-#         plt.figure()
-#         plt.subplot(2, 1, 1)
-#         plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
-#         plt.plot(tliste, Ginh, label='Gi {} Hz'.format(fi))
-#         plt.ylabel('Conductance', fontsize=fs)
-#         # plt.xticks([], fontsize=fs)
-#         plt.yticks(fontsize=fs)
-#         plt.legend(loc='upper right', fontsize=fs)
-#         plt.title('exc={} nS, inh={} nS'.format(
-#             estrengths[enum], istrengths[inum]))
-#     
-#         plt.subplot(2, 1, 2)
-#         plt.title('fout={}'.format(np.around(fout, 2)))
-#         plt.plot(t * dt, V, label='V')
-#         plt.plot(t * dt, vr * np.ones(len(t)), linestyle='-',
-#                  color='gray', alpha=0.5, label='vr')
-#         plt.plot(t * dt, vi * np.ones(len(t)), linestyle='--',
-#                  color='green', alpha=0.5, label='vi')
-#         plt.plot(t * dt, vin * np.ones(len(t)), linestyle='-.',
-#                  color='red', alpha=0.5, label='vin')
-#         plt.plot(t * dt, vin2 * np.ones(len(t)), linestyle='-.',
-#                  color='orange', alpha=0.5, label='vin2')
-#         plt.plot(t * dt, vtmin * np.ones(len(t)), linestyle='-',
-#                  color='purple', alpha=0.5, label='vtmin')
-#         plt.plot(t * dt, vt * np.ones(len(t)), linestyle='--',
-#                  color='purple', alpha=0.5, label='vt')
-#     
-#     
-#         plt.ylabel('Membrane\npotential (mV)', fontsize=fs)
-#         plt.xlabel('Time (sec)', fontsize=fs)
-#         plt.yticks(fontsize=fs)
-#         plt.xticks(fontsize=fs)
-#         plt.plot(t*dt, vthlist, label='vth', color='k')
-#         plt.legend(loc='upper right', fontsize=fs-5, framealpha=0.8)
-#     
-#     # =============================================================================
-#     #     for x in aplist:
-#     #         plt.axvline(x, color='r', alpha=0.6)
-#     #     plt.show()
-#     # =============================================================================
-#         plt.show()
-#     
-#         print(fout)
-#     
-#     if ttype == 10:
-#         filist, foutlist = t10(f, fi, ne, ni, ce, ci, tde, tdi, tre, 
-#                                tri, tmax, dt, V0, vr, rf, gL, vi, vin, vin2, vi2,
-#                                tautheta1, tautheta2, vt, vtmin, at, alpha, navgs)
-#         fs = 15
-#         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-#         for i in range(3):
-#             plt.plot(filist, d1.iloc[:, i], marker='o',
-#                      label='exc={}, inh={}'.format(
-#                          estrengths[enum], istrengths[i]),
-#                      color=cs[i])
-#         plt.ylabel('Steady state mean firing rate', fontsize=fs)
-#         plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
-#         plt.tick_params(axis='both', labelsize=fs)
-#         plt.plot(filist, foutlist, marker='o', label='sim {}'.format(istrengths[inum]), color='k')
-#         plt.legend(fontsize=fs-3)
-#         plt.show()
-#     
-#     if ttype == 100:
-#         d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
-#         f=300
-#         filist, foutlist = t100(ifibers, f, fi, ne, ni, ce, 
-#                                  ci, tde, tdi, tre, tri, tmax, dt, 
-#                                  V0, vr, rf, gL, vi, vin, vin2, vi2,
-#                                  tautheta1, tautheta2, vt, vtmin, 
-#                                  at, alpha, navgs)
-#     
-#         fs = 15
-#         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-#         plt.plot(filist, d1.iloc[:, 0], marker='o',
-#                  label='exc={}, inh={}'.format(
-#                      estrengths[enum], istrengths[0]),
-#                  color=cs[0])
-#         ptype = 0
-#         if ptype == 0:
-#             plt.plot(filist, np.array(foutlist), marker='o',
-#                      label='simulation',
-#                      color=cs[0], linestyle='--')
-#         if ptype == 1:
-#             plt.plot(filist, np.array(foutlist)-foutlist+d1.iloc[0, 0], marker='o',
-#                      label='simulation',
-#                      color=cs[0], linestyle='--')
-#     
-#         plt.ylabel('Steady state mean firing rate', fontsize=fs)
-#         plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
-#         plt.tick_params(axis='both', labelsize=fs)
-#         plt.legend(fontsize=fs-3)
-#         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
-#         plt.show()
-# =============================================================================
-        
-        
-        
