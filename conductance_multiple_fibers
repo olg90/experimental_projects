@@ -5196,8 +5196,9 @@ vi = -52.1e-3  # threshold increases when the membrane potential is above this l
 vi2 = -35e-3
 # at = 1
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-at = np.array([0.9, 0.5, 10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+at = np.array([0.95, 0.5, 10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
 alpha = [1e-3, 3e-3, 0*0.01e-3]  # jump size
+# at[0]=0.95 is the 
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -61e-3  # the threshold will not lower below this voltage
