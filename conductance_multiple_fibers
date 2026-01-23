@@ -5188,7 +5188,7 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# Testing
+# A lot closer just need to lower the right side for exc=1
 tautheta1 = 0.8e-3  # time constant of the threshold change to the infinite value
 tautheta2 = 3e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -47e-3  # threshold base value at no activity
@@ -5196,13 +5196,12 @@ vi = -52.1e-3  # threshold increases when the membrane potential is above this l
 vi2 = -35e-3
 # at = 1
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-at = np.array([1, 0.01, 10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-alpha = [2e-3, 4e-3, 0*0.01e-3]  # jump size
+at = np.array([0.9, 0.5, 10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+alpha = [1e-3, 3e-3, 0*0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -61e-3  # the threshold will not lower below this voltage
 vtmin = vt #-59e-3  # the lower value of the threshold potential
-
 
 ttype = 100 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
 xtype = 10 # 1-exc or 10-exc/inh
@@ -6024,23 +6023,38 @@ gL = 25e-9  # leak conductance nS
 # vtmin = vt  # the lower value of the threshold potential
 # =============================================================================
 
-# Testing
+# =============================================================================
+# # Slightly better than the last one
+# tautheta1 = 10e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 5e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -43e-3  # threshold base value at no activity
+# vi = -53e-3  # threshold increases when the membrane potential is above this level
+# vi2 = -40e-3
+# at = np.array([0.7, 0.2, 1.3])  ## 0-slope, 1-scale, 2-rate
+# alpha = [100e-3, 0e-3, 0e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -65e-3  # the threshold will not lower below this voltage
+# vtmin = vt  # the lower value of the threshold potential
+# =============================================================================
+
+# Testing lower the threshold 
 tautheta1 = 10e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 5e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -43e-3  # threshold base value at no activity
-vi = -51e-3  # threshold increases when the membrane potential is above this level
+tautheta2 = 200e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vt = -50e-3  # threshold base value at no activity
+vi = -53e-3  # threshold increases when the membrane potential is above this level
 vi2 = -40e-3
-at = np.array([0.65, 0.3, 1.3])  ## 0-slope, 1-scale, 2-rate
-alpha = [100e-3, 0e-3, 0e-3]  # jump size
+at = np.array([0.7, 0.2, 1.3])  ## 0-slope, 1-scale, 2-rate
+alpha = [10e-3, 0e-3, 0e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -65e-3  # the threshold will not lower below this voltage
 vtmin = vt  # the lower value of the threshold potential
 
 ttype = 10 # <------- test type, 1-sim, 10-3 curves
-tmax = 5 # <----------------- TMAX
+tmax = 3 # <----------------- TMAX
 
-f = 100 # exc
+f = 500 # exc
 fi = 150 # inh
 
 # Simulation parameters
@@ -6172,7 +6186,7 @@ if xtype==1:
         plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
         plt.tick_params(axis='both', labelsize=fs)
         plt.legend(fontsize=fs-3)
-        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
+        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
         # plt.ylim([0,10])
         
         plt.subplot(2,1,2)
