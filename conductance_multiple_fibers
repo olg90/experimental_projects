@@ -4740,8 +4740,7 @@ def thetainf(vm, vi, vin, vin2, vi2, vt, vtmin, at):
         return vt + at[0]*(vm-vi)
     if vm >= vi2:
         return vt + at[0]*(vm-vi) + at[1]*(np.exp(at[2]*(vm-vi2))-1)
-    
-    
+
     if vm <= vin and vm > vin2:
         return vtmin + (vt - vtmin) * (vm - vin2) / (vin - vin2)
     if vm <= vin2:
@@ -5193,21 +5192,20 @@ tautheta1 = 0.8e-3  # time constant of the threshold change to the infinite valu
 tautheta2 = 3e-3 # 20e-3  # time constant of the depolarized post-jump decay
 vt = -47e-3  # threshold base value at no activity
 vi = -52.1e-3  # threshold increases when the membrane potential is above this level
-vi2 = -35e-3
+vi2 = -33e-3
 # at = 1
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-at = np.array([0.95, 0.5, 10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-alpha = [1e-3, 3e-3, 0*0.01e-3]  # jump size
-# at[0]=0.95 is the 
+at = np.array([0.95, 1, 10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+alpha = [3e-3, 0*2e-3, 0*0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -61e-3  # the threshold will not lower below this voltage
 vtmin = vt #-59e-3  # the lower value of the threshold potential
 
-ttype = 100 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
-xtype = 10 # 1-exc or 10-exc/inh
+ttype = 1000 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
+xtype = 1 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
-tmax = 10 #   <----------------- TMAX
+tmax = 3 #   <----------------- TMAX
 
 f = 300 # exc
 fi = 150 # inh
@@ -5476,7 +5474,7 @@ if xtype==10:
         plt.legend(fontsize=fs-3)
         plt.show()
     
-    if ttype == 100:
+    if ttype == 100 or ttype==1000:
         d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
         f=300
         filist, foutlists = t100(ifibers, f, fi, ne, ni, ce, 
