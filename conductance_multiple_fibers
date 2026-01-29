@@ -5187,15 +5187,32 @@ gL = 25e-9  # leak conductance nS
 # vtmin = -59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-# A lot closer just need to lower the right side for exc=1
+# =============================================================================
+# # A lot closer just need to lower the right side for exc=1
+# tautheta1 = 0.8e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 3e-3 # 20e-3  # time constant of the depolarized post-jump decay
+# vt = -47e-3  # threshold base value at no activity
+# vi = -52.1e-3  # threshold increases when the membrane potential is above this level
+# vi2 = -30e-3
+# # at = 1
+# # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# at = np.array([0.95, 0*0.5, 0*10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# alpha = [3e-3, 0*2e-3, 0*0.01e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -61e-3  # the threshold will not lower below this voltage
+# vtmin = vt #-59e-3  # the lower value of the threshold potential
+# =============================================================================
+
+# Testing
 tautheta1 = 0.8e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 3e-3 # 20e-3  # time constant of the depolarized post-jump decay
-vt = -47e-3  # threshold base value at no activity
+tautheta2 = 4e-3 # 20e-3  #  time constant of the depolarized post-jump decay
+vt = -47.5e-3  # threshold base value at no activity
 vi = -52.1e-3  # threshold increases when the membrane potential is above this level
-vi2 = -33e-3
+vi2 = -30e-3
 # at = 1
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-at = np.array([0.95, 1, 10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+at = np.array([0.95, 0*0.5, 0*10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
 alpha = [3e-3, 0*2e-3, 0*0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
@@ -5203,9 +5220,9 @@ vin2 = -61e-3  # the threshold will not lower below this voltage
 vtmin = vt #-59e-3  # the lower value of the threshold potential
 
 ttype = 1000 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
-xtype = 1 # 1-exc or 10-exc/inh
+xtype = 10 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
-tmax = 3 #   <----------------- TMAX
+tmax = 5 #   <----------------- TMAX
 
 f = 300 # exc
 fi = 150 # inh
@@ -5237,7 +5254,7 @@ if xtype==1:
         fs = 15
         plt.figure()
         plt.subplot(2, 1, 1)
-        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
+        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin,tmax))
         plt.plot(tliste, Gexc, label='Ge {} Hz'.format(f))
         plt.ylabel('Conductance', fontsize=fs)
         plt.xticks([], fontsize=fs)
@@ -5343,7 +5360,7 @@ if xtype==1:
         plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
         plt.tick_params(axis='both', labelsize=fs)
         plt.legend(fontsize=fs-3)
-        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
+        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
         # plt.ylim([0,10])
         plt.show()
         
@@ -5375,7 +5392,7 @@ if xtype==1:
         for i in range(3):
             plt.subplot(3,1,i+1)
             if i == 0:
-                plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
+                plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
                 
             plt.plot(flist, edata[2-i], marker='o',
                      label='exc={}'.format(strengths[2-i]),
@@ -5504,7 +5521,7 @@ if xtype==10:
         plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
         plt.tick_params(axis='both', labelsize=fs)
         plt.legend(fontsize=fs-3)
-        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin))
+        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
         plt.show()
 
 #%% Just exc=1 inh = 8
