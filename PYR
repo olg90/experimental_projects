@@ -287,12 +287,12 @@ dt = 1e-4 # sample rate
 rf = 1e-3  # refractory period
 
 V0 = [-78e-3, -78e-3, -78e-3]  # reverse potential
-C_m = [80e-12, 250e-12, 650e-12] # capacitance
+C_m = [300e-12, 250e-12, 650e-12] # capacitance
 vr = [-78e-3, -78e-3, -78e-3] # reset potential after postsynaptic AP
 gL = [1/(50e6), 1/(50.29e6), 1/(120e6)] # 15e-9  # leak conductance
 vt = [-77e-3, -62e-3, -70e-3]  # threshold base level
-tauvth = [8e-3, 1e-3, 1e-3] # threshold time constant
-alpha = [[50e-3, 10e-3, 1e-3], 
+tauvth = [7e-3, 1e-3, 1e-3] # threshold time constant
+alpha = [[75e-3, 0e-3, 0e-3], 
          [1e-3, 1e-3, 1e-3], 
          [1e-3, 1e-3, 1e-3]]
 
