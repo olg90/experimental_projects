@@ -1,163 +1,4 @@
-#%%
-from tqdm import tqdm
-from scipy.optimize import minimize
-import numpy as np
-from matplotlib.pyplot import plot as pt
-import matplotlib.pyplot as plt
-from numpy.random import exponential, binomial, gamma
-from numpy import exp
-from numpy import sqrt as Sqrt
-from numpy import log as Log
-import pandas as pd
-from numba import jit
-import os
-import re
-
-# @jit(nopython=True)
-def sim(V0, tlen, Iext, dt, vr, rf, gL, vt, C_m):
-    
-    # Variables initialization
-    V = np.zeros(tlen)
-    aplist = np.zeros_like(V)
-
-    # Set initial conditions
-    V[0] = V0
-
-    ratio = 0.3
-    rfon = False
-    rftimer = np.inf
-    
-    for i in range(1, tlen):
-
-        i_ion = gL*(V[i-1]-V0)
-
-        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
-        V[i] = V[i-1] + dVdt * dt*(1-rfon)
-
-        if rftimer != np.inf:
-            rftimer -= dt
-
-        if rftimer <= 0:
-            rftimer = np.inf
-            rfon = False
-
-        if V[i] > vt:  # AP
-            if i > int(ratio*tlen) and i < tlen:
-                aplist[i] = i*dt
-            rfon = True
-            rftimer = rf
-            V[i] = vr
-
-    aps = getaps(aplist, dt)
-    if len(aps) < 2:
-        fout = 0.0  # or np.nan if you want to flag it
-    else:
-        fout = 1/np.mean(np.diff(aps))
-    return V, fout
-
-# @jit(nopython=True)
-def getaps(aplist, dt):
-    return np.where(aplist != 0)[0]*dt
-
-def geti(tmax, dt, A):
-    Iext = np.zeros(int(tmax/dt))
-    Iext[int(tmax/dt*2/15):int(tmax/dt*4/5)]=A
-    return Iext
-
-
-file = r'C:\Users\Oliver\Desktop\Research\PYR\PYR model data'
-files=['F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
-
-
-data=pd.read_csv(file+'\{}'.format(files[0]))
-data=np.array(data.iloc[:, :2])
-data[:,0]*=1e-9
-
-tmax = 1.5  # <----------------- simulation run time
-dt = 1e-4 # sample rate
-rf = 1e-3  # refractory period
-
-V0 = -78e-3  # reverse potential
-C_m = 200e-12 # capacitance
-vr = V0 # reset potential after postsynaptic AP
-gL = 1/(50.29e6) # 15e-9  # leak conductance
-vt = -50e-3  # threshold level
-A=0.557e-9 # current amplitude
-
-Iext = geti(tmax, dt, A)
-res=sim(V0, len(Iext), Iext, dt, vr, rf, gL, vt, C_m)
-t=np.linspace(0,len(Iext),len(Iext))*dt
-
-plt.figure()
-plt.subplot(3,1,1)
-plt.plot(t, Iext*1e9)
-plt.ylabel('Current (nA)')
-plt.xticks([])
-
-plt.subplot(3,1,2)
-plt.plot(t, res[0]*1000, label='membrane potnetial')
-plt.plot(t, vt*np.ones(len(t))*1000, label='threshold potential')
-plt.ylabel('Membrane\npotential (mV)')
-plt.xlabel('Time (sec)')
-plt.legend(loc='upper right')
-plt.show()
-
-# alist=np.arange(-0.1, 0.3, 0.05)
-alist=[-0.1, -0.05, 0.05, 0.1, 0.15, 0.2, 0.25]
-alist = np.array([a*1e-9 for a in alist if a!=0])
-ilist = [geti(tmax, dt, a) for a in alist]
-vlist = [sim(V0, len(i), i, dt, vr, rf, gL, vt, C_m)[0] for i in ilist]
-
-plt.figure()
-plt.subplot(1,2,1)
-for i in range(len(vlist)):
-    plt.plot(t, ilist[i]*1e9)
-plt.xlabel('Time (sec)')
-plt.ylabel('Current (nA)')
-plt.subplot(1,2,2)
-for i in range(len(vlist)):
-    plt.plot(t, vlist[i]*1e3)
-plt.xlabel('Time (sec)')
-plt.ylabel('Membrane potential (mV)')
-plt.tight_layout()
-plt.show()
-    
-#%%  Fit the Fout vs input current amplitude 
-
-tmax = 1.5  # <----------------- simulation run time
-dt = 1e-4 # sample rate
-rf = 1e-3  # refractory period
-
-V0 = -78e-3  # reverse potential
-C_m = 250e-12 # capacitance
-vr = V0 # reset potential after postsynaptic AP
-gL = 1/(50.29e6) # 15e-9  # leak conductance
-vt = -62e-3  # threshold level
-
-alist=data[:,0]
-fouts=[]
-for a in alist:
-    Iext = geti(tmax, dt, a)
-    res=sim(V0, len(Iext), Iext, dt, vr, rf, gL, vt, C_m)
-    fouts.append(res[1])
-    
-    
-plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
-plt.plot(alist*1e9, fouts, label='simulation', marker='o', alpha=0.6)
-# =============================================================================
-# plt.plot(alist, data[:, 1], label='experimental', 
-#             marker='o')
-# plt.plot(alist, fouts, label='simulation', 
-#          linewidth=1, alpha=0.8, marker='o')
-# =============================================================================
-
-plt.ylabel('Output frequency')
-plt.xlabel('Input current amplitude (nA)')
-plt.legend()
-plt.show()
-
-#%%  Check other files
-
+#%% Fit the currents and plot the membrane potential
 from tqdm import tqdm
 from scipy.optimize import minimize
 import numpy as np
@@ -227,7 +68,7 @@ def geti(tmax, dt, A):
 
 fbdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedback_interneuron_CSV'
 ffdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedforward_interneuron_Csv'
-somdir=r'C:\Users\Oliver\Desktop\Research\PYR\Pyramidal_neuron_soma'
+somdir=r'C:\Users\Oliver\Desktop\Research\PYR\Pyramidal_neuron_soma_Csv'
 
 files=['F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
 
@@ -236,7 +77,7 @@ fbfiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
 fffiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'v-t', 'v-t noise']
 dirnames=['Som', 'Feedback', 'Feedforward']
 
-dirtype=1
+dirtype=0
 ftype='F-I.csv'
 
 dirs = [somdir, fbdir, ffdir]
@@ -296,23 +137,182 @@ plt.ylabel('Membrane potential (mV)')
 plt.tight_layout()
 plt.show()
 
-tmax = 1.5  # <----------------- simulation run time
+
+#%% Plot the fout vs input current
+
+from tqdm import tqdm
+from scipy.optimize import minimize
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+import os
+import re
+
+# @jit(nopython=True)
+def sim(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+
+    # Set initial conditions
+    print(Vinit)
+    V[0] = Vinit
+
+    ratio = 0.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > vt:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+            rfon = True
+            rftimer = rf
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout
+
+def vthfun(v, v1, vt, aval):
+    if v <= v1:
+        return vt
+    else:
+        return vt + aval[0]*(v1-v)
+# @jit(nopython=True)
+
+def sima(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m, alpha, tauvth):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+    vth=np.zeros_like(V)
+
+    # Set initial conditions
+    V[0] = Vinit
+    vth[0]=vt
+
+    ratio = 0.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+        
+        dvthdt = -(vth[i-1]-vt)/tauvth
+        vth[i] = vth[i-1] + dvthdt * dt 
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > vth[i]:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+            rfon = True
+            rftimer = rf
+
+            vth[i]+=alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)**2
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout, vth
+
+# @jit(nopython=True)
+def getaps(aplist, dt):
+    return np.where(aplist != 0)[0]*dt
+
+def geti(tmax, dt, A):
+    Iext = np.zeros(int(tmax/dt))
+    Iext[int(tmax/dt*2/15):int(tmax/dt*4/5)]=A
+    return Iext
+
+
+fbdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedback_interneuron_CSV'
+ffdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedforward_interneuron_Csv'
+somdir=r'C:\Users\Oliver\Desktop\Research\PYR\Pyramidal_neuron_soma_Csv'
+
+files=['F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+
+somfiles=['F-I.csv','t.csv','v-tv1.csv','v-tv10.csv','v-tv11.csv','v-tv12.csv','v-tv13.csv','v-tv14.csv','v-tv15.csv','v-tv16.csv','v-tv17.csv','v-tv18.csv','v-tv19.csv','v-tv2.csv','v-tv20.csv','v-tv21.csv','v-tv22.csv','v-tv23.csv','v-tv24.csv','v-tv25.csv','v-tv26.csv','v-tv27.csv','v-tv28.csv','v-tv29.csv','v-tv3.csv','v-tv30.csv','v-tv31.csv','v-tv32.csv','v-tv33.csv','v-tv34.csv','v-tv4.csv','v-tv5.csv','v-tv6.csv','v-tv7.csv','v-tv8.csv','v-tv9.csv']
+fbfiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+fffiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'v-t', 'v-t noise']
+dirnames=['Som', 'Feedback', 'Feedforward']
+
+dirtype=0 # <-------------------- 0-som, 1-FB, 2-FF
+ftype='F-I.csv'
+
+dirs = [somdir, fbdir, ffdir]
+
+data=pd.read_csv(dirs[dirtype]+'\{}'.format(ftype))
+data=np.array(data.iloc[:, :2])
+data[:,0]*=1e-9
+
+tmax = 1.5  # simulation run time
 dt = 1e-4 # sample rate
 rf = 1e-3  # refractory period
 
 V0 = [-78e-3, -78e-3, -78e-3]  # reverse potential
-C_m = [200e-12, 250e-12, 200e-12] # capacitance
+C_m = [80e-12, 250e-12, 650e-12] # capacitance
 vr = [-78e-3, -78e-3, -78e-3] # reset potential after postsynaptic AP
-gL = [1/(50.29e6), 1/(50.29e6), 1/(50.29e6)] # 15e-9  # leak conductance
-vt = [-50e-3, -62e-3, -50e-3]  # threshold level
+gL = [1/(50e6), 1/(50.29e6), 1/(120e6)] # 15e-9  # leak conductance
+vt = [-77e-3, -62e-3, -70e-3]  # threshold base level
+tauvth = [8e-3, 1e-3, 1e-3] # threshold time constant
+alpha = [[50e-3, 10e-3, 1e-3], 
+         [1e-3, 1e-3, 1e-3], 
+         [1e-3, 1e-3, 1e-3]]
+
+# =============================================================================
+# # sim test
+# res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+# plt.plot(res[0])
+# plt.plot(res[2])
+# # plt.ylim([-0.08, -0.065])
+# # plt.xlim([0, 3000])
+# plt.show()
+# #%%
+# =============================================================================
 
 alist=data[:,0]
 fouts=[]
 for a in alist:
     Iext = geti(tmax, dt, a)
-    res=sim(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype])
+    res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
     fouts.append(res[1])
-    
     
 plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
 plt.plot(alist*1e9, fouts, label='simulation', marker='o', alpha=0.6)
@@ -326,7 +326,7 @@ plt.plot(alist*1e9, fouts, label='simulation', marker='o', alpha=0.6)
 plt.ylabel('Output frequency')
 plt.xlabel('Input current amplitude (nA)')
 plt.legend()
-plt.title(dirnames[dirtype])
+plt.title(dirnames[dirtype]+'\nV0={}, C_m={}, v_r={}, gL={:.3g}, vt={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype]))
 plt.show()
 
 #%% End
