@@ -77,7 +77,7 @@ fbfiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
 fffiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'v-t', 'v-t noise']
 dirnames=['Som', 'Feedback', 'Feedforward']
 
-dirtype=0
+dirtype=1
 ftype='F-I.csv'
 
 dirs = [somdir, fbdir, ffdir]
@@ -312,6 +312,249 @@ fouts=[]
 for a in alist:
     Iext = geti(tmax, dt, a)
     res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+    fouts.append(res[1])
+    
+plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
+plt.plot(alist*1e9, fouts, label='simulation', marker='o', alpha=0.6)
+# =============================================================================
+# plt.plot(alist, data[:, 1], label='experimental', 
+#             marker='o')
+# plt.plot(alist, fouts, label='simulation', 
+#          linewidth=1, alpha=0.8, marker='o')
+# =============================================================================
+
+plt.ylabel('Output frequency')
+plt.xlabel('Input current amplitude (nA)')
+plt.legend()
+plt.title(dirnames[dirtype]+'\nV0={}, C_m={}, v_r={}, gL={:.3g}, \nvt={}, tauvth={},alpha={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype], tauvth[0], alpha[dirtype][0]))
+plt.show()
+
+
+#%% Plot the fout vs input current (Thetas)
+
+from tqdm import tqdm
+from scipy.optimize import minimize
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+import os
+import re
+
+# @jit(nopython=True)
+def sim(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+
+    # Set initial conditions
+    print(Vinit)
+    V[0] = Vinit
+
+    ratio = 0.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > vt:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+            rfon = True
+            rftimer = rf
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout
+
+def vthfun(v, v1, vt, aval):
+    if v <= v1:
+        return vt
+    else:
+        return vt + aval[0]*(v1-v)
+# @jit(nopython=True)
+
+@jit(nopython=True)
+def thetainf(vm, vi, vin, vin2, vt, vtmin, at):
+    if vm < vi and vm > vin:
+        return vt
+    if vm >= vi:
+        return at*(vm-vi)+vt
+    if vm <= vin and vm > vin2:
+        return vtmin + (vt - vtmin) * (vm - vin2) / (vin - vin2)
+    if vm <= vin2:
+        return vtmin
+
+def sima(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m, alpha, tauvth, tautheta1,
+         tautheta2, vi, vin, vin2, vtmin, at):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+    vth=np.zeros_like(V)
+    
+    theta1 = np.zeros_like(V)
+    theta2 = np.zeros_like(V)
+    theta = np.zeros_like(V)
+
+    # Set initial conditions
+    V[0] = Vinit
+    theta[0]=vt
+    theta1[0]=vt
+    theta2[0]=0
+
+    ratio = 0.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+        
+        dvthdt = -(vth[i-1]-vt)/tauvth
+        vth[i] = vth[i-1] + dvthdt * dt 
+        
+        dtheta1dt = 1/tautheta1*(-theta1[i-1] +
+                                 thetainf(V[i-1], vi, vin, vin2, vt, vtmin, at))
+        theta1[i] = theta1[i-1] + dtheta1dt*dt
+
+        dtheta2dt = 1/tautheta2*(-theta2[i-1])
+        theta2[i] = theta2[i-1]+dtheta2dt*dt
+
+        theta[i] = theta1[i]+theta2[i]
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > theta[i]:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+            rfon = True
+            rftimer = rf
+
+            theta2[i] += alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)**2 
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout, theta
+
+# @jit(nopython=True)
+def getaps(aplist, dt):
+    return np.where(aplist != 0)[0]*dt
+
+def geti(tmax, dt, A):
+    Iext = np.zeros(int(tmax/dt))
+    Iext[int(tmax/dt*2/15):int(tmax/dt*4/5)]=A
+    return Iext
+
+
+fbdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedback_interneuron_CSV'
+ffdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedforward_interneuron_Csv'
+somdir=r'C:\Users\Oliver\Desktop\Research\PYR\Pyramidal_neuron_soma_Csv'
+
+files=['F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+
+somfiles=['F-I.csv','t.csv','v-tv1.csv','v-tv10.csv','v-tv11.csv','v-tv12.csv','v-tv13.csv','v-tv14.csv','v-tv15.csv','v-tv16.csv','v-tv17.csv','v-tv18.csv','v-tv19.csv','v-tv2.csv','v-tv20.csv','v-tv21.csv','v-tv22.csv','v-tv23.csv','v-tv24.csv','v-tv25.csv','v-tv26.csv','v-tv27.csv','v-tv28.csv','v-tv29.csv','v-tv3.csv','v-tv30.csv','v-tv31.csv','v-tv32.csv','v-tv33.csv','v-tv34.csv','v-tv4.csv','v-tv5.csv','v-tv6.csv','v-tv7.csv','v-tv8.csv','v-tv9.csv']
+fbfiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+fffiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'v-t', 'v-t noise']
+dirnames=['Som', 'Feedback', 'Feedforward']
+
+dirtype=0 # <-------------------- 0-som, 1-FB, 2-FF
+ftype='F-I.csv'
+
+dirs = [somdir, fbdir, ffdir]
+
+data=pd.read_csv(dirs[dirtype]+'\{}'.format(ftype))
+data=np.array(data.iloc[:, :2])
+data[:,0]*=1e-9
+
+tmax = 1.5  # simulation run time
+dt = 1e-4 # sample rate
+rf = 1e-3  # refractory period
+
+V0 = [-78e-3, -78e-3, -78e-3]  # reverse potential
+C_m = [250e-12, 250e-12, 650e-12] # capacitance
+vr = [-78e-3, -78e-3, -78e-3] # reset potential after postsynaptic AP
+gL = [1/(60e6), 1/(50.29e6), 1/(120e6)] # 15e-9  # leak conductance
+vt = [-76e-3, -62e-3, -70e-3]  # threshold base level
+tauvth = [4e-3, 1e-3, 1e-3] # threshold time constant
+alpha = [[40e-3, 0e-3, 0e-3], 
+         [1e-3, 1e-3, 1e-3], 
+         [1e-3, 1e-3, 1e-3]]
+
+# Closest exc fits so far
+tautheta1 = 5e-3  # time constant of the threshold change to the infinite value
+tautheta2 = 70e-3 # 20e-3  # time constant of the depolarized post-jump decay
+vi = -40e-3  # threshold increases when the membrane potential is above this level
+at = 1  # rate of polarization increase, larger means more curve downward at high f
+
+vin = -np.inf  # ignore
+vin2 = -np.inf  # ignore
+vtmin = -np.inf # the lower value of the threshold potential
+
+
+
+# sim test
+Iext=geti(tmax, dt, 1e-9)
+res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], 
+         vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype],
+         tautheta1,tautheta2,vi,vin,vin2,vtmin,at)
+fs=15
+plt.title(dirnames[dirtype]+'\nV0={}, C_m={}, v_r={}, gL={:.3g}, vt={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype]))
+plt.plot(res[0], label='membrane potential')
+plt.plot(res[2], label='threshold')
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Membrane potential (V)', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.plot(vi*np.ones(len(res[0])), label='vi')
+plt.plot(vt[dirtype]*np.ones(len(res[0])), label='vt')
+# plt.ylim([-0.08, -0.065])
+# plt.xlim([0, 3000])
+plt.legend(loc='upper right')
+plt.show()
+#%% (Fout vs a's for theta)
+
+alist=data[:,0]
+fouts=[]
+for a in alist:
+    Iext = geti(tmax, dt, a)
+    # res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+    res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype], tautheta1,
+             tautheta2, vi, vin, vin2, vtmin, at)
+
     fouts.append(res[1])
     
 plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
