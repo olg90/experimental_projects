@@ -5678,6 +5678,27 @@ strength = 40e-9
 strengths = [1, 4, 10]
 nfibers = [40, 10, 4]
 
+# Bound data
+quant_dir=r'C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\quantiles_table.xlsx'
+quant=pd.ExcelFile(quant_dir)
+qe= quant.parse('Exc')
+qi=quant.parse('Inh')
+qe25=np.array(qe.iloc[6:16,2:7]) # x=50-500 Hz, y=10,4,2,1,0.1
+qe75=np.array(qe.iloc[21:31,2:7])
+qi25=np.array(qi.iloc[9:30,2:5])
+qi75=np.array(qi.iloc[9:30,6:11])
+
+# =============================================================================
+# # Getting the bounds example
+# qeind=0 # 0=10, 1=4, 2=2 excitatory
+# qebounds=(qe25[:,qeind], qe75[:,qeind])
+# qie=0 # exc: 0=10, 1=4, 2=1
+# qii=2 # inh: 0=8, 1=4, 2=2
+# qibounds=(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii])
+# =============================================================================
+
+
+
 # Fixed
 f = 300  # exc
 fi = 150  # inh
@@ -5965,9 +5986,9 @@ vin2 = -61e-3  # the threshold will not lower below this voltage
 vtmin = vt #-59e-3 # the lower value of the threshold potential
 
 ttype = 1000 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
-xtype = 10 # 1-exc or 10-exc/inh
+xtype = 1 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
-tmax = 10 #   <----------------- TMAX
+tmax = 1 #   <----------------- TMAX
 
 f = 300 # exc
 fi = 150 # inh
@@ -6107,11 +6128,17 @@ if xtype==1:
         plt.legend(fontsize=fs-3)
         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
         # plt.ylim([0,10])
+        
+        qeboundlist=[(qe25[:, i], qe75[:, i]) for i in (0,1,3)]
+        for i, qebounds in enumerate(qeboundlist):
+            plt.plot(flist, qebounds[0], color=cs[i])
+            plt.plot(flist, qebounds[1], color=cs[i])
         plt.show()
         
         
     if ttype == 1000:
         
+        # calculate all the data
         foutlists = []
         count = 0
         for i1, nef in enumerate(nfibers):
@@ -6132,8 +6159,10 @@ if xtype==1:
                 foutlist.append(np.mean(foutsj))
             foutlists.append(foutlist)
         
+        # plot all the data
         fs = 15
         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+        qeboundlist=[(qe25[:, i], qe75[:, i]) for i in (0,1,3)]
         for i in range(3):
             plt.subplot(3,1,i+1)
             if i == 0:
@@ -6157,8 +6186,13 @@ if xtype==1:
             if i != 2:
                 plt.xticks([])
             plt.legend()
+            qebounds=qeboundlist[i]
+            plt.plot(flist, qebounds[0], color=cs[i])
+            plt.plot(flist, qebounds[1], color=cs[i])
         plt.show()
         
+        
+
         
 if xtype==10:
     
@@ -6269,23 +6303,30 @@ if xtype==10:
         plt.legend(fontsize=fs-3)
         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
         plt.show()
+        
+        
+        qie=0 # exc: 0=10, 1=4, 2=1
+        qii=2 # inh: 0=8, 1=4, 2=2
+        qibounds=(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii])
 
-#%%
+#%% end
 
-quant_dir=r'C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\quantiles_table.xlsx'
-quant=pd.ExcelFile(quant_dir)
-qe= quant.parse('Exc')
-qi=quant.parse('Inh')
 
-qe25=np.array(qe.iloc[6:16,2:7]) # x=50-500 Hz, y=10,4,2,1,0.1
-qe75=np.array(qe.iloc[21:31,2:7])
-
-qi25=np.array(qi.iloc[9:30,2:5])
-qi75=np.array(qi.iloc[9:30,6:11])
-
-qeind=0 # 0=10, 1=4, 2=2 excitatory
-qebounds=(qe25[:,qeind], qe75[:,qeind])
-
-qie=0 # exc: 0=10, 1=4, 2=1
-qii=2 # inh: 0=8, 1=4, 2=2
-qibounds=(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii])
+# =============================================================================
+# # Bound data
+# quant_dir=r'C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\quantiles_table.xlsx'
+# quant=pd.ExcelFile(quant_dir)
+# qe= quant.parse('Exc')
+# qi=quant.parse('Inh')
+# qe25=np.array(qe.iloc[6:16,2:7]) # x=50-500 Hz, y=10,4,2,1,0.1
+# qe75=np.array(qe.iloc[21:31,2:7])
+# qi25=np.array(qi.iloc[9:30,2:5])
+# qi75=np.array(qi.iloc[9:30,6:11])
+# 
+# # Getting the bounds example
+# qeind=0 # 0=10, 1=4, 2=2 excitatory
+# qebounds=(qe25[:,qeind], qe75[:,qeind])
+# qie=0 # exc: 0=10, 1=4, 2=1
+# qii=2 # inh: 0=8, 1=4, 2=2
+# qibounds=(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii])
+# =============================================================================
