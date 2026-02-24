@@ -5957,8 +5957,8 @@ vi = -56e-3  # threshold increases when the membrane potential is above this lev
 vi2 = -40e-3
 # at = 1
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-at = np.array([0.89, 0*0.01, 0*10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-alpha = [9e-3, 3e-3, 0*0.01e-3]  # jump size
+at = np.array([0.89, 0*100, 0*100])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+alpha = [9e-3, 0*9e-3, 0*1e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -61e-3  # the threshold will not lower below this voltage
@@ -5967,7 +5967,7 @@ vtmin = vt #-59e-3 # the lower value of the threshold potential
 ttype = 1000 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
 xtype = 10 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
-tmax = 30 #   <----------------- TMAX
+tmax = 10 #   <----------------- TMAX
 
 f = 300 # exc
 fi = 150 # inh
@@ -6271,3 +6271,21 @@ if xtype==10:
         plt.show()
 
 #%%
+
+quant_dir=r'C:\Users\Oliver\Desktop\Research\current_project\postinhibitory_facilitation\quantiles_table.xlsx'
+quant=pd.ExcelFile(quant_dir)
+qe= quant.parse('Exc')
+qi=quant.parse('Inh')
+
+qe25=np.array(qe.iloc[6:16,2:7]) # x=50-500 Hz, y=10,4,2,1,0.1
+qe75=np.array(qe.iloc[21:31,2:7])
+
+qi25=np.array(qi.iloc[9:30,2:5])
+qi75=np.array(qi.iloc[9:30,6:11])
+
+qeind=0 # 0=10, 1=4, 2=2 excitatory
+qebounds=(qe25[:,qeind], qe75[:,qeind])
+
+qie=0 # exc: 0=10, 1=4, 2=1
+qii=2 # inh: 0=8, 1=4, 2=2
+qibounds=(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii])
