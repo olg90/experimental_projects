@@ -2074,9 +2074,9 @@ for dnametype in range(len(dnames)):
 
     # Set data directory
     if location == 0:
-        dir1 = rf'C:\Users\ogamb\OneDrive\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dnames[dnametype]}'
     elif location == 1:
-        dir1 = rf'C:\Users\olgud\OneDrive\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dnames[dnametype]}'
     
     dir2 = os.listdir(dir1)
 
@@ -2648,7 +2648,7 @@ bin_centerslist = [(binarr[:-1] + binarr[1:]) / 2 for binarr in binnlist]
 
 #%% Plot the different room data histograms
 
-i=5 # 0 bigroom, 1
+i=0 # 0 bigroom, 1
 data=datalist[i]
 binarr=binnlist[i]
 bin_centers=bin_centerslist[i]
@@ -9401,3 +9401,379 @@ if len(reshuffled_maps) > 0:
     plot_histogram_pixel_with_distributions(summed_matrix)
 else:
     print("No maps could be reshuffled successfully.")
+#%% Rotate all the place fields around their centroids by uniformally selecting
+# the angle of rotation and then placing them back in their original location
+# if a place field is then outside of the boundary of the image, clip it
+
+#%% Rotate all the place fields around their centroids by uniformly selecting
+# the angle of rotation and then placing them back in their original location
+# if a place field is then outside of the boundary of the image, clip it
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import label, center_of_mass, rotate
+from scipy.stats import nbinom, binom
+from scipy.special import comb, beta as beta_func
+from scipy.optimize import minimize
+import random
+
+# ================== Distribution helpers ==================
+
+def fit_negative_binomial(data):
+    data = np.array(data)
+    mean_pf = np.mean(data)
+    var_pf = np.var(data)
+    if var_pf <= mean_pf:
+        var_pf = mean_pf + 1e-3
+    p = mean_pf / var_pf
+    r = mean_pf * p / (1 - p)
+    return r, p
+
+def hist_with_bins(data):
+    max_val = int(np.max(data))
+    bins = np.arange(-0.5, max_val+1.5, 1)
+    hist, bins = np.histogram(data, bins=bins)
+    bin_centers = (bins[:-1] + bins[1:])/2
+    return hist, bin_centers
+
+def beta_binomial_pmf(k, n, a, b):
+    return comb(n, k) * beta_func(k+a, n-k+b) / beta_func(a, b)
+
+def binomial_mixture_nll(params, data, n_max):
+    f, p1, p2 = params
+    pmf = f*binom.pmf(data, n_max, p1) + (1-f)*binom.pmf(data, n_max, p2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 0.2, 0.8]
+    bounds = [(0,1), (0,1), (0,1)]
+    res = minimize(binomial_mixture_nll, x0, args=(data, n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+def beta_binomial_mixture_nll(params, data, n_max):
+    f, a1, b1, a2, b2 = params
+    pmf = f*beta_binomial_pmf(data, n_max, a1, b1) + (1-f)*beta_binomial_pmf(data, n_max, a2, b2)
+    pmf = np.clip(pmf, 1e-10, None)
+    return -np.sum(np.log(pmf))
+
+def fit_beta_binomial_mixture(data):
+    n_max = max(int(max(data)), 1)
+    x0 = [0.5, 2, 5, 5, 2]
+    bounds = [(0,1),(1e-2,None),(1e-2,None),(1e-2,None),(1e-2,None)]
+    res = minimize(beta_binomial_mixture_nll, x0, args=(data,n_max), bounds=bounds)
+    return res.x, res.fun, n_max
+
+# ================== Field extraction ==================
+
+def extract_fields_and_centroids(place_map):
+    structure = np.ones((3,3))
+    labeled, n_fields = label(place_map>0, structure=structure)
+    fields = []
+    centroids = []
+    for i in range(1, n_fields+1):
+        mask = (labeled == i)
+        ys, xs = np.where(mask)
+        h, w = ys.max()-ys.min()+1, xs.max()-xs.min()+1
+        field_array = np.zeros((h, w))
+        field_array[ys-ys.min(), xs-xs.min()] = place_map[ys, xs]
+        fields.append(field_array)
+        cy, cx = center_of_mass(mask)
+        centroids.append((cy, cx))
+    return fields, centroids
+
+# ================== Rotation + placement ==================
+
+def place_field_at_location(matrix, field, centroid):
+    H, W = matrix.shape
+    h, w = field.shape
+    cy, cx = centroid
+
+    top = int(round(cy - h/2))
+    left = int(round(cx - w/2))
+
+    field_top = 0
+    field_left = 0
+    field_bottom = h
+    field_right = w
+
+    if top < 0:
+        field_top = -top
+        top = 0
+    if left < 0:
+        field_left = -left
+        left = 0
+    if top + (field_bottom - field_top) > H:
+        field_bottom = h - ((top + (field_bottom - field_top)) - H)
+    if left + (field_right - field_left) > W:
+        field_right = w - ((left + (field_right - field_left)) - W)
+
+    matrix[top:top+(field_bottom-field_top), left:left+(field_right-field_left)] += \
+        field[field_top:field_bottom, field_left:field_right]
+
+def rotate_fields_at_centroids(place_map):
+    fields, centroids = extract_fields_and_centroids(place_map)
+    rotated_map = np.zeros(place_map.shape)
+
+    for field, centroid in zip(fields, centroids):
+        angle = random.uniform(0, 360)
+        rotated_field = rotate(field, angle, reshape=True, order=1)
+        rotated_field[rotated_field < 0] = 0
+        place_field_at_location(rotated_map, rotated_field, centroid)
+
+    return rotated_map
+
+def rotate_all_maps(place_maps):
+    rotated_maps = []
+    for pm in place_maps:
+        rotated_maps.append(rotate_fields_at_centroids(pm))
+    return rotated_maps
+
+# ================== Plotting ==================
+
+def plot_summed_matrix(matrix):
+    plt.figure(figsize=(8,6))
+    plt.imshow(matrix, cmap='viridis', origin='lower')
+    plt.colorbar(label="Number of place fields")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Summed Rotated Place Fields")
+    plt.show()
+
+def plot_histogram_pixel_with_distributions(matrix):
+    data = matrix.flatten()
+    hist, bin_centers = hist_with_bins(data)
+    x_fit = np.arange(int(max(data))+1)
+
+    # Negative Binomial
+    r, p = fit_negative_binomial(data)
+    nb_pmf = nbinom.pmf(x_fit, r, p) * len(data)
+    nb_mean = r*(1-p)/p
+    nb_std = np.sqrt(r*(1-p)/(p**2))
+    nb_cv2 = (nb_std/nb_mean)**2
+    nb_aic = 2*2 - 2*np.sum(nbinom.logpmf(data, r, p))
+
+    # Binomial Mixture
+    bm_params, bm_nll, n_max = fit_binomial_mixture(data)
+    f_bm, p1_bm, p2_bm = bm_params
+    bm_pmf = (f_bm*binom.pmf(x_fit,n_max,p1_bm) +
+              (1-f_bm)*binom.pmf(x_fit,n_max,p2_bm))*len(data)
+    mean1 = n_max*p1_bm
+    mean2 = n_max*p2_bm
+    cv21 = (n_max*p1_bm*(1-p1_bm))/mean1**2
+    cv22 = (n_max*p2_bm*(1-p2_bm))/mean2**2
+    bm_aic = 2*3 - 2*(-bm_nll)
+
+    # Beta-Binomial Mixture
+    bb_params, bb_nll, n_max = fit_beta_binomial_mixture(data)
+    f_bb, a1_bb, b1_bb, a2_bb, b2_bb = bb_params
+    pmf1 = beta_binomial_pmf(x_fit, n_max, a1_bb, b1_bb)
+    pmf2 = beta_binomial_pmf(x_fit, n_max, a2_bb, b2_bb)
+    bb_pmf = (f_bb*pmf1 + (1-f_bb)*pmf2)*len(data)
+    mean1_bb = a1_bb/(a1_bb+b1_bb)*n_max
+    mean2_bb = a2_bb/(a2_bb+b2_bb)*n_max
+    var1_bb = n_max*a1_bb*b1_bb/((a1_bb+b1_bb)**2*(a1_bb+b1_bb+1))
+    var2_bb = n_max*a2_bb*b2_bb/((a2_bb+b2_bb)**2*(a2_bb+b2_bb+1))
+    cv2_1 = var1_bb/mean1_bb**2
+    cv2_2 = var2_bb/mean2_bb**2
+    bb_aic = 2*5 - 2*(-bb_nll)
+
+    fs = 15
+    plt.figure(figsize=(9,6))
+    plt.bar(bin_centers, hist, width=0.8, align='center',
+            color='lightblue', edgecolor='black', label='Data')
+    plt.plot(x_fit, nb_pmf, 'r-o',
+             label=f'NB: mean={nb_mean:.2f}, CV²={nb_cv2:.2f}, AIC={nb_aic:.1f}')
+    plt.plot(x_fit, bm_pmf, 'g-s',
+             label=f'Binom Mix AIC={bm_aic:.1f}')
+    plt.plot(x_fit, bb_pmf, 'm-^',
+             label=f'Beta-Binom Mix AIC={bb_aic:.1f}')
+    plt.xlabel("Number of place fields per pixel", fontsize=fs)
+    plt.ylabel("Number of pixels", fontsize=fs)
+    plt.title("Pixel Histogram with Distributions (Rotated Fields)")
+    plt.xticks(bin_centers.astype(int))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=fs)
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.show()
+
+# ================== Example usage ==================
+
+dnum = 0
+place_maps = p1[dnum]  # binarized place maps
+
+rotated_maps = rotate_all_maps(place_maps)
+
+if len(rotated_maps) > 0:
+    summed_matrix = np.sum(rotated_maps, axis=0)
+    plot_summed_matrix(summed_matrix)
+    plot_histogram_pixel_with_distributions(summed_matrix)
+else:
+    print("No maps were processed.")
+    
+#%% Meeting 8 - Separate all subfolder data
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from collections import Counter
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+shapeslist = [
+    [(65, 116), (65, 117)],                      
+    [(43, 53), (43, 50), (43, 57)],              
+    [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  
+    [(12, 12), (13, 13)],                        
+    [(24, 36), (31, 40)],                        
+    [(20, 20)]                                   
+]
+
+location = 0  # 0 = Ogamb path, 1 = Olgud path
+
+# =================== Collect all data (subfolders separate) ===================
+plist = []
+nlist = []
+
+subfoldernames = []
+
+for d_idx, dataset_name in enumerate(dnames):
+
+    dataset_p = []
+    dataset_n = []
+
+    # Set directory
+    if location == 0:
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dataset_name}'
+    elif location == 1:
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dataset_name}'
+
+    subfolders = [f for f in os.listdir(dir1) if os.path.isdir(os.path.join(dir1, f))]
+    subfoldernames.append(subfolders)
+    for foldername in subfolders:
+        dir3 = os.path.join(dir1, foldername)
+        matfiles = [f for f in os.listdir(dir3) if f.endswith('.mat')]
+
+        subfolder_p = []
+        subfolder_n = []
+
+        for matname in matfiles:
+            mat = loadmat(os.path.join(dir3, matname))
+
+            if 'pfields' in mat and 'numFields' in mat:
+                subfolder_p.append(mat['pfields'])
+                subfolder_n.append(mat['numFields'][0][0])
+
+        if len(subfolder_p) > 0:
+            dataset_p.append(subfolder_p)
+            dataset_n.append(subfolder_n)
+
+    plist.append(dataset_p)
+    nlist.append(dataset_n)
+
+# =================== Verify dimensions within each subfolder ===================
+print("Checking dimensions for each subfolder...\n")
+for d_idx, dataset in enumerate(plist):
+    print(f"Dataset: {dnames[d_idx]}")
+    for s_idx, subfolder in enumerate(dataset):
+        shapes = [pmap.shape for pmap in subfolder]
+        unique_shapes = set(shapes)
+        if len(unique_shapes) == 1:
+            print(f"  Subfolder {s_idx}: OK - shape {list(unique_shapes)[0]}")
+        else:
+            print(f"  Subfolder {s_idx}: MISMATCH")
+            for shape, count in Counter(shapes).items():
+                print(f"    {shape}: {count} maps")
+    print()
+
+# =================== Crop each subfolder to its own minimal shape ===================
+for d_idx, dataset in enumerate(plist):
+    for s_idx, subfolder in enumerate(dataset):
+        min_H = min([pmap.shape[0] for pmap in subfolder])
+        min_W = min([pmap.shape[1] for pmap in subfolder])
+        for i, pmap in enumerate(subfolder):
+            plist[d_idx][s_idx][i] = pmap[:min_H, :min_W]
+
+# =================== Binarize ===================
+p1 = []
+for dataset in plist:
+    dataset_bin = []
+    for subfolder in dataset:
+        subfolder_bin = []
+        for neuron in subfolder:
+            subfolder_bin.append((neuron > 0).astype(int))
+        dataset_bin.append(subfolder_bin)
+    p1.append(dataset_bin)
+
+# =================== Optional: print final cropped shapes ===================
+print("\nFinal cropped shapes per subfolder:")
+for d_idx, dataset in enumerate(plist):
+    print(f"Dataset: {dnames[d_idx]}")
+    for s_idx, subfolder in enumerate(dataset):
+        shape = subfolder[0].shape if len(subfolder) > 0 else None
+        print(f"  Subfolder {s_idx}: shape {shape}")
+    print()
+    
+#%% Get the counts and the patches, fixed for varying subfolder sizes
+rlist=[]
+clist=[]
+for room in p1:
+    subfolderlist=[]
+    clistfolder=[]
+    for subfolder in room:
+        neuronsum=np.zeros(subfolder[0].shape)
+        for neuron in subfolder:
+            neuronsum+=neuron
+        subfolderlist.append(neuronsum)
+        clistfolder.append(neuronsum.reshape(-1,))
+    clist.append(clistfolder)
+    rlist.append(subfolderlist)
+
+cforms = []
+
+rnum=0
+fnum=1
+# Bins and bin centers
+# Example: a single subfolder counts
+data = clist[rnum][fnum]  # counts for room rnum, subfolder fnum
+
+# Use the unique values in the data as bin edges
+unique_vals = np.unique(data)
+# To make bins include each unique value properly, add 0.5 padding on both ends
+bins = np.concatenate(([unique_vals[0]-0.5], unique_vals + 0.5))
+
+# Compute bin centers
+bin_centers = (bins[:-1] + bins[1:]) / 2
+
+# Plot histogram
+plt.hist(data, bins=bins, edgecolor='black', alpha=0.6)
+plt.xticks(bin_centers, bin_centers.astype(int))  # show integer labels at bin centers
+plt.xlabel('Number of neurons active at a single location')
+plt.ylabel('Counts')
+plt.title(f'{dnames[rnum]} - {subfoldernames[rnum][fnum]}')
+plt.show()
+
+#%% Plot all of them
+
+for i in range(len(clist)):
+    for j in range(len(clist[i])):
+        data = clist[i][j]  # counts for room rnum, subfolder fnum
+
+        # Use the unique values in the data as bin edges
+        unique_vals = np.unique(data)
+        # To make bins include each unique value properly, add 0.5 padding on both ends
+        bins = np.concatenate(([unique_vals[0]-0.5], unique_vals + 0.5))
+
+        # Compute bin centers
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+
+        # Plot histogram
+        plt.hist(data, bins=bins, edgecolor='black', alpha=0.6)
+        plt.xticks(bin_centers, bin_centers.astype(int))  # show integer labels at bin centers
+        plt.xlabel('Number of neurons active at a single location')
+        plt.ylabel('Counts')
+        plt.title(f'{dnames[i]} - {subfoldernames[i][j]}')
+        plt.show()
