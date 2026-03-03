@@ -9716,32 +9716,45 @@ for d_idx, dataset in enumerate(plist):
         shape = subfolder[0].shape if len(subfolder) > 0 else None
         print(f"  Subfolder {s_idx}: shape {shape}")
     print()
-    
-#%% Get the counts and the patches, fixed for varying subfolder sizes
-rlist=[]
-clist=[]
-for room in p1:
-    subfolderlist=[]
-    clistfolder=[]
-    for subfolder in room:
-        neuronsum=np.zeros(subfolder[0].shape)
-        for neuron in subfolder:
-            neuronsum+=neuron
-        subfolderlist.append(neuronsum)
-        clistfolder.append(neuronsum.reshape(-1,))
-    clist.append(clistfolder)
-    rlist.append(subfolderlist)
 
-cforms = []
+#%% Get the counts and the patches, fixed for varying subfolder sizes
+# =============================================================================
+# rlist=[]
+# clist=[]
+# for room in p1:
+#     subfolderlist=[]
+#     clistfolder=[]
+#     for subfolder in room:
+#         neuronsum=np.zeros(subfolder[0].shape)
+#         for neuron in subfolder:
+#             neuronsum+=neuron
+#         subfolderlist.append(neuronsum)
+#         clistfolder.append(neuronsum.reshape(-1,))
+#     clist.append(clistfolder)
+#     rlist.append(subfolderlist)
+# =============================================================================
+
+rlist=[]
+for room in p1:
+    daylist=[]
+    for day in room:
+        neuronsum=np.zeros(day[0].shape)
+        for neuron in day:
+            neuronsum+=neuron
+        daylist.append(neuronsum)
+    rlist.append(daylist)
+
+# p1[room][day][neuron]
+# rlist[room][day] # this is a neuron
 
 rnum=0
 fnum=1
 # Bins and bin centers
 # Example: a single subfolder counts
-data = clist[rnum][fnum]  # counts for room rnum, subfolder fnum
+data = (rlist[rnum][fnum]).astype(int).reshape(-1,)  # counts for room rnum, subfolder fnum
 
 # Use the unique values in the data as bin edges
-unique_vals = np.unique(data)
+unique_vals = np.unique(data).astype(int).reshape(-1,)
 # To make bins include each unique value properly, add 0.5 padding on both ends
 bins = np.concatenate(([unique_vals[0]-0.5], unique_vals + 0.5))
 
@@ -9756,28 +9769,44 @@ plt.ylabel('Counts')
 plt.title(f'{dnames[rnum]} - {subfoldernames[rnum][fnum]}')
 plt.show()
 
-#%% 8 - Plot all of them
+#%% 8 - Plot all of the heatmaps
 
-for i in range(len(clist)):
-    for j in range(len(clist[i])):
-        data = clist[i][j]  # counts for room rnum, subfolder fnum
+for i in range(len(rlist)):
+    for j in range(len(rlist[i])):
+        fig, ax = plt.subplots()
+        ax.set_title(f'{dnames[i]} - {subfoldernames[i][j]}')
+        im = ax.imshow(rlist[i][j], cmap='nipy_spectral')
+        fig.colorbar(im, ax=ax)   # add colorbar
+        
+        plt.show()
+        
+
+#%% 8 - Plot all of the histograms
+
+# rlist[room][day][placemap]
+
+for i in range(len(rlist)):
+    for j in range(len(rlist[i])):
+        placemap = rlist[i][j]  # counts for room rnum, subfolder fnum
 
         # Use the unique values in the data as bin edges
-        unique_vals = np.unique(data)
+        unique_vals = np.unique(placemap)
         # To make bins include each unique value properly, add 0.5 padding on both ends
         bins = np.concatenate(([unique_vals[0]-0.5], unique_vals + 0.5))
 
         # Compute bin centers
         bin_centers = (bins[:-1] + bins[1:]) / 2
 
+        placemap = placemap.reshape(-1,)
+
         # Plot histogram
-        plt.hist(data, bins=bins, edgecolor='black', alpha=0.6)
+        plt.hist(placemap, bins=bins, edgecolor='black', alpha=0.6)
         plt.xticks(bin_centers, bin_centers.astype(int))  # show integer labels at bin centers
         plt.xlabel('Number of neurons active at a single location')
         plt.ylabel('Counts')
         plt.title(f'{dnames[i]} - {subfoldernames[i][j]}')
         plt.show()
-        
+
 #%% 8 - Remove the 0's and plot a histogram for each one and put a best fit 
 # curve of binomial, geometric, poisson, negative binomial, poisson.  plot
 # the parameters in the legend and the AIC 
@@ -9825,7 +9854,6 @@ plt.title(f'{dnames[rnum]} - {subfoldernames[rnum][fnum]}')
 plt.show()
 
 #%% 8 - Plot all of them
-
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import binom, poisson, nbinom
@@ -9840,11 +9868,10 @@ dist_styles = {
     'NegBin': ('m:d', 2)         # magenta dotted with diamond
 }
 
-for i in range(len(clist)):
-    for j in range(len(clist[i])):
-        data = clist[i][j]
-        # Remove zeros
-        data = data[data != 0]
+for i in range(len(rlist)):
+    for j in range(len(rlist[i])):
+        data = rlist[i][j]
+        data = (data[data != 0]).astype(int).reshape(-1,)  # Remove zeros
         n_obs = len(data)
         if n_obs == 0:
             continue
@@ -9853,39 +9880,186 @@ for i in range(len(clist)):
         var_val = np.var(data, ddof=1)
         cv2 = var_val / mean_val**2 if mean_val != 0 else np.nan
 
-        # Histogram
         max_val = np.max(data)
         x_vals = np.arange(0, max_val+1)
         plt.figure(figsize=(7,5))
         plt.hist(data, bins=np.arange(-0.5, max_val+1.5), edgecolor='black', alpha=0.6, label='Data')
 
+        # Store distribution info
+        dist_list = []
+
         # ---- Poisson ----
         lambda_p = mean_val
         poisson_vals = poisson.pmf(x_vals, mu=lambda_p) * n_obs
         loglik = np.sum(poisson.logpmf(data, mu=lambda_p))
-        plt.plot(x_vals, poisson_vals, dist_styles['Poisson'][0], lw=2,
-                 label=f'Poisson: λ={lambda_p:.2f}, mean={mean_val:.2f}, CV²={cv2:.2f}, AIC={aic(n_obs, loglik,1):.1f}')
+        dist_list.append(('Poisson', poisson_vals, lambda_p, aic(n_obs, loglik, 1)))
 
         # ---- Binomial ----
-        n_bin = max(1, np.max(data))  # avoid n=0
+        n_bin = max(1, np.max(data))
         p_bin = mean_val / n_bin
         binom_vals = binom.pmf(x_vals, n=n_bin, p=p_bin) * n_obs
         loglik = np.sum(binom.logpmf(data, n=n_bin, p=p_bin))
-        plt.plot(x_vals, binom_vals, dist_styles['Binomial'][0], lw=2,
-                 label=f'Binomial: n={n_bin}, p={p_bin:.2f}, mean={mean_val:.2f}, CV²={cv2:.2f}, AIC={aic(n_obs, loglik,2):.1f}')
+        dist_list.append(('Binomial', binom_vals, (n_bin, p_bin), aic(n_obs, loglik, 2)))
+
         # ---- Negative Binomial ----
-        # Ensure r > 0
         r_nb = max(0.01, mean_val**2 / max(var_val - mean_val, 0.01))
         p_nb = r_nb / (r_nb + mean_val)
         nbinom_vals = nbinom.pmf(x_vals, r_nb, p_nb) * n_obs
         loglik = np.sum(nbinom.logpmf(data, r_nb, p_nb))
-        plt.plot(x_vals, nbinom_vals, dist_styles['NegBin'][0], lw=2,
-                 label=f'NegBin: r={r_nb:.2f}, p={p_nb:.2f}, mean={mean_val:.2f}, CV²={cv2:.2f}, AIC={aic(n_obs, loglik,2):.1f}')
+        dist_list.append(('NegBin', nbinom_vals, (r_nb, p_nb), aic(n_obs, loglik, 2)))
 
-        # Axis, title, legend
+        # ---- Sort by AIC ascending (smallest first) ----
+        dist_list.sort(key=lambda x: x[3])
+
+        # ---- Plot in sorted order ----
+        for dist_name, y_vals, params, aic_val in dist_list:
+            style = dist_styles[dist_name][0]
+            if dist_name == 'Poisson':
+                label = f'Poisson: λ={params:.2f}, mean={mean_val:.2f}, CV²={cv2:.2f}, AIC={aic_val:.1f}'
+            elif dist_name == 'Binomial':
+                n_bin, p_bin = params
+                label = f'Binomial: n={n_bin}, p={p_bin:.2f}, mean={mean_val:.2f}, CV²={cv2:.2f}, AIC={aic_val:.1f}'
+            else:  # NegBin
+                r_nb, p_nb = params
+                label = f'NegBin: r={r_nb:.2f}, p={p_nb:.2f}, mean={mean_val:.2f}, CV²={cv2:.2f}, AIC={aic_val:.1f}'
+
+            plt.plot(x_vals, y_vals, style, lw=2, label=label)
+
         plt.xlabel('Number of neurons active at a single location')
         plt.ylabel('Counts')
         plt.title(f'{dnames[i]} - {subfoldernames[i][j]}')
         plt.xticks(x_vals)
         plt.legend(fontsize=8)
+        plt.show()
+        
+#%% 8 - Number of place fields per day
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import poisson, binom, nbinom
+
+def aic(n, loglik, k):
+    return 2*k - 2*loglik
+
+for i,room in enumerate(nlist):              
+    for j, data in enumerate(room):  
+        data=np.array(data)
+        
+        data = data[data > 0]
+        n_obs = len(data)
+
+        if n_obs == 0:
+            continue
+
+        mean_val = np.mean(data)
+        var_val  = np.var(data, ddof=1)
+        cv2 = var_val / mean_val**2 if mean_val != 0 else np.nan
+
+        max_val = np.max(data)
+        x_vals = np.arange(0, max_val + 1)
+
+        plt.figure(figsize=(7,5))
+
+        plt.hist(data,
+                 bins=np.arange(-0.5, max_val + 1.5),
+                 edgecolor='black',
+                 alpha=0.6,
+                 label='Data')
+
+        fits = []
+
+        # =======================
+        # Poisson
+        # =======================
+        lambda_p = mean_val
+        pois_vals = poisson.pmf(x_vals, lambda_p) * n_obs
+        loglik_pois = np.sum(poisson.logpmf(data, lambda_p))
+        aic_pois = aic(n_obs, loglik_pois, 1)
+
+        h_pois, = plt.plot(
+            x_vals, pois_vals, 'r-o', lw=2,
+            label=f'Poisson | λ={lambda_p:.2f} | mean={mean_val:.2f} | CV²={cv2:.2f} | AIC={aic_pois:.1f}'
+        )
+
+        fits.append((aic_pois, h_pois))
+
+        # =======================
+        # Binomial
+        # =======================
+        n_bin = max(1, np.max(data))
+        p_bin = mean_val / n_bin
+        bin_vals = binom.pmf(x_vals, n_bin, p_bin) * n_obs
+        loglik_bin = np.sum(binom.logpmf(data, n_bin, p_bin))
+        aic_bin = aic(n_obs, loglik_bin, 2)
+
+        h_bin, = plt.plot(
+            x_vals, bin_vals, 'g--s', lw=2,
+            label=f'Binomial | n={n_bin} p={p_bin:.2f} | mean={mean_val:.2f} | CV²={cv2:.2f} | AIC={aic_bin:.1f}'
+        )
+
+        fits.append((aic_bin, h_bin))
+
+        # =======================
+        # Negative Binomial
+        # =======================
+        r_nb = max(0.01, mean_val**2 / max(var_val - mean_val, 0.01))
+        p_nb = r_nb / (r_nb + mean_val)
+
+        nb_vals = nbinom.pmf(x_vals, r_nb, p_nb) * n_obs
+        loglik_nb = np.sum(nbinom.logpmf(data, r_nb, p_nb))
+        aic_nb = aic(n_obs, loglik_nb, 2)
+
+        h_nb, = plt.plot(
+            x_vals, nb_vals, 'm:d', lw=2,
+            label=f'NegBin | r={r_nb:.2f} p={p_nb:.2f} | mean={mean_val:.2f} | CV²={cv2:.2f} | AIC={aic_nb:.1f}'
+        )
+
+        fits.append((aic_nb, h_nb))
+
+        # =======================
+        # Sort legend by AIC
+        # =======================
+        
+        fits.sort(key=lambda x: x[0])  # smallest AIC first
+        sorted_handles = [f[1] for f in fits]
+
+        # Add histogram last in legend
+        handles, labels = plt.gca().get_legend_handles_labels()
+        hist_handle = handles[0]  # first is histogram
+        sorted_handles.append(hist_handle)
+
+        sorted_labels = [h.get_label() for h in sorted_handles]
+
+        plt.xlabel('Number of place fields')
+        plt.ylabel('Counts')
+        plt.title(f'{dnames[i]} - {subfoldernames[i][j]}')
+        plt.xticks(x_vals)
+        
+        plt.legend(sorted_handles, sorted_labels, fontsize=8)
+        plt.show()
+        
+#%% test
+import numpy as np
+import matplotlib.pyplot as plt
+
+for room in range(len(clist)):
+    for day in range(len(clist[room])):
+
+        data = np.array(clist[room][day])
+
+        if len(data) == 0:
+            continue
+
+        # Integer bins centered properly
+        min_val = int(np.min(data))
+        max_val = int(np.max(data))
+        bins = np.arange(min_val - 0.5, max_val + 1.5, 1)
+
+        plt.figure()
+        plt.hist(data, bins=bins, edgecolor='black', alpha=0.7)
+
+        plt.xticks(np.arange(min_val, max_val + 1, 1))
+        plt.xlabel('Number of place fields')
+        plt.ylabel('Count')
+        plt.title(f'Room {room} - Day {day}')
         plt.show()
