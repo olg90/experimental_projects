@@ -5970,25 +5970,43 @@ gL = 25e-9  # leak conductance nS
 # vtmin = vt #-59e-3  # the lower value of the threshold potential
 # =============================================================================
 
-#%% Tests - lower vth and vi
+# =============================================================================
+# #%% Tests - lower vth and vi
+# tautheta1 = 0.9e-3  # time constant of the threshold change to the infinite value
+# tautheta2 = 10e-3 # 20e-3  #  time constant of the depolarized post-jump decay
+# vt = -50e-3  # threshold base value at no activity
+# vi = -56e-3  # threshold increases when the membrane potential is above this level
+# vi2 = -40e-3
+# # at = 1
+# # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# at = np.array([0.89, 0*100, 0*100])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+# alpha = [9e-3, 0*9e-3, 0*1e-3]  # jump size
+# 
+# vin = -60e-3  # voltage at which the threshold resting value lowers
+# vin2 = -61e-3  # the threshold will not lower below this voltage
+# vtmin = vt #-59e-3 # the lower value of the threshold potential
+# =============================================================================
+
+
+#%% Tests - Almost good - a little too flat in exc+inh and underfits exc=4,10
 tautheta1 = 0.9e-3  # time constant of the threshold change to the infinite value
-tautheta2 = 10e-3 # 20e-3  #  time constant of the depolarized post-jump decay
-vt = -50e-3  # threshold base value at no activity
-vi = -56e-3  # threshold increases when the membrane potential is above this level
-vi2 = -40e-3
-# at = 1
+tautheta2 = 20e-3 # 20e-3  #  time constant of the depolarized post-jump decay
+vt = -48e-3  # threshold base value at no activity
+vi = -52.1e-3  # threshold increases when the membrane potential is above this level
+vi2 = -30e-3
+# at = 1 
 # at = np.array([1, -60e-3, 0.01])  # 0-slope, 1-center, 2-rate # alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-at = np.array([0.89, 0*100, 0*100])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
-alpha = [9e-3, 0*9e-3, 0*1e-3]  # jump size
+at = np.array([0.97, 0*0.5, 0*10])  # 0-slope, 1-scale, 2-rate# alpha = [2e-3, 0.07e-3, 0e-3, 0e-3]  # jump size
+alpha = [6e-3, 0*2e-3, 0*0.01e-3]  # jump size
 
 vin = -60e-3  # voltage at which the threshold resting value lowers
 vin2 = -61e-3  # the threshold will not lower below this voltage
-vtmin = vt #-59e-3 # the lower value of the threshold potential
+vtmin = vt #-59e-3  # the lower value of the threshold potential
 
 ttype = 1000 # <------- test type, 1-sim, 100-3 curves, 1000-separate 3 curves
-xtype = 1 # 1-exc or 10-exc/inh
+xtype = 10 # 1-exc or 10-exc/inh
 enum = 0 # 0-1nS, 1-4nS, 2-10nS - For xtype==10
-tmax = 1 #   <----------------- TMAX
+tmax = 40 #   <----------------- TMAX
 
 f = 300 # exc
 fi = 150 # inh
@@ -6108,7 +6126,6 @@ if xtype==1:
             foutlists.append(foutlist)
             
     
-    
         fs = 15
         cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
         
@@ -6128,6 +6145,7 @@ if xtype==1:
         plt.legend(fontsize=fs-3)
         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
         # plt.ylim([0,10])
+        
         
         qeboundlist=[(qe25[:, i], qe75[:, i]) for i in (0,1,3)]
         for i, qebounds in enumerate(qeboundlist):
@@ -6186,16 +6204,120 @@ if xtype==1:
             if i != 2:
                 plt.xticks([])
             plt.legend()
-            qebounds=qeboundlist[i]
-            plt.plot(flist, qebounds[0], color=cs[i])
-            plt.plot(flist, qebounds[1], color=cs[i])
+# =============================================================================
+#             qebounds=qeboundlist[i]
+#             plt.plot(flist, qebounds[0], color=cs[i], marker='+')
+#             plt.plot(flist, qebounds[1], color=cs[i], marker='+')
+# =============================================================================
         plt.show()
         
         
+#%% test
 
+# plot all the data
+fs = 15
+cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+qeboundlist=[(qe25[:, i], qe75[:, i]) for i in (0,1,3)]
+for i in range(2,3):
+    if i == 0:
+        plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
         
-if xtype==10:
+    plt.plot(flist, edata[2-i], marker='o',
+             label='Data: exc={}'.format(strengths[2-i]),
+             color=cs[i])
     
+    ptype = 0
+    if ptype == 0:
+        plt.plot(flist, np.array(foutlists[2-i]), marker='o',
+                 label='simulation',
+                 color=cs[i], linestyle='--')
+        plt.ylabel('Steady state mean\npostsynaptic firing rate', fontsize=fs)
+    if i == 2:
+        plt.xlabel('Excitatory neuron frequency per fiber', fontsize=fs)
+
+    plt.tick_params(axis='both', labelsize=fs)
+    if i != 2:
+        plt.xticks([])
+plt.legend(loc='lower right', fontsize=fs)
+qebounds=qeboundlist[2]
+plt.plot(flist, qebounds[0], color=cs[i], marker='+')
+plt.plot(flist, qebounds[1], color=cs[i], marker='+')
+
+plt.show()
+#%% error bounds
+# plot all the data
+fs = 15
+cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+
+qeboundlist = [(qe25[:, i], qe75[:, i]) for i in (0,1,3)]
+
+for i in range(2,3):
+
+    if i == 0:
+        plt.title(
+            'tautheta1={}, tautheta2={}, vt={}, vi={}\n'
+            'vi2={}, at={}, alpha={}\n'
+            'vin={}, vin2={}, vtmin={}, tmax={}'.format(
+                tautheta1, tautheta2, vt, vi, vi2, at,
+                alpha, vin, vin2, vtmin, tmax
+            )
+        )
+
+    # data line
+    plt.scatter(
+        flist,
+        edata[2-i],
+        marker='o',
+        label='Data: exc={}'.format(strengths[2-i]),
+        color=cs[i]
+    )
+
+    # simulation line
+    ptype = 0
+    if ptype == 0:
+        plt.plot(
+            flist,
+            np.array(foutlists[2-i]),
+            linestyle='--',
+            label='simulation',
+            color=cs[i]
+        )
+        plt.ylabel(
+            'Steady state mean\npostsynaptic firing rate',
+            fontsize=fs
+        )
+
+    if i == 2:
+        plt.xlabel(
+            'Excitatory neuron frequency per fiber',
+            fontsize=fs
+        )
+
+    plt.tick_params(axis='both', labelsize=fs)
+
+    if i != 2:
+        plt.xticks([])
+
+    # error bars using qe bounds
+    qebounds = qeboundlist[2]
+
+    plt.errorbar(
+        flist,
+        edata[2-i],
+        yerr=[qebounds[0], qebounds[1]],   # lower and upper bounds
+        fmt='none',
+        ecolor=cs[i],
+        capsize=4,
+        label='25-75% quantile'
+    )
+
+plt.legend(loc='upper left', fontsize=fs)
+plt.show()
+#%%
+
+
+
+if xtype==10:
 
     if ttype == 1:
     
@@ -6271,7 +6393,7 @@ if xtype==10:
         plt.legend(fontsize=fs-3)
         plt.show()
     
-    if ttype == 100 or ttype==1000:
+    if ttype == 100:
         d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
         f=300
         filist, foutlists = t100(ifibers, f, fi, ne, ni, ce, 
@@ -6302,12 +6424,139 @@ if xtype==10:
         plt.tick_params(axis='both', labelsize=fs)
         plt.legend(fontsize=fs-3)
         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
+        
+        qie=2-enum # exc: 0=10, 1=4, 2=1
+        qiboundlist=[(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii]) for qii in range(3)]
+        for i, qibounds in enumerate(qiboundlist):
+            plt.plot(filist, qibounds[0], color=cs[i])
+            plt.plot(filist, qibounds[1], color=cs[i])
+        plt.show()
+        
+    if ttype==1000:
+        d1 = d.iloc[1:, -3:][7*(2-enum):7*((2-enum)+1)]  # Mean sustained rate
+        f=300
+        filist, foutlists = t100(ifibers, f, fi, ne, ni, ce, 
+                                 ci, tde, tdi, tre, tri, tmax, dt, 
+                                 V0, vr, rf, gL, vi, vin, vin2, vi2,
+                                 tautheta1, tautheta2, vt, vtmin, 
+                                 at, alpha, navgs)
+    
+        fs = 15
+        cs = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+        qie=2-enum # exc: 0=10, 1=4, 2=1
+        qiboundlist=[(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii]) for qii in range(3)]
+
+        
+        for i in range(3):
+            plt.subplot(3,1,i+1)
+            plt.plot(filist, d1.iloc[:, i], marker='o',
+                     label='exc={}, inh={}'.format(
+                         estrengths[enum], istrengths[i]),
+                     color=cs[i])
+            ptype = 1
+            if ptype == 0:
+                plt.plot(filist, np.array(foutlists[i]), marker='o',
+                         label='simulation',
+                         color=cs[i], linestyle='--')
+            if ptype == 1:
+                plt.plot(filist, np.array(foutlists[i])-foutlists[i][0]+d1.iloc[0, i], marker='o',
+                         label='simulation',
+                         color=cs[i], linestyle='--')
+# =============================================================================
+#             qibounds = qiboundlist[i]
+#             plt.plot(filist, qibounds[0], color=cs[i])
+#             plt.plot(filist, qibounds[1], color=cs[i])
+# =============================================================================
+    
+# =============================================================================
+#         plt.ylabel('Steady state mean firing rate', fontsize=fs)
+#         plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
+#         plt.tick_params(axis='both', labelsize=fs)
+#         plt.legend(fontsize=fs-3)
+#         plt.title('tautheta1={}, tautheta2={}, vt={}, vi={}\nvi2={}, at={}, alpha={}\nvin={}, vin2={}, vtmin={}, tmax={}'.format(tautheta1, tautheta2, vt, vi, vi2, at, alpha, vin, vin2, vtmin, tmax))
+#         
+# =============================================================================
         plt.show()
         
         
-        qie=0 # exc: 0=10, 1=4, 2=1
-        qii=2 # inh: 0=8, 1=4, 2=2
-        qibounds=(qi25[7*qie:7*(qie+1),qii], qi75[7*qie:7*(qie+1),qii])
+#%% test
+
+fs=15
+
+for i in range(0,1):
+    plt.plot(filist, d1.iloc[:, i], marker='o',
+             label='Data: exc={}, inh={}'.format(
+                 estrengths[enum], istrengths[i]),
+             color=cs[i])
+    ptype = 1
+    if ptype == 0:
+        plt.plot(filist, np.array(foutlists[i]), marker='o',
+                 label='simulation',
+                 color=cs[i], linestyle='--')
+    if ptype == 1:
+        plt.plot(filist, np.array(foutlists[i])-foutlists[i][0]+d1.iloc[0, i], marker='o',
+                 label='simulation',
+                 color=cs[i], linestyle='--')
+    qibounds = qiboundlist[i]
+    plt.plot(filist, qibounds[0], color=cs[i])
+    plt.plot(filist, qibounds[1], color=cs[i])
+plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
+plt.ylabel('Steady state mean \npostsynaptic firing rate', fontsize = fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='lower right', fontsize = fs)
+
+
+#%% test error inh
+
+fs = 15
+
+for i in range(0, 1):
+    # plot data
+    plt.scatter(
+        filist,
+        d1.iloc[:, i],
+        marker='o',
+        label='Data: exc={}, inh={}'.format(estrengths[enum], istrengths[i]),
+        color=cs[i]
+    )
+
+    # plot simulation
+    ptype = 1
+    if ptype == 0:
+        plt.plot(
+            filist,
+            np.array(foutlists[i]),
+            marker='o',
+            linestyle='--',
+            label='simulation',
+            color=cs[i]
+        )
+    elif ptype == 1:
+        plt.plot(
+            filist,
+            np.array(foutlists[i]) - foutlists[i][0] + d1.iloc[0, i],
+            linestyle='--',
+            label='simulation',
+            color=cs[i]
+        )
+
+    # plot error bars using qibounds
+    qibounds = qiboundlist[i]
+    plt.errorbar(
+        filist,
+        d1.iloc[:, i],
+        yerr=[qibounds[0], qibounds[1]],  # lower and upper bounds
+        fmt='none',
+        ecolor=cs[i],
+        capsize=4,
+        label='25-75% quantile'
+    )
+
+plt.xlabel('Inhibitory neuron frequency per fiber', fontsize=fs)
+plt.ylabel('Steady state mean \npostsynaptic firing rate', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper left', fontsize=fs-4)
+plt.show()
 
 #%% end
 
