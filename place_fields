@@ -10038,28 +10038,243 @@ for i,room in enumerate(nlist):
         plt.legend(sorted_handles, sorted_labels, fontsize=8)
         plt.show()
         
-#%% test
+#%% Meeting 8 - Combine all neurons across subfolders
 import numpy as np
+import os
 import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from collections import Counter
 
-for room in range(len(clist)):
-    for day in range(len(clist[room])):
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
 
-        data = np.array(clist[room][day])
+shapeslist = [
+    [(65, 116), (65, 117)],                      
+    [(43, 53), (43, 50), (43, 57)],              
+    [(62, 55), (63, 60), (63, 59), (62, 57), (62, 56)],  
+    [(12, 12), (13, 13)],                        
+    [(24, 36), (31, 40)],                        
+    [(20, 20)]                                   
+]
 
-        if len(data) == 0:
-            continue
+location = 0  # 0 = Ogamb path, 1 = Olgud path
 
-        # Integer bins centered properly
-        min_val = int(np.min(data))
-        max_val = int(np.max(data))
-        bins = np.arange(min_val - 0.5, max_val + 1.5, 1)
+# =================== Collect all data ===================
+plist = []  # raw place fields
+nlist = []  # number of fields per neuron
+subfoldernames = []
 
-        plt.figure()
-        plt.hist(data, bins=bins, edgecolor='black', alpha=0.7)
+for d_idx, dataset_name in enumerate(dnames):
+    dataset_p = []
+    dataset_n = []
 
-        plt.xticks(np.arange(min_val, max_val + 1, 1))
-        plt.xlabel('Number of place fields')
-        plt.ylabel('Count')
-        plt.title(f'Room {room} - Day {day}')
-        plt.show()
+    # Set directory
+    if location == 0:
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dataset_name}'
+    elif location == 1:
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dataset_name}'
+
+    subfolders = [f for f in os.listdir(dir1) if os.path.isdir(os.path.join(dir1, f))]
+    subfoldernames.append(subfolders)
+
+    for foldername in subfolders:
+        dir3 = os.path.join(dir1, foldername)
+        matfiles = [f for f in os.listdir(dir3) if f.endswith('.mat')]
+
+        subfolder_p = []
+        subfolder_n = []
+
+        for matname in matfiles:
+            mat = loadmat(os.path.join(dir3, matname))
+            if 'pfields' in mat and 'numFields' in mat:
+                subfolder_p.append(mat['pfields'])
+                subfolder_n.append(mat['numFields'][0][0])
+
+        if len(subfolder_p) > 0:
+            dataset_p.append(subfolder_p)
+            dataset_n.append(subfolder_n)
+
+    plist.append(dataset_p)
+    nlist.append(dataset_n)
+
+# =================== Verify dimensions within each subfolder ===================
+print("Checking dimensions for each subfolder...\n")
+for d_idx, dataset in enumerate(plist):
+    print(f"Dataset: {dnames[d_idx]}")
+    for s_idx, subfolder in enumerate(dataset):
+        shapes = [pmap.shape for pmap in subfolder]
+        unique_shapes = set(shapes)
+        if len(unique_shapes) == 1:
+            print(f"  Subfolder {s_idx}: OK - shape {list(unique_shapes)[0]}")
+        else:
+            print(f"  Subfolder {s_idx}: MISMATCH")
+            for shape, count in Counter(shapes).items():
+                print(f"    {shape}: {count} maps")
+    print()
+
+# =================== Crop each subfolder to its minimal shape ===================
+for d_idx, dataset in enumerate(plist):
+    for s_idx, subfolder in enumerate(dataset):
+        min_H = min([pmap.shape[0] for pmap in subfolder])
+        min_W = min([pmap.shape[1] for pmap in subfolder])
+        for i, pmap in enumerate(subfolder):
+            plist[d_idx][s_idx][i] = pmap[:min_H, :min_W]
+
+# =================== Binarize ===================
+p1 = []
+for dataset in plist:
+    dataset_bin = []
+    for subfolder in dataset:
+        subfolder_bin = [(neuron > 0).astype(int) for neuron in subfolder]
+        dataset_bin.append(subfolder_bin)
+    p1.append(dataset_bin)
+
+# =================== Combine all neurons across subfolders ===================
+# Result: p1_combined[room][neuron]
+p1_combined = []
+for room in p1:
+    all_neurons = []
+    for subfolder in room:
+        all_neurons.extend(subfolder)  # add all neurons from each subfolder
+    p1_combined.append(all_neurons)
+
+# =================== Sum neurons to get counts per location ===================
+rlist = []
+for room in p1_combined:
+    if len(room) == 0:
+        rlist.append(None)
+        continue
+    shape = room[0].shape
+    neuronsum = np.zeros(shape)
+    for neuron in room:
+        neuronsum += neuron
+    rlist.append(neuronsum)
+
+# =================== Plot example histogram ===================
+rnum = 0  # dataset index
+neuronsum = rlist[rnum].astype(int).reshape(-1,)  # flatten to 1D counts
+
+unique_vals = np.unique(neuronsum).astype(int).reshape(-1,)
+bins = np.concatenate(([unique_vals[0]-0.5], unique_vals + 0.5))
+bin_centers = (bins[:-1] + bins[1:]) / 2
+
+plt.hist(neuronsum, bins=bins, edgecolor='black', alpha=0.6)
+plt.xticks(bin_centers, bin_centers.astype(int))
+plt.xlabel('Number of neurons active at a single location')
+plt.ylabel('Counts')
+plt.title(f'{dnames[rnum]} - all neurons combined')
+plt.show()
+
+#%% Meeting 9 - Combine all neurons across subfolders (fixed)
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from scipy.io import loadmat
+from collections import Counter
+
+# =================== Setup ===================
+dnames = ['BigroomData', 'CircleData', 'HalfroomData',
+          'HexagonData', 'RectangleData', 'SquareData']
+
+location = 0  # 0 = Ogamb path, 1 = Olgud path
+
+# =================== Collect all data ===================
+plist = []  # raw place fields
+nlist = []  # number of fields per neuron
+subfoldernames = []
+
+for d_idx, dataset_name in enumerate(dnames):
+    dataset_p = []
+    dataset_n = []
+
+    # Set directory
+    if location == 0:
+        dir1 = rf'C:\Users\Oliver\Desktop\Research\place_fields\DataforDrSingh\{dataset_name}'
+    elif location == 1:
+        dir1 = rf'C:\Users\Oliver\Desktop\PhD\3-Research\Neuron\place fields\DataforDrSingh\{dataset_name}'
+
+    subfolders = [f for f in os.listdir(dir1) if os.path.isdir(os.path.join(dir1, f))]
+    subfoldernames.append(subfolders)
+
+    for foldername in subfolders:
+        dir3 = os.path.join(dir1, foldername)
+        matfiles = [f for f in os.listdir(dir3) if f.endswith('.mat')]
+
+        subfolder_p = []
+        subfolder_n = []
+
+        for matname in matfiles:
+            mat = loadmat(os.path.join(dir3, matname))
+            if 'pfields' in mat and 'numFields' in mat:
+                subfolder_p.append(mat['pfields'])
+                subfolder_n.append(mat['numFields'][0][0])
+
+        if len(subfolder_p) > 0:
+            dataset_p.append(subfolder_p)
+            dataset_n.append(subfolder_n)
+
+    plist.append(dataset_p)
+    nlist.append(dataset_n)
+
+# =================== Verify dimensions within each subfolder ===================
+print("Checking dimensions for each subfolder...\n")
+for d_idx, dataset in enumerate(plist):
+    print(f"Dataset: {dnames[d_idx]}")
+    for s_idx, subfolder in enumerate(dataset):
+        shapes = [pmap.shape for pmap in subfolder]
+        unique_shapes = set(shapes)
+        if len(unique_shapes) == 1:
+            print(f"  Subfolder {s_idx}: OK - shape {list(unique_shapes)[0]}")
+        else:
+            print(f"  Subfolder {s_idx}: MISMATCH")
+            for shape, count in Counter(shapes).items():
+                print(f"    {shape}: {count} maps")
+    print()
+
+# =================== Binarize ===================
+p1 = []
+for dataset in plist:
+    dataset_bin = []
+    for subfolder in dataset:
+        subfolder_bin = [(neuron > 0).astype(int) for neuron in subfolder]
+        dataset_bin.append(subfolder_bin)
+    p1.append(dataset_bin)
+
+# =================== Combine all neurons across subfolders (with cropping) ===================
+p1_combined = []
+rlist = []
+
+for room_idx, room in enumerate(p1):
+    # Find minimal shape across all neurons in all subfolders for this room
+    all_neurons = []
+    min_H = min([neuron.shape[0] for subfolder in room for neuron in subfolder])
+    min_W = min([neuron.shape[1] for subfolder in room for neuron in subfolder])
+
+    # Crop each neuron and collect
+    for subfolder in room:
+        for neuron in subfolder:
+            all_neurons.append(neuron[:min_H, :min_W])
+
+    p1_combined.append(all_neurons)
+
+    # Sum neurons for histogram
+    neuronsum = np.zeros((min_H, min_W))
+    for neuron in all_neurons:
+        neuronsum += neuron
+    rlist.append(neuronsum)
+
+# =================== Plot example histogram ===================
+rnum = 0  # dataset index
+neuronsum = rlist[rnum].astype(int).reshape(-1,)  # flatten to 1D counts
+
+unique_vals = np.unique(neuronsum).astype(int).reshape(-1,)
+bins = np.concatenate(([unique_vals[0]-0.5], unique_vals + 0.5))
+bin_centers = (bins[:-1] + bins[1:]) / 2
+
+plt.hist(neuronsum, bins=bins, edgecolor='black', alpha=0.6)
+plt.xticks(bin_centers, bin_centers.astype(int))
+plt.xlabel('Number of neurons active at a single location')
+plt.ylabel('Counts')
+plt.title(f'{dnames[rnum]} - all neurons combined')
+plt.show()
