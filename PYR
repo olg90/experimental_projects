@@ -308,25 +308,33 @@ alpha = [[75e-3, 0e-3, 0e-3],
 # =============================================================================
 
 alist=data[:,0]
-fouts=[]
-for a in alist:
-    Iext = geti(tmax, dt, a)
-    res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
-    fouts.append(res[1])
+foutslist=[]
+dirtypes=range(3)
+for dirtype in range(3):
+    fouts=[]
+    for a in alist:
+        Iext = geti(tmax, dt, a)
+        res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+        fouts.append(res[1])
+    foutslist.append(fouts)
     
-plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
-plt.plot(alist*1e9, fouts, label='simulation', marker='o', alpha=0.6)
-# =============================================================================
-# plt.plot(alist, data[:, 1], label='experimental', 
-#             marker='o')
-# plt.plot(alist, fouts, label='simulation', 
-#          linewidth=1, alpha=0.8, marker='o')
-# =============================================================================
-
-plt.ylabel('Output frequency')
-plt.xlabel('Input current amplitude (nA)')
-plt.legend()
-plt.title(dirnames[dirtype]+'\nV0={}, C_m={}, v_r={}, gL={:.3g}, \nvt={}, tauvth={},alpha={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype], tauvth[0], alpha[dirtype][0]))
+for i in range(3):
+    plt.subplot(1,3,i+1)
+    plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
+    plt.plot(alist*1e9, foutslist[i], label='simulation', marker='o', alpha=0.6)
+    # =============================================================================
+    # plt.plot(alist, data[:, 1], label='experimental', 
+    #             marker='o')
+    # plt.plot(alist, fouts, label='simulation', 
+    #          linewidth=1, alpha=0.8, marker='o')
+    # =============================================================================
+    
+    plt.ylabel('Output frequency')
+    plt.xlabel('Input current amplitude (nA)')
+    plt.plot([],[],' ', label='{}'.format(dirnames[i]))
+    plt.legend()
+    if i == 1:
+        plt.title('\nV0={}, C_m={}, v_r={}, gL={:.3g}, \nvt={}, tauvth={},alpha={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype], tauvth[0], alpha[dirtype][0]))
 plt.show()
 
 
@@ -554,9 +562,8 @@ for a in alist:
     # res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
     res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype], tautheta1,
              tautheta2, vi, vin, vin2, vtmin, at)
-
     fouts.append(res[1])
-    
+
 plt.plot(alist*1e9, data[:, 1], label='experimental', marker='o')
 plt.plot(alist*1e9, fouts, label='simulation', marker='o', alpha=0.6)
 # =============================================================================
@@ -572,4 +579,308 @@ plt.legend()
 plt.title(dirnames[dirtype]+'\nV0={}, C_m={}, v_r={}, gL={:.3g}, vt={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype]))
 plt.show()
 
-#%% End
+#%% Meeting 3 - Connecting input output of different types
+
+from tqdm import tqdm
+from scipy.optimize import minimize
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+import os
+import re
+
+# @jit(nopython=True)
+def sim(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+
+    # Set initial conditions
+    print(Vinit)
+    V[0] = Vinit
+
+    ratio = 0.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > vt:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+            rfon = True
+            rftimer = rf
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout
+
+def vthfun(v, v1, vt, aval):
+    if v <= v1:
+        return vt
+    else:
+        return vt + aval[0]*(v1-v)
+# @jit(nopython=True)
+
+def sima(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m, alpha, tauvth):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+    vth=np.zeros_like(V)
+    apind=[]
+
+    # Set initial conditions
+    V[0] = Vinit
+    vth[0]=vt
+
+    ratio = 0.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+        
+        dvthdt = -(vth[i-1]-vt)/tauvth
+        vth[i] = vth[i-1] + dvthdt * dt 
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > vth[i]:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+                apind.append(i)
+            rfon = True
+            rftimer = rf
+
+            vth[i]+=alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)**2
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout, vth, aplist, apind
+
+# @jit(nopython=True)
+def getaps(aplist, dt):
+    return np.where(aplist != 0)[0]*dt
+
+def geti(tmax, dt, A):
+    Iext = np.zeros(int(tmax/dt))
+    Iext[int(tmax/dt*2/15):int(tmax/dt*4/5)]=A
+    return Iext
+
+def generate_spike_train(foutlen, spike_ind, template):
+    # blank array
+    out = np.zeros(foutlen)
+
+    Ltemp = len(template)
+
+    for pos in spike_ind:
+        end = pos + Ltemp
+        if end > foutlen:
+            end = foutlen
+
+        # add template at spike
+        out[pos:end] += template[:end - pos]
+
+    return out
+
+def make_normalized_template(td, tr, tmax, dt, scale_I):
+    # SynKernel = A * ( exp(-(x)/tauDecay) - exp(-(x)/tauRise) )
+    t = np.arange(0, tmax, dt)
+    A = scale_I / (-(tr/td)**(td/(td-tr)) + (tr/td)**(tr/(td-tr)))
+    template = A * (np.exp(-t / td) - np.exp(-t / tr))
+    return t, template
+
+
+def compute_fout_heatmap(dir1, dir2,
+                         amplitudes,
+                         strengths,
+                         tmax, dt, rf,
+                         V0, vr, gL, vt, C_m, alpha, tauvth,
+                         tr, td, ttemp):
+    
+    fout_map = np.zeros((len(amplitudes), len(strengths)))
+
+    for i, A in enumerate(amplitudes):
+        # input neuron → spikes
+        Iext = geti(tmax, dt, A)
+        res_in = sima(V0[dir1], len(Iext), Iext, dt,
+                      vr[dir1], rf, gL[dir1], vt[dir1],
+                      C_m[dir1], alpha[dir1], tauvth[dir1])
+        
+        spike_ind = res_in[4]
+
+        for j, s in enumerate(strengths):
+            print(i, len(amplitudes),j,len(strengths))
+            # synaptic kernel with strength s
+            _, temp = make_normalized_template(td, tr, ttemp, dt, s)
+
+            # spike train → current
+            syn_current = generate_spike_train(len(res_in[0]), spike_ind, temp)
+
+            # output neuron
+            res_out = sima(V0[dir2], len(syn_current), syn_current, dt,
+                           vr[dir2], rf, gL[dir2], vt[dir2],
+                           C_m[dir2], alpha[dir2], tauvth[dir2])
+
+            fout_map[i, j] = res_out[1]
+
+    return {
+        "fout_map": fout_map,
+        "amplitudes": amplitudes,
+        "strengths": strengths
+    }
+
+
+fbdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedback_interneuron_CSV'
+ffdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedforward_interneuron_Csv'
+somdir=r'C:\Users\Oliver\Desktop\Research\PYR\Pyramidal_neuron_soma_Csv'
+
+files=['F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+
+somfiles=['F-I.csv','t.csv','v-tv1.csv','v-tv10.csv','v-tv11.csv','v-tv12.csv','v-tv13.csv','v-tv14.csv','v-tv15.csv','v-tv16.csv','v-tv17.csv','v-tv18.csv','v-tv19.csv','v-tv2.csv','v-tv20.csv','v-tv21.csv','v-tv22.csv','v-tv23.csv','v-tv24.csv','v-tv25.csv','v-tv26.csv','v-tv27.csv','v-tv28.csv','v-tv29.csv','v-tv3.csv','v-tv30.csv','v-tv31.csv','v-tv32.csv','v-tv33.csv','v-tv34.csv','v-tv4.csv','v-tv5.csv','v-tv6.csv','v-tv7.csv','v-tv8.csv','v-tv9.csv']
+fbfiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+fffiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'v-t', 'v-t noise']
+dirnames=['Som', 'Feedback', 'Feedforward']
+ftype='F-I.csv'
+dirs = [somdir, fbdir, ffdir]
+
+dirtype=0 # <-------------------- 0-som, 1-FB, 2-FF
+dnames=['som', 'feedback', 'feedforward']
+
+dlist=[]
+for dirtype in range(3):
+    data=pd.read_csv(dirs[dirtype]+'\{}'.format(ftype))
+    data=np.array(data.iloc[:, :2])
+    data[:,0]*=1e-9
+    dlist.append(data)
+    
+tmax = 1.5  # simulation run time
+dt = 1e-4 # sample rate
+rf = 1e-3  # refractory period
+
+V0 = [-78e-3, -78e-3, -78e-3]  # reverse potential
+C_m = [300e-12, 250e-12, 650e-12] # capacitance
+vr = [-78e-3, -78e-3, -78e-3] # reset potential after postsynaptic AP
+gL = [1/(50e6), 1/(50.29e6), 1/(120e6)] # 15e-9  # leak conductance
+vt = [-77e-3, -62e-3, -70e-3]  # threshold base level
+tauvth = [7e-3, 1e-3, 1e-3] # threshold time constant
+alpha = [[75e-3, 0e-3, 0e-3], 
+         [1e-3, 1e-3, 1e-3], 
+         [1e-3, 1e-3, 1e-3]]
+
+tr=1e-3
+td=10e-3
+ttemp=1
+tmax=10
+dt=1e-4
+strength = 1e-9
+f=100
+t_temp, temp= make_normalized_template(td, tr, ttemp, dt, strength)
+
+dir1=0
+dir2=0
+
+amplitudes = np.array(dlist[dir1])[:,0]  # or whichever you want
+strengths = np.linspace(1e-9, 10e-9, 20)
+
+res = compute_fout_heatmap(
+    dir1=dir1, dir2=dir2,
+    amplitudes=amplitudes,
+    strengths=strengths,
+    tmax=tmax, dt=dt, rf=rf,
+    V0=V0, vr=vr, gL=gL, vt=vt, C_m=C_m,
+    alpha=alpha, tauvth=tauvth,
+    tr=tr, td=td, ttemp=ttemp
+)
+
+# plot
+plt.figure()
+plt.imshow(res["fout_map"], aspect='auto', origin='lower',
+           extent=[res["strengths"][0]*1e9, res["strengths"][-1]*1e9,
+                   res["amplitudes"][0]*1e9, res["amplitudes"][-1]*1e9])
+
+plt.colorbar(label='fout (Hz)')
+plt.xlabel('Strength (nA)')
+plt.ylabel('Amplitude (nA)')
+plt.title(r'${} \rightarrow {}$'.format(dnames[dir1], dnames[dir2]))
+plt.show()
+
+
+#%% 3 - calculate heatmap 
+strengths = np.linspace(1e-9, 5e-9, 20)
+
+outlist=np.zeros((3,3), dtype=object)
+for dir1 in range(3):
+    for dir2 in range(3):
+        print(dir1, 3, dir2, 3)
+        amplitudes = np.array(dlist[dir1])[:,0]
+        res = compute_fout_heatmap(
+            dir1=dir1, dir2=dir2,
+            amplitudes=amplitudes,
+            strengths=strengths,
+            tmax=tmax, dt=dt, rf=rf,
+            V0=V0, vr=vr, gL=gL, vt=vt, C_m=C_m,
+            alpha=alpha, tauvth=tauvth,
+            tr=tr, td=td, ttemp=ttemp
+        )
+        outlist[dir1,dir2]=res['fout_map']
+
+#%% 3 - plot heatmap
+
+fig, ax = plt.subplots(3, 3, figsize=(10, 10))
+
+for dir1 in range(3):
+    amplitudes = np.array(dlist[dir1])[:,0]
+    for dir2 in range(3):
+        im = ax[dir1, dir2].imshow(
+            outlist[dir1, dir2],
+            aspect='auto',
+            origin='lower',
+            extent=[strengths[0]*1e9, strengths[-1]*1e9,
+                    amplitudes[0]*1e9, amplitudes[-1]*1e9]
+        )
+
+        fig.colorbar(im, ax=ax[dir1, dir2], label='fout (Hz)')
+        ax[dir1, dir2].set_xlabel('Strength (nA)')
+        ax[dir1, dir2].set_ylabel('Amplitude (nA)')
+        ax[dir1, dir2].set_title(r'${} \rightarrow {}$'.format(dnames[dir1], dnames[dir2]))
+
+plt.tight_layout()
+plt.show()
