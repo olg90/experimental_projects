@@ -1,24 +1,36 @@
 import numpy as np
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
 
 os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
 
 file1 = '100Hz_1s_20_repeats_P11.xlsx'
 file2 = '100Hz_1s_20_repeats_P38.xlsx'
 
-# Read all sheets
 excel1 = pd.read_excel(file1, sheet_name=None, header=None)
 excel2 = pd.read_excel(file2, sheet_name=None, header=None)
 
-# Convert all sheets into a 3D numpy array
-data1 = np.array([df.to_numpy() for df in excel1.values()])
-data2 = np.array([df.to_numpy() for df in excel2.values()])
+# full data (unchanged)
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
 
-# Access:
-# data1[sheet_number][row][column]
+times = fulldata1[0][1:, 0]
 
-print(data1.shape)
+# stripped data (remove first row + first column)
+data1 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel1.values()
+])
 
-# Example
-print(data1[0][0][0])
+data2 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel2.values()
+])
+
+# access:
+# fulldata1[sheet][row][col] -> original
+# data1[sheet][row][col]     -> stripped
+
+plt.scatter(times, data1[0][:, 0])
+
