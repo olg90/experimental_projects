@@ -1,0 +1,24 @@
+import numpy as np
+import pandas as pd
+import os
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+# Read all sheets
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# Convert all sheets into a 3D numpy array
+data1 = np.array([df.to_numpy() for df in excel1.values()])
+data2 = np.array([df.to_numpy() for df in excel2.values()])
+
+# Access:
+# data1[sheet_number][row][column]
+
+print(data1.shape)
+
+# Example
+print(data1[0][0][0])
