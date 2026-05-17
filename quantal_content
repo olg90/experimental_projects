@@ -3,6 +3,21 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 
+def get_pi_occupied(pi, pr, pd):
+    return pi*(1-pr)+(1-pi*(1-pr))*pd
+
+def bootstrap(data, metric, n_bootstraps=1000, percentiles=(2.5, 97.5)):
+    data = np.asarray(data)
+    n = len(data)
+    vals = [
+        metric(np.random.choice(data, size=n, replace=True))
+        for _ in range(n_bootstraps)
+    ]
+    return metric(data), np.percentile(vals, percentiles)
+
+def get_FF(x):
+    return np.var(x)/np.mean(x)
+
 os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
 
 file1 = '100Hz_1s_20_repeats_P11.xlsx'
@@ -36,7 +51,6 @@ data=[data1, data2]
 # fulldata1[sheet][row][col] -> original
 # data1[sheet][row][col]     -> stripped
 
-
 # =============================================================================
 # plt.title('Dataset {}'.format(dnum))
 # plt.scatter(times, data1[dnum][:, 2])
@@ -44,16 +58,21 @@ data=[data1, data2]
 # plt.ylabel('Quantal content')
 # =============================================================================
 
-dnum=2 # 0-12, dataset number 
 fnum=0 # 0-P11, 1-P32
+dnum=0 # 0-12 for fnum=0, 0-8 for fnum=1
 
 plt.figure()
 plt.title('{}, dataset {}'.format(fnames[fnum], dnum))
 for i in range(data[fnum][dnum].shape[1]):
-    plt.plot(data[fnum][dnum][:, i], linewidth=1, label='{}'.format(i))
+    plt.plot(data[fnum][dnum][:, i], linewidth=1, label='{}'.format(i), alpha=0.5)
 plt.xlabel('Time (sec)')
 plt.ylabel('Quantal content')
 plt.legend()
+
+
+ffs=[]
+for i in range(data[fnum][dnum].shape[0]):
+    ffs.append(get_FF(data[fnum][dnum][i, :]))
 
 M1 = 100 # number of occuiped docking sites in the first pool
 M2 = 100 # number of occupied docking sites in the second pool
@@ -67,17 +86,938 @@ p2=1 # probability a docking site is occupied in the second pool before AP arriv
 pd1=1 # probability docking site is reoccupied in the first pool
 pd2=1 # NEEDS TO BE A FUNCTION, probability docking site is reoccupied in the second pool
 
-def get_pi_occupied(pi, pr, pd):
-    return pi*(1-pr)+(1-pi*(1-pr))*pd
+
+# =============================================================================
+# plt.figure()
+# plt.plot(data[fnum][dnum][:, 0], linewidth=1, label='{}'.format(i))
+# plt.plot(data[fnum][dnum][:, 10], linewidth=1, label='{}'.format(i))
+# # plt.plot(data[fnum][dnum][:, 17], linewidth=0.5, label='{}'.format(i))
+# # plt.plot(data[fnum][dnum][:, 19], linewidth=0.5, label='{}'.format(i))
+# =============================================================================
 
 
-plt.figure()
-plt.plot(data[fnum][dnum][:, 0], linewidth=1, label='{}'.format(i))
-plt.plot(data[fnum][dnum][:, 10], linewidth=1, label='{}'.format(i))
-# plt.plot(data[fnum][dnum][:, 17], linewidth=0.5, label='{}'.format(i))
-# plt.plot(data[fnum][dnum][:, 19], linewidth=0.5, label='{}'.format(i))
+#%% Calculate bootstrapping
+
+mbounds=[]
+ffbounds=[]
+for k, datax in enumerate(data):
+    mboundsdata=[]
+    ffboundsdata=[]
+    for j, ds in enumerate(datax):
+        mboundsx=[]
+        ffboundsx=[]
+        for i, row in enumerate(ds):
+            print(k, len(data), j, len(datax), i, len(ds))
+            _, mbound = bootstrap(row, np.mean)
+            _, ffbound = bootstrap(row, get_FF)
+            mboundsx.append(mbound)
+            ffboundsx.append(ffbound)
+        mboundsdata.append(mboundsx)
+        ffboundsdata.append(ffboundsx)
+    mbounds.append(mboundsdata)
+    ffbounds.append(ffboundsdata)
+    
+
+means=[]
+ffs=[]
+for k, datax in enumerate(data):
+    meandata=[]
+    ffdata=[]
+    for j, ds in enumerate(datax):
+        meanx=[]
+        ffx=[]
+        for i, row in enumerate(ds):
+            print(k, len(data), j, len(datax), i, len(ds))
+            meanx.append(np.mean(row))
+            ffx.append(np.var(row)/np.mean(row))
+        meandata.append(meanx)
+        ffdata.append(ffx)
+    means.append(meandata)
+    ffs.append(ffdata)
 
 
+mbounds = np.array(mbounds, dtype=object)
+ffbounds = np.array(ffbounds, dtype=object)
+
+means = np.array(means, dtype=object)
+ffs = np.array(ffs, dtype=object)
+
+# =============================================================================
+# np.save('mbounds.npy', mbounds)
+# np.save('ffbounds.npy', ffbounds)
+# 
+# np.save('means.npy', means)
+# np.save('ffs.npy', ffs)
+# =============================================================================
+
+#%% Plot traces + mean + FF for one dataset
+
+fnum = 0   # file number
+dnum = 1   # dataset number
+
+t = np.asarray(times, dtype=float)
+
+# ======================
+# RAW TRACES
+# ======================
+plt.figure(figsize=(7, 5))
+
+ds = np.asarray(data[fnum][dnum], dtype=float)
+
+for run in range(ds.shape[1]):
+    plt.plot(
+        t,
+        ds[:, run],
+        linewidth=1,
+        alpha=0.7,
+        label=f'run {run+1}'
+    )
+
+plt.title(f'{fnames[fnum]} cell {dnum+1} traces')
+plt.xlabel('Time (sec)')
+plt.ylabel('Quantal content')
+plt.legend(framealpha=0.5)
+
+# ======================
+# MEAN + ERROR BARS
+# ======================
+plt.figure(figsize=(7, 5))
+
+y = np.asarray(means[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = plt.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+plt.title(f'{fnames[fnum]} cell {dnum+1} mean')
+plt.xlabel('Time (sec)')
+plt.ylabel('Mean quantal content')
+
+# ======================
+# FF + ERROR BARS
+# ======================
+plt.figure(figsize=(7, 5))
+
+y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = plt.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+plt.title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
+plt.xlabel('Time (sec)')
+plt.ylabel('Fano factor')
+
+plt.show()
+
+#%% 3x1
+
+fnum = 0   # file number
+dnum = 1   # dataset number
+
+t = np.asarray(times, dtype=float)
+
+fig, axs = plt.subplots(3, 1, figsize=(8, 12), sharex=True)
+
+# ======================
+# RAW TRACES
+# ======================
+ax = axs[0]
+
+ds = np.asarray(data[fnum][dnum], dtype=float)
+
+for run in range(ds.shape[1]):
+
+    ax.plot(
+        t,
+        ds[:, run],
+        linewidth=1,
+        alpha=0.7,
+        # label=f'run {run+1}'
+    )
+
+ax.set_title(f'{fnames[fnum]} cell {dnum+1} traces')
+ax.set_ylabel('Quantal content')
+ax.legend(framealpha=0.5)
+
+# ======================
+# MEAN + ERROR BARS
+# ======================
+ax = axs[1]
+
+y = np.asarray(means[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax.set_title(f'{fnames[fnum]} cell {dnum+1} mean')
+ax.set_ylabel('Mean quantal content')
+
+# ======================
+# FF + ERROR BARS
+# ======================
+ax = axs[2]
+
+y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax.set_title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
+ax.set_xlabel('Time (sec)')
+ax.set_ylabel('Fano factor')
+
+plt.tight_layout()
+plt.show()
+
+#%% 1x3
+fnum = 0   # file number
+dnum = 1   # dataset number
+
+t = np.asarray(times, dtype=float)
+
+fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+
+# ======================
+# RAW TRACES
+# ======================
+ax = axs[0]
+
+ds = np.asarray(data[fnum][dnum], dtype=float)
+
+for run in range(ds.shape[1]):
+
+    ax.plot(
+        t,
+        ds[:, run],
+        linewidth=1,
+        alpha=0.7,
+        label=f'run {run+1}'
+    )
+
+ax.set_title(f'{fnames[fnum]} cell {dnum+1} traces')
+ax.set_xlabel('Time (sec)')
+ax.set_ylabel('Quantal content')
+ax.legend(framealpha=0.5)
+
+# ======================
+# MEAN + ERROR BARS
+# ======================
+ax = axs[1]
+
+y = np.asarray(means[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax.set_title(f'{fnames[fnum]} cell {dnum+1} mean')
+ax.set_xlabel('Time (sec)')
+ax.set_ylabel('Mean quantal content')
+
+# ======================
+# FF + ERROR BARS
+# ======================
+ax = axs[2]
+
+y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax.set_title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
+ax.set_xlabel('Time (sec)')
+ax.set_ylabel('Fano factor')
+
+plt.tight_layout()
+plt.show()
+
+#%% 2x1 + 1 below center
+fnum = 0   # file number
+dnum = 1   # dataset number
+
+t = np.asarray(times, dtype=float)
+
+fig = plt.figure(figsize=(14, 10))
+
+# custom layout
+ax1 = plt.subplot2grid((2, 4), (0, 0), colspan=2)  # traces
+ax2 = plt.subplot2grid((2, 4), (0, 2), colspan=2)  # mean
+ax3 = plt.subplot2grid((2, 4), (1, 1), colspan=2)  # centered FF
+
+# ======================
+# RAW TRACES
+# ======================
+
+ds = np.asarray(data[fnum][dnum], dtype=float)
+
+for run in range(ds.shape[1]):
+
+    ax1.plot(
+        t,
+        ds[:, run],
+        linewidth=1,
+        alpha=0.7,
+        # label=f'run {run+1}'
+    )
+
+ax1.set_title(f'{fnames[fnum]} cell {dnum+1} traces')
+ax1.set_xlabel('Time (sec)')
+ax1.set_ylabel('Quantal content')
+ax1.legend(framealpha=0.5)
+
+# ======================
+# MEAN + ERROR BARS
+# ======================
+
+y = np.asarray(means[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax2.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax2.set_title(f'{fnames[fnum]} cell {dnum+1} mean')
+ax2.set_xlabel('Time (sec)')
+ax2.set_ylabel('Mean quantal content')
+
+# ======================
+# FANO FACTOR + ERROR BARS
+# ======================
+
+y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax3.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax3.set_title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
+ax3.set_xlabel('Time (sec)')
+ax3.set_ylabel('Fano factor')
+
+plt.tight_layout()
+plt.show()
+
+#%% Plot all fnum/dnum figures
+
+t = np.asarray(times, dtype=float)
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        fig = plt.figure(figsize=(14, 10))
+
+        # custom layout
+        ax1 = plt.subplot2grid((2, 4), (0, 0), colspan=2)  # traces
+        ax2 = plt.subplot2grid((2, 4), (0, 2), colspan=2)  # mean
+        ax3 = plt.subplot2grid((2, 4), (1, 1), colspan=2)  # centered FF
+
+        # ======================
+        # RAW TRACES
+        # ======================
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            ax1.plot(
+                t,
+                ds[:, run],
+                linewidth=1,
+                alpha=0.7
+            )
+
+        ax1.set_title(f'{fnames[fnum]} cell {dnum+1} traces')
+        ax1.set_xlabel('Time (sec)')
+        ax1.set_ylabel('Quantal content')
+
+        # ======================
+        # MEAN + ERROR BARS
+        # ======================
+
+        y = np.asarray(means[fnum][dnum], dtype=float)
+
+        lower = np.asarray(
+            [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+            dtype=float
+        )
+
+        upper = np.asarray(
+            [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+            dtype=float
+        )
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax2.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2
+        )
+
+        eb[0].set_alpha(0.9)
+
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax2.set_title(f'{fnames[fnum]} cell {dnum+1} mean')
+        ax2.set_xlabel('Time (sec)')
+        ax2.set_ylabel('Mean quantal content')
+
+        # ======================
+        # FF + ERROR BARS
+        # ======================
+
+        y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+        lower = np.asarray(
+            [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+            dtype=float
+        )
+
+        upper = np.asarray(
+            [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+            dtype=float
+        )
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax3.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2
+        )
+
+        eb[0].set_alpha(0.9)
+
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax3.set_title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
+        ax3.set_xlabel('Time (sec)')
+        ax3.set_ylabel('Fano factor')
+
+        plt.tight_layout()
+
+plt.show()
+
+#%% Plot every individual repeat separately
+
+t = np.asarray(times, dtype=float)
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            plt.figure(figsize=(7, 5))
+
+            plt.plot(
+                t,
+                ds[:, run],
+                linewidth=1
+            )
+
+            plt.title(
+                f'{fnames[fnum]} cell {dnum+1} repeat {run+1}'
+            )
+
+            plt.xlabel('Time (sec)')
+            plt.ylabel('Quantal content')
+
+plt.show()
+
+#%% Plot all the traces for a dataset
+
+
+fnum = 0   # file number
+
+t = np.asarray(times, dtype=float)
+
+for dnum in range(len(data[fnum])):
+
+    plt.figure(figsize=(8, 5))
+
+    ds = np.asarray(data[fnum][dnum], dtype=float)
+
+    for run in range(ds.shape[1]):
+
+        plt.plot(
+            t,
+            ds[:, run],
+            linewidth=1,
+            alpha=0.7,
+            label=f'run {run+1}'
+        )
+
+    plt.title(f'{fnames[fnum]} dataset {dnum+1}')
+    plt.xlabel('Time (sec)')
+    plt.ylabel('Quantal content')
+    plt.legend()
+
+plt.show()
+
+#%% Plot the mean and error bounds
+fig, axs = plt.subplots(2, 2, figsize=(14, 10))
+
+t = np.asarray(times, dtype=float)
+
+for fnum in range(2):
+
+    # ======================
+    # MEANS
+    # ======================
+    ax = axs[0, fnum]
+
+    for dnum in range(len(means[fnum])):
+
+        y = np.asarray(means[fnum][dnum], dtype=float)
+
+        lower = np.asarray(
+            [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+            dtype=float
+        )
+
+        upper = np.asarray(
+            [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+            dtype=float
+        )
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2,
+            label=f'cell {dnum+1}'
+        )
+
+        # alpha control
+        eb[0].set_alpha(0.85)      # line
+        for bar in eb[2]:          # error bars
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)   # caps
+        eb[1][1].set_alpha(0.25)
+
+    ax.set_title(f'{fnames[fnum]} Means')
+    ax.set_xlabel('Time (sec)')
+    ax.set_ylabel('Mean')
+    ax.legend()
+
+    # ======================
+    # FANO FACTORS
+    # ======================
+    ax = axs[1, fnum]
+
+    for dnum in range(len(ffs[fnum])):
+
+        y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+        lower = np.asarray(
+            [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+            dtype=float
+        )
+
+        upper = np.asarray(
+            [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+            dtype=float
+        )
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2,
+            label=f'cell {dnum+1}'
+        )
+
+        # alpha control
+        eb[0].set_alpha(0.85)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+    ax.set_title(f'{fnames[fnum]} Fano Factors')
+    ax.set_xlabel('Time (sec)')
+    ax.set_ylabel('FF')
+    ax.legend()
+
+plt.tight_layout()
+plt.show()
+
+#%% separate
+t = np.asarray(times, dtype=float)
+
+for fnum in range(2):
+
+    # ======================
+    # MEANS
+    # ======================
+    plt.figure(figsize=(7, 5))
+
+    for dnum in range(len(means[fnum])):
+
+        y = np.asarray(means[fnum][dnum], dtype=float)
+
+        lower = np.asarray(
+            [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+            dtype=float
+        )
+
+        upper = np.asarray(
+            [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+            dtype=float
+        )
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = plt.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2,
+            label=f'cell {dnum+1}'
+        )
+
+        # alpha settings
+        eb[0].set_alpha(0.85)      # main line
+        for bar in eb[2]:          # error bars
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)   # caps
+        eb[1][1].set_alpha(0.25)
+
+    plt.title(f'{fnames[fnum]} Means')
+    plt.xlabel('Time (sec)')
+    plt.ylabel('Mean quantal content')
+    plt.legend()
+
+    # ======================
+    # FANO FACTORS
+    # ======================
+    plt.figure(figsize=(7, 5))
+
+    for dnum in range(len(ffs[fnum])):
+
+        y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+        lower = np.asarray(
+            [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+            dtype=float
+        )
+
+        upper = np.asarray(
+            [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+            dtype=float
+        )
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = plt.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2,
+            label=f'cell {dnum+1}'
+        )
+
+        # alpha settings
+        eb[0].set_alpha(0.85)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+    plt.title(f'{fnames[fnum]} Fano Factors')
+    plt.xlabel('Time (sec)')
+    plt.ylabel('Fano factor of quantal content')
+    plt.legend()
+
+plt.show()
+
+    
+#%% subplots FF
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+
+t = np.asarray(times, dtype=float)
+
+for fnum in range(2):
+
+    n = len(ffs[fnum])
+
+    nrows = math.ceil(np.sqrt(n))
+    ncols = math.ceil(n / nrows)
+
+    fig, axs = plt.subplots(
+        nrows, ncols,
+        figsize=(4*ncols, 3*nrows),
+        sharex=True,
+        constrained_layout=True
+    )
+
+    axs = np.array(axs).reshape(-1)
+
+    for dnum in range(n):
+
+        ax = axs[dnum]
+
+        y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+        lower = np.asarray(
+            [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+            dtype=float
+        )
+
+        upper = np.asarray(
+            [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+            dtype=float
+        )
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        # ---- errorbar with alpha control ----
+        eb = ax.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2
+        )
+
+        # set alpha for line + error bars
+        eb[0].set_alpha(0.8)  # main line
+        for barcol in eb[2]:  # error bar segments
+            barcol.set_alpha(0.3)
+        eb[1][0].set_alpha(0.3)  # caps (lower)
+        eb[1][1].set_alpha(0.3)  # caps (upper)
+
+        ax.set_title(f'cell {dnum+1}')
+        ax.set_ylabel('Fano factor')
+
+    # turn off unused axes
+    for i in range(n, len(axs)):
+        axs[i].axis('off')
+
+    fig.suptitle(f'{fnames[fnum]} Fano Factors')
+
+    plt.show()
 #%% plotting select lines
 import numpy as np
 import pandas as pd
