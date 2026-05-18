@@ -735,6 +735,1255 @@ for fnum in range(len(data)):
 
 plt.show()
 
+#%% plot all traces with 200% increase from mean running average
+
+t = np.asarray(times, dtype=float)
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =================================================
+            # running average
+            # =================================================
+            running_avg = (
+                np.cumsum(trace)
+                / np.arange(1, len(trace) + 1)
+            )
+
+            # =================================================
+            # relative deviation from running average
+            # =================================================
+            eps = 1e-12
+
+            frac_dev = (
+                np.abs(trace - running_avg)
+                / (np.abs(running_avg) + eps)
+            )
+
+            # =================================================
+            # only plot if any point deviates > 200%
+            # =================================================
+            if np.any(frac_dev > 1.0):
+
+                plt.figure(figsize=(7, 5))
+
+                plt.plot(
+                    t,
+                    trace,
+                    linewidth=1
+                )
+
+                plt.plot(
+                    t,
+                    running_avg,
+                    linestyle='--',
+                    linewidth=1
+                )
+
+                plt.title(
+                    f'{fnames[fnum]} cell {dnum+1} repeat {run+1}'
+                )
+
+                plt.xlabel('Time (sec)')
+                plt.ylabel('Quantal content')
+
+plt.show()
+
+#%% plot all traces with large deviation from window average
+
+t = np.asarray(times, dtype=float)
+
+window = 25
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # edge-corrected moving average
+            # =============================================
+            kernel = np.ones(window)
+
+            window_sum = np.convolve(
+                trace,
+                kernel,
+                mode='same'
+            )
+
+            window_count = np.convolve(
+                np.ones_like(trace),
+                kernel,
+                mode='same'
+            )
+
+            window_avg = window_sum / window_count
+
+            # =============================================
+            # deviation criterion
+            # =============================================
+            eps = 1e-6
+
+            frac_dev = (
+                np.abs(trace - window_avg)
+                / (np.abs(window_avg) + eps)
+            )
+
+            # =============================================
+            # plot if ANY point > 100% away
+            # =============================================
+            if np.any(frac_dev > 1.0):
+
+                plt.figure(figsize=(7, 5))
+
+                plt.plot(
+                    t,
+                    trace,
+                    linewidth=1,
+                    label='trace'
+                )
+
+                plt.plot(
+                    t,
+                    window_avg,
+                    linestyle='--',
+                    linewidth=1,
+                    label='window avg'
+                )
+
+                plt.title(
+                    f'{fnames[fnum]} cell {dnum+1} repeat {run+1}'
+                )
+
+                plt.xlabel('Time (sec)')
+                plt.ylabel('Quantal content')
+
+                plt.legend()
+
+plt.show()
+
+#%% plot all traces with large deviation from window average
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+t = np.asarray(times, dtype=float)
+window = 10
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # causal expanding / sliding window average
+            # =============================================
+            cumsum = np.cumsum(trace, dtype=float)
+            window_avg = np.empty_like(trace, dtype=float)
+
+            for i in range(len(trace)):
+                start = max(0, i - window + 1)
+
+                total = cumsum[i] - (cumsum[start - 1] if start > 0 else 0.0)
+                window_avg[i] = total / (i - start + 1)
+
+            # =============================================
+            # deviation criterion
+            # =============================================
+            eps = 1e-6
+
+            frac_dev = np.abs(trace - window_avg) / (np.abs(window_avg) + eps)
+
+            # =============================================
+            # plot if ANY point > 100% away
+            # =============================================
+            if np.any(frac_dev > 1.0):
+
+                plt.figure(figsize=(7, 5))
+
+                plt.plot(t, trace, linewidth=1, label='trace')
+
+                plt.plot(t, window_avg, linestyle='--', linewidth=1, label='window avg')
+
+                plt.title(f'{fnames[fnum]} cell {dnum+1} repeat {run+1}')
+                plt.xlabel('Time (sec)')
+                plt.ylabel('Quantal content')
+
+                plt.legend()
+
+plt.show()
+
+#%% plot all traces with large deviation from window average
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+t = np.asarray(times, dtype=float)
+
+window = 5
+pct = 50/100   # <-- 2.0 = 200% bounds, 1.0 = 100%, etc.
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # causal moving / expanding window average
+            # =============================================
+            cumsum = np.cumsum(trace, dtype=float)
+            window_avg = np.empty_like(trace, dtype=float)
+
+            for i in range(len(trace)):
+                start = max(0, i - window + 1)
+                total = cumsum[i] - (cumsum[start - 1] if start > 0 else 0.0)
+                window_avg[i] = total / (i - start + 1)
+
+            # =============================================
+            # bounds (± pct)
+            # =============================================
+            upper = window_avg * (1.0 + pct)
+            lower = window_avg * (1.0 - pct)
+
+            # =============================================
+            # deviation criterion
+            # =============================================
+            eps = 1e-6
+            frac_dev = np.abs(trace - window_avg) / (np.abs(window_avg) + eps)
+
+            # =============================================
+            # plot if ANY point exceeds bounds
+            # =============================================
+            if np.any(frac_dev > pct):
+
+                plt.figure(figsize=(7, 5))
+
+                plt.plot(t, trace, linewidth=1, label='trace')
+                plt.plot(t, window_avg, '--', linewidth=1, label='window avg')
+
+                plt.plot(t, upper, ':', linewidth=1, label=f'+{int(pct*100)}% bound')
+                plt.plot(t, lower, ':', linewidth=1, label=f'-{int(pct*100)}% bound')
+
+                plt.fill_between(t, lower, upper, alpha=0.15)
+
+                plt.title(f'{fnames[fnum]} cell {dnum+1} repeat {run+1}')
+                plt.xlabel('Time (sec)')
+                plt.ylabel('Quantal content')
+
+                plt.legend()
+
+plt.show()
+
+#%% plot all traces with large deviation from window average
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+t = np.asarray(times, dtype=float)
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+window = 5
+pct = 50/100   # <-- 2.0 = 200% bounds, 1.0 = 100%, etc.
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # causal moving / expanding window average
+            # =============================================
+            cumsum = np.cumsum(trace, dtype=float)
+            window_avg = np.empty_like(trace, dtype=float)
+
+            for i in range(len(trace)):
+                start = max(0, i - window + 1)
+                total = cumsum[i] - (cumsum[start - 1] if start > 0 else 0.0)
+                window_avg[i] = total / (i - start + 1)
+
+            # =============================================
+            # bounds (± pct)
+            # =============================================
+            upper = window_avg * (1.0 + pct)
+            lower = window_avg * (1.0 - pct)
+
+            # =============================================
+            # deviation criterion
+            # =============================================
+            eps = 1e-6
+            frac_dev = np.abs(trace - window_avg) / (np.abs(window_avg) + eps)
+
+            # mask for bound violations
+            out_of_bounds = (trace > upper) | (trace < lower)
+
+            # =============================================
+            # plot if ANY point exceeds bounds
+            # =============================================
+            if np.any(out_of_bounds):
+
+                plt.figure(figsize=(7, 5))
+
+                plt.plot(t, trace, linewidth=1, label='trace')
+                plt.plot(t, window_avg, '--', linewidth=1, label='Average of the\nlast {} points'.format(window))
+                
+                plt.plot(t, upper, ':', linewidth=1, label=f'+{int(pct*100)}% bound')
+                plt.plot(t, lower, ':', linewidth=1, label=f'-{int(pct*100)}% bound')
+
+                plt.fill_between(t, lower, upper, alpha=0.1)
+
+                # =============================================
+                # red circles at violation points
+                # =============================================
+                plt.scatter(
+                    t[out_of_bounds],
+                    trace[out_of_bounds],
+                    color='red',
+                    s=25,
+                    label='out of bounds'
+                )
+
+                plt.title(f'{fnames[fnum]} cell {dnum+1} repeat {run+1}')
+                plt.xlabel('Time (sec)')
+                plt.ylabel('Mean quantal content')
+
+                plt.legend()
+
+plt.show()
+
+#%% plot all traces with large deviation from window average
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+def get_pi_occupied(pi, pr, pd):
+    return pi*(1-pr)+(1-pi*(1-pr))*pd
+
+def bootstrap(data, metric, n_bootstraps=1000, percentiles=(2.5, 97.5)):
+    data = np.asarray(data)
+    n = len(data)
+    vals = [
+        metric(np.random.choice(data, size=n, replace=True))
+        for _ in range(n_bootstraps)
+    ]
+    return metric(data), np.percentile(vals, percentiles)
+
+def get_FF(x):
+    return np.var(x)/np.mean(x)
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# full data (unchanged)
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0]
+
+# stripped data (remove first row + first column)
+data1 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel1.values()
+])
+
+data2 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel2.values()
+])
+
+data=[data1, data2]
+
+t = np.asarray(times, dtype=float)
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+window = 10
+pct = 50/100   # <-- 2.0 = 200% bounds, 1.0 = 100%, etc.
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # causal moving / expanding window average
+            # =============================================
+            cumsum = np.cumsum(trace, dtype=float)
+            window_avg = np.empty_like(trace, dtype=float)
+
+            for i in range(len(trace)):
+                start = max(0, i - window + 1)
+                total = cumsum[i] - (cumsum[start - 1] if start > 0 else 0.0)
+                window_avg[i] = total / (i - start + 1)
+
+            # =============================================
+            # bounds (± pct)
+            # =============================================
+            upper = window_avg * (1.0 + pct)
+            lower = window_avg * (1.0 - pct)
+
+            # =============================================
+            # deviation criterion
+            # =============================================
+            eps = 1e-6
+            frac_dev = np.abs(trace - window_avg) / (np.abs(window_avg) + eps)
+
+            # mask for bound violations
+            out_of_bounds = (trace > upper) | (trace < lower)
+
+            # =============================================
+            # always plot every trace
+            # =============================================
+            plt.figure(figsize=(7, 5))
+
+            plt.plot(
+                t,
+                trace,
+                linewidth=1,
+                label='trace'
+            )
+
+            plt.plot(
+                t,
+                window_avg,
+                '--',
+                linewidth=1,
+                label='Average of the\nlast {} points'.format(window)
+            )
+
+            plt.plot(
+                t,
+                upper,
+                ':',
+                linewidth=1,
+                label=f'+{int(pct*100)}% bound'
+            )
+
+            plt.plot(
+                t,
+                lower,
+                ':',
+                linewidth=1,
+                label=f'-{int(pct*100)}% bound'
+            )
+
+            plt.fill_between(t, lower, upper, alpha=0.1)
+
+            # =============================================
+            # red circles at violation points
+            # =============================================
+            plt.scatter(
+                t[out_of_bounds],
+                trace[out_of_bounds],
+                color='red',
+                s=25,
+                label='out of bounds'
+            )
+
+            plt.title(
+                f'{fnames[fnum]} cell {dnum+1} repeat {run+1}'
+            )
+
+            plt.xlabel('Time (sec)')
+            plt.ylabel('Mean quantal content')
+
+            plt.legend()
+
+plt.show()
+
+#%% plot ONLY traces with points outside bounds
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+def get_pi_occupied(pi, pr, pd):
+    return pi*(1-pr)+(1-pi*(1-pr))*pd
+
+def bootstrap(data, metric, n_bootstraps=1000, percentiles=(2.5, 97.5)):
+    data = np.asarray(data)
+    n = len(data)
+    vals = [
+        metric(np.random.choice(data, size=n, replace=True))
+        for _ in range(n_bootstraps)
+    ]
+    return metric(data), np.percentile(vals, percentiles)
+
+def get_FF(x):
+    return np.var(x)/np.mean(x)
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# full data
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0]
+
+# stripped data
+data1 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel1.values()
+])
+
+data2 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel2.values()
+])
+
+data = [data1, data2]
+
+t = np.asarray(times, dtype=float)
+
+window = 10
+pct = 30 / 100
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # causal moving average
+            # =============================================
+            cumsum = np.cumsum(trace, dtype=float)
+
+            window_avg = np.empty_like(trace, dtype=float)
+
+            for i in range(len(trace)):
+
+                start = max(0, i - window + 1)
+
+                total = (
+                    cumsum[i]
+                    - (cumsum[start - 1] if start > 0 else 0.0)
+                )
+
+                window_avg[i] = total / (i - start + 1)
+
+            # =============================================
+            # bounds
+            # =============================================
+            upper = window_avg * (1.0 + pct)
+            lower = window_avg * (1.0 - pct)
+
+            # =============================================
+            # bound violations
+            # =============================================
+            out_of_bounds = (
+                (trace > upper) |
+                (trace < lower)
+            )
+
+            # =============================================
+            # ONLY plot violating traces
+            # =============================================
+            if np.any(out_of_bounds):
+
+                plt.figure(figsize=(7, 5))
+
+                plt.plot(
+                    t,
+                    trace,
+                    linewidth=1,
+                    label='trace'
+                )
+
+                plt.plot(
+                    t,
+                    window_avg,
+                    '--',
+                    linewidth=1,
+                    label=f'avg of last {window} points'
+                )
+
+                plt.plot(
+                    t,
+                    upper,
+                    ':',
+                    linewidth=1,
+                    label=f'+{int(pct*100)}% bound'
+                )
+
+                plt.plot(
+                    t,
+                    lower,
+                    ':',
+                    linewidth=1,
+                    label=f'-{int(pct*100)}% bound'
+                )
+
+                plt.fill_between(
+                    t,
+                    lower,
+                    upper,
+                    alpha=0.1
+                )
+
+                # violation points
+                plt.scatter(
+                    t[out_of_bounds],
+                    trace[out_of_bounds],
+                    color='red',
+                    s=25,
+                    label='out of bounds'
+                )
+
+                plt.title(
+                    f'{fnames[fnum]} cell {dnum+1} repeat {run+1}'
+                )
+
+                plt.xlabel('Time (sec)')
+                plt.ylabel('Mean quantal content')
+
+                plt.legend()
+
+plt.show()
+
+#%% plot violating repeats together per cell
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import math
+
+def get_pi_occupied(pi, pr, pd):
+    return pi*(1-pr)+(1-pi*(1-pr))*pd
+
+def bootstrap(data, metric, n_bootstraps=1000, percentiles=(2.5, 97.5)):
+    data = np.asarray(data)
+    n = len(data)
+    vals = [
+        metric(np.random.choice(data, size=n, replace=True))
+        for _ in range(n_bootstraps)
+    ]
+    return metric(data), np.percentile(vals, percentiles)
+
+def get_FF(x):
+    return np.var(x)/np.mean(x)
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# full data
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0]
+
+# stripped data
+data1 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel1.values()
+])
+
+data2 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel2.values()
+])
+
+data = [data1, data2]
+
+t = np.asarray(times, dtype=float)
+
+window = 10
+pct = 30 / 100
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        violating_runs = []
+
+        # =====================================================
+        # collect all violating repeats first
+        # =====================================================
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # causal moving average
+            cumsum = np.cumsum(trace, dtype=float)
+
+            window_avg = np.empty_like(trace, dtype=float)
+
+            for i in range(len(trace)):
+
+                start = max(0, i - window + 1)
+
+                total = (
+                    cumsum[i]
+                    - (cumsum[start - 1] if start > 0 else 0.0)
+                )
+
+                window_avg[i] = total / (i - start + 1)
+
+            # bounds
+            upper = window_avg * (1.0 + pct)
+            lower = window_avg * (1.0 - pct)
+
+            # violations
+            out_of_bounds = (
+                (trace > upper) |
+                (trace < lower)
+            )
+
+            if np.any(out_of_bounds):
+
+                violating_runs.append({
+                    'run': run,
+                    'trace': trace,
+                    'avg': window_avg,
+                    'upper': upper,
+                    'lower': lower,
+                    'mask': out_of_bounds
+                })
+
+        # =====================================================
+        # skip cells with no violations
+        # =====================================================
+        nplots = len(violating_runs)
+
+        if nplots == 0:
+            continue
+
+        # =====================================================
+        # choose subplot layout
+        # =====================================================
+        if nplots <= 20:
+            ncols = min(5, nplots)
+            nrows = math.ceil(nplots / ncols)
+        else:
+            ncols = 5
+            nrows = math.ceil(nplots / 5)
+
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(4*ncols, 3*nrows),
+            squeeze=False
+        )
+
+        axes = axes.flatten()
+
+        # =====================================================
+        # plot violating repeats
+        # =====================================================
+        for k, item in enumerate(violating_runs):
+
+            ax = axes[k]
+
+            trace = item['trace']
+            window_avg = item['avg']
+            upper = item['upper']
+            lower = item['lower']
+            out_of_bounds = item['mask']
+            run = item['run']
+
+            ax.plot(
+                t,
+                trace,
+                linewidth=1
+            )
+
+            ax.plot(
+                t,
+                window_avg,
+                '--',
+                linewidth=1
+            )
+
+            ax.plot(
+                t,
+                upper,
+                ':',
+                linewidth=1
+            )
+
+            ax.plot(
+                t,
+                lower,
+                ':',
+                linewidth=1
+            )
+
+            ax.fill_between(
+                t,
+                lower,
+                upper,
+                alpha=0.1
+            )
+
+            ax.scatter(
+                t[out_of_bounds],
+                trace[out_of_bounds],
+                color='red',
+                s=20
+            )
+
+            ax.set_title(f'repeat {run+1}')
+
+            ax.set_xlabel('Time')
+            ax.set_ylabel('QC')
+
+        # =====================================================
+        # remove unused subplots
+        # =====================================================
+        for k in range(nplots, len(axes)):
+            fig.delaxes(axes[k])
+
+        fig.suptitle(
+            f'{fnames[fnum]} cell {dnum+1}',
+            fontsize=14
+        )
+
+        plt.tight_layout()
+
+plt.show()
+
+#%% plot violating repeats together per cell (ignore first point in error check only)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import math
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = [
+    '100Hz_1s_20_repeats_P11',
+    '100Hz_1s_20_repeats_P38'
+]
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0]
+t = np.asarray(times, dtype=float)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+window = 10
+pct = 30 / 100
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        violating_runs = []
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # centered moving average (edge corrected)
+            # =============================================
+            kernel = np.ones(window)
+
+            window_sum = np.convolve(trace, kernel, mode='same')
+            window_count = np.convolve(np.ones_like(trace), kernel, mode='same')
+
+            window_avg = window_sum / window_count
+
+            # =============================================
+            # bounds
+            # =============================================
+            upper = window_avg * (1.0 + pct)
+            lower = window_avg * (1.0 - pct)
+
+            # =============================================
+            # error detection
+            # =============================================
+            out_of_bounds = (
+                (trace > upper) |
+                (trace < lower)
+            )
+
+            # =================================================
+            # IGNORE FIRST POINT ONLY FOR ERROR DETECTION
+            # =================================================
+            out_of_bounds[0] = False
+
+            if np.any(out_of_bounds):
+
+                violating_runs.append({
+                    'run': run,
+                    'trace': trace,
+                    'avg': window_avg,
+                    'upper': upper,
+                    'lower': lower,
+                    'mask': out_of_bounds
+                })
+
+        nplots = len(violating_runs)
+
+        if nplots == 0:
+            continue
+
+        ncols = min(5, nplots)
+        nrows = math.ceil(nplots / ncols)
+
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(4*ncols, 3*nrows),
+            squeeze=False
+        )
+
+        axes = axes.flatten()
+
+        for k, item in enumerate(violating_runs):
+
+            ax = axes[k]
+
+            trace = item['trace']
+            avg = item['avg']
+            upper = item['upper']
+            lower = item['lower']
+            mask = item['mask']
+            run = item['run']
+
+            ax.plot(t, trace, linewidth=1)
+            ax.plot(t, avg, '--', linewidth=1)
+            ax.plot(t, upper, ':', linewidth=1)
+            ax.plot(t, lower, ':', linewidth=1)
+
+            ax.fill_between(t, lower, upper, alpha=0.1)
+
+            ax.scatter(
+                t[mask],
+                trace[mask],
+                color='red',
+                s=20
+            )
+
+            ax.set_title(f'repeat {run+1}')
+            ax.set_xlabel('Time')
+            ax.set_ylabel('QC')
+
+        for k in range(nplots, len(axes)):
+            fig.delaxes(axes[k])
+
+        fig.suptitle(f'{fnames[fnum]} cell {dnum+1}', fontsize=14)
+
+        plt.tight_layout()
+
+plt.show()
+
+#%% bootstrap 95% CI per cell and flag outliers
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import math
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+times = fulldata1[0][1:, 0]
+t = np.asarray(times, dtype=float)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+n_boot = 500
+ci_low, ci_high = 2.5, 97.5
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)  # (time, repeats)
+
+        n_time, n_rep = ds.shape
+
+        # =====================================================
+        # bootstrap CI per time point across repeats
+        # =====================================================
+        lower = np.zeros(n_time)
+        upper = np.zeros(n_time)
+
+        for i in range(n_time):
+
+            samples = ds[i, :]
+
+            boots = np.empty(n_boot)
+
+            for b in range(n_boot):
+                resamp = np.random.choice(samples, size=len(samples), replace=True)
+                boots[b] = np.mean(resamp)
+
+            lower[i] = np.percentile(boots, ci_low)
+            upper[i] = np.percentile(boots, ci_high)
+
+        # =====================================================
+        # plot each repeat only if it violates CI
+        # =====================================================
+        violating_runs = []
+
+        for run in range(n_rep):
+
+            trace = ds[:, run]
+
+            out_of_bounds = (trace < lower) | (trace > upper)
+
+            # ignore first point (optional stability)
+            out_of_bounds[0] = False
+
+            if np.any(out_of_bounds):
+
+                violating_runs.append((run, trace, out_of_bounds))
+
+        # =====================================================
+        # skip empty cells
+        # =====================================================
+        if len(violating_runs) == 0:
+            continue
+
+        # =====================================================
+        # subplot layout (max 5 columns)
+        # =====================================================
+        nplots = len(violating_runs)
+        ncols = min(5, nplots)
+        nrows = math.ceil(nplots / ncols)
+
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=(4*ncols, 3*nrows),
+            squeeze=False
+        )
+
+        axes = axes.flatten()
+
+        # =====================================================
+        # plotting
+        # =====================================================
+        for k, (run, trace, mask) in enumerate(violating_runs):
+
+            ax = axes[k]
+
+            ax.plot(t, trace, linewidth=1)
+            ax.plot(t, lower, '--', linewidth=1, alpha=0.6)
+            ax.plot(t, upper, '--', linewidth=1, alpha=0.6)
+
+            ax.fill_between(t, lower, upper, alpha=0.15)
+
+            ax.scatter(
+                t[mask],
+                trace[mask],
+                color='red',
+                s=20
+            )
+
+            ax.set_title(f'repeat {run+1}')
+            ax.set_xlabel('Time')
+            ax.set_ylabel('QC')
+
+        for k in range(nplots, len(axes)):
+            fig.delaxes(axes[k])
+
+        fig.suptitle(f'{fnames[fnum]} cell {dnum+1}')
+
+        plt.tight_layout()
+
+plt.show()
+
+#%% ±ndev standard deviation bounds per cell (across repeats)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import math
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+times = fulldata1[0][1:, 0]
+t = np.asarray(times, dtype=float)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+ndev=2
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)  # (time, repeats)
+
+        # =====================================================
+        # mean + std across repeats at each time point
+        # =====================================================
+        mean = np.mean(ds, axis=1)
+        std = np.std(ds, axis=1)
+
+        upper = mean + ndev*std
+        lower = mean - ndev*std
+
+        violating_runs = []
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            out_of_bounds = (trace > upper) | (trace < lower)
+
+            # ignore first point only for detection
+            out_of_bounds[0] = False
+
+            if np.any(out_of_bounds):
+                violating_runs.append((run, trace, out_of_bounds))
+
+        # skip empty cells
+        if len(violating_runs) == 0:
+            continue
+
+        nplots = len(violating_runs)
+        ncols = min(5, nplots)
+        nrows = math.ceil(nplots / ncols)
+
+        fig, axes = plt.subplots(
+            nrows, ncols,
+            figsize=(4*ncols, 3*nrows),
+            squeeze=False
+        )
+
+        axes = axes.flatten()
+
+        for k, (run, trace, mask) in enumerate(violating_runs):
+
+            ax = axes[k]
+
+            ax.plot(t, trace, linewidth=1, label='trace')
+            ax.plot(t, mean, '--', linewidth=1, label='mean')
+
+            ax.plot(t, upper, ':', linewidth=1, label='+1 std')
+            ax.plot(t, lower, ':', linewidth=1, label='-1 std')
+
+            ax.fill_between(t, lower, upper, alpha=0.15)
+
+            ax.scatter(
+                t[mask],
+                trace[mask],
+                color='red',
+                s=20,
+                label='out of bounds'
+            )
+
+            ax.set_title(f'repeat {run+1}')
+            ax.set_xlabel('Time')
+            ax.set_ylabel('QC')
+
+        for k in range(nplots, len(axes)):
+            fig.delaxes(axes[k])
+
+        fig.suptitle(f'{fnames[fnum]} cell {dnum+1}')
+
+        plt.tight_layout()
+
+plt.show()
+
 #%% Plot all the traces for a dataset
 
 
