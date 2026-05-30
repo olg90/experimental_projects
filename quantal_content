@@ -3949,9 +3949,9 @@ for fnum, fname in enumerate(fnames):
 
     perm_results.append(file_results)
 
-
+#%%
 # =========================
-# PLOTTING (FIXED VISIBILITY)
+# PLOTTING (SIGNIFICANCE STYLE MARKERS)
 # =========================
 
 for fnum, fname in enumerate(fnames):
@@ -3973,21 +3973,130 @@ for fnum, fname in enumerate(fnames):
         y2 = r["last_mean"]
         sig = r["sig"]
 
-        ax.plot(times, y1, 'o-', label='First 5')
-        ax.plot(times, y2, 's-', label='Last 5')
+        ns = ~sig  # not significant
 
-        # RED DOTS = NOT SIGNIFICANT (ensure visibility)
-        ns = ~sig
+        # =========================
+        # FIRST 5 (P11) STYLE
+        # =========================
+        ax.scatter(
+            times[ns],
+            y1[ns],
+            facecolors='C0',
+            edgecolors='C0',
+            s=40,
+            label='First 5 (ns)'
+        )
 
-        if np.any(ns):
-            ax.scatter(
-                times[ns],
-                y2[ns],
-                color='red',
-                s=40,
-                label='not significant',
-                zorder=5
-            )
+        ax.scatter(
+            times[sig],
+            y1[sig],
+            facecolors='white',
+            edgecolors='C0',
+            s=40,
+            label='First 5 (sig)'
+        )
+
+        # =========================
+        # LAST 5 (P38) STYLE
+        # =========================
+        ax.scatter(
+            times[ns],
+            y2[ns],
+            facecolors='C1',
+            edgecolors='C1',
+            s=40,
+            label='Last 5 (ns)'
+        )
+
+        ax.scatter(
+            times[sig],
+            y2[sig],
+            facecolors='white',
+            edgecolors='C1',
+            s=40,
+            label='Last 5 (sig)'
+        )
+
+        ax.set_title(f'Cell {cell_idx+1}')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('QC')
+        ax.legend()
+
+    for k in range(n_cells, len(axes)):
+        fig.delaxes(axes[k])
+
+    fig.suptitle(f'{fname} Permutation Test (per time point)')
+    plt.tight_layout()
+    plt.show()
+    
+#%%
+# =========================
+# PLOTTING (SIGNIFICANCE STYLE MARKERS)
+# solid = significant, hollow = not significant
+# =========================
+
+for fnum, fname in enumerate(fnames):
+
+    n_cells = len(perm_results[fnum])
+
+    ncols = 4
+    nrows = int(np.ceil(n_cells / ncols))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5*ncols, 4*nrows))
+    axes = np.atleast_1d(axes).ravel()
+
+    for cell_idx in range(n_cells):
+
+        ax = axes[cell_idx]
+        r = perm_results[fnum][cell_idx]
+
+        y1 = r["first_mean"]
+        y2 = r["last_mean"]
+        sig = r["sig"]
+
+        ns = ~sig  # not significant
+
+        # =========================
+        # FIRST 5 (P11)
+        # =========================
+        ax.scatter(
+            times[sig],
+            y1[sig],
+            facecolors='C0',
+            edgecolors='C0',
+            s=40,
+            label='First 5 (sig)'
+        )
+
+        ax.scatter(
+            times[ns],
+            y1[ns],
+            facecolors='white',
+            edgecolors='C0',
+            s=40,
+            label='First 5 (ns)'
+        )
+
+        # =========================
+        # LAST 5 (P38)
+        # =========================
+        ax.scatter(
+            times[sig],
+            y2[sig],
+            facecolors='C1',
+            edgecolors='C1',
+            s=40,
+            label='Last 5 (sig)'
+        )
+
+        ax.scatter(
+            times[ns],
+            y2[ns],
+            facecolors='white',
+            edgecolors='C1',
+            s=40,
+            label='Last 5 (ns)'
+        )
 
         ax.set_title(f'Cell {cell_idx+1}')
         ax.set_xlabel('Time')
