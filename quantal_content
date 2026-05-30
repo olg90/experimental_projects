@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 import pandas as pd
 import os
@@ -151,6 +152,13 @@ ffs = np.array(ffs, dtype=object)
 # =============================================================================
 
 #%% Plot traces + mean + FF for one dataset
+
+mbounds=np.load('mbounds.npy', allow_pickle=True)
+ffbounds=np.load('ffbounds.npy', allow_pickle=True)
+
+means=np.load('means.npy', allow_pickle=True)
+ffs=np.load('ffs.npy', allow_pickle=True)
+
 
 fnum = 0   # file number
 dnum = 1   # dataset number
@@ -2366,3 +2374,1629 @@ def on_pick(event):
 fig.canvas.mpl_connect("pick_event", on_pick)
 
 plt.show()
+
+#%% Meeting 2 - Normalizing the datasets to the first data point across all repeats
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+def get_pi_occupied(pi, pr, pd):
+    return pi*(1-pr)+(1-pi*(1-pr))*pd
+
+def bootstrap(data, metric, n_bootstraps=1000, percentiles=(2.5, 97.5)):
+    data = np.asarray(data)
+    n = len(data)
+    vals = [
+        metric(np.random.choice(data, size=n, replace=True))
+        for _ in range(n_bootstraps)
+    ]
+    return metric(data), np.percentile(vals, percentiles)
+
+def get_FF(x):
+    return np.var(x)/np.mean(x)
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# full data (unchanged)
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0]
+
+# stripped data (remove first row + first column)
+data1 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel1.values()
+])
+
+data2 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel2.values()
+])
+
+data=[data1, data2]
+
+# access:
+# fulldata1[sheet][row][col] -> original
+# data1[sheet][row][col]     -> stripped
+
+# =============================================================================
+# plt.title('Dataset {}'.format(dnum))
+# plt.scatter(times, data1[dnum][:, 2])
+# plt.xlabel('Time (sec)')
+# plt.ylabel('Quantal content')
+# =============================================================================
+
+fnum=0 # 0-P11, 1-P32
+dnum=0 # 0-12 for fnum=0, 0-8 for fnum=1
+
+plt.figure()
+plt.title('{}, dataset {}'.format(fnames[fnum], dnum))
+for i in range(data[fnum][dnum].shape[1]):
+    plt.plot(data[fnum][dnum][:, i]/data[fnum][dnum][:, i][0], linewidth=1, label='{}'.format(i), alpha=0.5)
+plt.xlabel('Time (sec)')
+plt.ylabel('Quantal content')
+plt.legend()
+
+
+ffs=[]
+for i in range(data[fnum][dnum].shape[0]):
+    ffs.append(get_FF(data[fnum][dnum][i, :]))
+
+M1 = 100 # number of occuiped docking sites in the first pool
+M2 = 100 # number of occupied docking sites in the second pool
+
+pr1=0.8 # release probability in 1st pool
+pr2=pr1 # release probability in 2nd pool
+
+p1=1 # probability a docking site is occupied in the first pool before AP arrival
+p2=1 # probability a docking site is occupied in the second pool before AP arrival
+
+pd1=1 # probability docking site is reoccupied in the first pool
+pd2=1 # NEEDS TO BE A FUNCTION, probability docking site is reoccupied in the second pool
+
+
+# =============================================================================
+# plt.figure()
+# plt.plot(data[fnum][dnum][:, 0], linewidth=1, label='{}'.format(i))
+# plt.plot(data[fnum][dnum][:, 10], linewidth=1, label='{}'.format(i))
+# # plt.plot(data[fnum][dnum][:, 17], linewidth=0.5, label='{}'.format(i))
+# # plt.plot(data[fnum][dnum][:, 19], linewidth=0.5, label='{}'.format(i))
+# =============================================================================
+
+#%% Meeting 2 - Correct QC normalization + pure averaging (P11 vs P38)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# (cell, time, repeat)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+# -----------------------------
+# normalize each repeat by its first value
+# then average repeats -> cell trace
+# then average cells -> condition trace
+# -----------------------------
+
+norm_cells = []
+
+for fnum in [0, 1]:  # P11, P38
+    cell_traces = []
+
+    for dnum in range(data[fnum].shape[0]):  # cells
+        cell = data[fnum][dnum]  # time x repeats
+
+        norm_repeats = np.zeros_like(cell, dtype=float)
+
+        for r in range(cell.shape[1]):
+            trace = cell[:, r]
+            base = trace[0]
+
+            if base != 0:
+                norm_repeats[:, r] = trace / base
+            else:
+                norm_repeats[:, r] = trace
+
+        # average across repeats (within cell)
+        cell_mean = np.mean(norm_repeats, axis=1)
+
+        cell_traces.append(cell_mean)
+
+    norm_cells.append(np.array(cell_traces))
+
+# -----------------------------
+# average across cells ONLY (no SEM, no std)
+# -----------------------------
+
+p11_mean = np.mean(norm_cells[0], axis=0)
+p38_mean = np.mean(norm_cells[1], axis=0)
+
+# -----------------------------
+# plot
+# -----------------------------
+
+plt.figure()
+
+plt.plot(times, p11_mean, label='P11', linewidth=2)
+plt.plot(times, p38_mean, label='P38', linewidth=2)
+
+plt.xlabel('Time (sec)')
+plt.ylabel('Normalized QC')
+plt.title('P11 vs P38 QC dynamics (repeat-normalized, cell-averaged)')
+plt.legend()
+
+plt.show()
+
+#%% Meeting 2 - QC normalization + all repeats + population mean (P11 vs P38)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# (cell, time, repeat)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+# -----------------------------
+# normalize each repeat, store everything
+# -----------------------------
+
+all_norm_repeats = [[], []]   # [P11, P38]
+cell_means = [[], []]         # [P11, P38]
+
+for fnum in [0, 1]:  # P11, P38
+
+    for dnum in range(data[fnum].shape[0]):  # cells
+        cell = data[fnum][dnum]  # time x repeats
+
+        norm_repeats = np.zeros_like(cell, dtype=float)
+
+        for r in range(cell.shape[1]):
+            trace = cell[:, r]
+            base = trace[0]
+
+            if base != 0:
+                norm_repeats[:, r] = trace / base
+            else:
+                norm_repeats[:, r] = trace
+
+        # store ALL normalized repeats (for plotting)
+        for r in range(norm_repeats.shape[1]):
+            all_norm_repeats[fnum].append(norm_repeats[:, r])
+
+        # average repeats within cell
+        cell_means[fnum].append(np.mean(norm_repeats, axis=1))
+
+    cell_means[fnum] = np.array(cell_means[fnum])
+
+# -----------------------------
+# plot ALL normalized repeats
+# -----------------------------
+
+plt.figure()
+
+for r in all_norm_repeats[0]:
+    plt.plot(times, r, color='blue', alpha=0.15)
+
+for r in all_norm_repeats[1]:
+    plt.plot(times, r, color='orange', alpha=0.15)
+
+plt.xlabel('Time (sec)')
+plt.ylabel('Normalized QC (per repeat)')
+plt.title('All normalized repeats (P11 vs P38)')
+plt.show()
+
+# -----------------------------
+# plot cell-averaged traces
+# -----------------------------
+
+p11_mean = np.mean(cell_means[0], axis=0)
+p38_mean = np.mean(cell_means[1], axis=0)
+
+plt.figure()
+
+plt.plot(times, p11_mean, label='P11', linewidth=2)
+plt.plot(times, p38_mean, label='P38', linewidth=2)
+
+plt.xlabel('Time (sec)')
+plt.ylabel('Normalized QC')
+plt.title('Cell-averaged QC dynamics (P11 vs P38)')
+plt.legend()
+
+plt.show()
+
+#%% Meeting 2 - QC normalization + per-cell subplots (P11 vs P38)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        trace = cell[:, r]
+        base = trace[0]
+        norm[:, r] = trace / base if base != 0 else trace
+    return norm
+
+# -----------------------------
+# P11 subplots
+# -----------------------------
+n_cells_p11 = data[0].shape[0]
+cols = 4
+rows = int(np.ceil(n_cells_p11 / cols))
+
+plt.figure(figsize=(15, 3 * rows))
+plt.suptitle('P11 - Each cell (normalized repeats + mean)', y=1.02)
+
+for i in range(n_cells_p11):
+    cell = data[0][i]
+    norm = normalize_repeats(cell)
+    mean_trace = np.mean(norm, axis=1)
+
+    plt.subplot(rows, cols, i + 1)
+    
+    # plot all repeats faint
+    for r in range(norm.shape[1]):
+        plt.plot(times, norm[:, r], alpha=0.2)
+
+    # plot cell mean
+    plt.plot(times, mean_trace, color='black', linewidth=2)
+
+    plt.title(f'Cell {i}')
+    plt.xticks([])
+    plt.yticks([])
+
+plt.tight_layout()
+plt.show()
+
+# -----------------------------
+# P38 subplots
+# -----------------------------
+n_cells_p38 = data[1].shape[0]
+cols = 4
+rows = int(np.ceil(n_cells_p38 / cols))
+
+plt.figure(figsize=(15, 3 * rows))
+plt.suptitle('P38 - Each cell (normalized repeats + mean)', y=1.02)
+
+for i in range(n_cells_p38):
+    cell = data[1][i]
+    norm = normalize_repeats(cell)
+    mean_trace = np.mean(norm, axis=1)
+
+    plt.subplot(rows, cols, i + 1)
+
+    for r in range(norm.shape[1]):
+        plt.plot(times, norm[:, r], alpha=0.2)
+
+    plt.plot(times, mean_trace, color='black', linewidth=2)
+
+    plt.title(f'Cell {i}')
+    plt.xticks([])
+    plt.yticks([])
+
+plt.tight_layout()
+plt.show()
+
+#%% QC normalization + per-cell plots + summary overlays (P11 vs P38)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        trace = cell[:, r]
+        base = trace[0]
+        norm[:, r] = trace / base if base != 0 else trace
+    return norm
+
+
+def process_and_plot_group(group_data, title):
+    n_cells = group_data.shape[0]
+
+    cols = 4
+    rows = int(np.ceil(n_cells / cols))
+
+    all_cell_means = []
+
+    plt.figure(figsize=(15, 3 * rows))
+    plt.suptitle(f'{title} - each cell (repeats + mean)', y=1.02)
+
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+
+        cell_mean = np.mean(norm, axis=1)
+        all_cell_means.append(cell_mean)
+
+        plt.subplot(rows, cols, i + 1)
+
+        # all repeats
+        for r in range(norm.shape[1]):
+            plt.plot(times, norm[:, r], alpha=0.2)
+
+        # cell mean
+        plt.plot(times, cell_mean, color='black', linewidth=2)
+
+        plt.title(f'Cell {i}')
+        plt.xticks([])
+        plt.yticks([])
+
+    plt.tight_layout()
+    plt.show()
+
+    all_cell_means = np.array(all_cell_means)
+
+    # -----------------------------
+    # overlay of all cell means
+    # -----------------------------
+    plt.figure()
+    for c in all_cell_means:
+        plt.plot(times, c, alpha=0.4)
+
+    plt.title(f'{title} - all cell means')
+    plt.xlabel('Time (sec)')
+    plt.ylabel('Normalized QC')
+    plt.show()
+
+    # -----------------------------
+    # mean of means
+    # -----------------------------
+    mean_of_means = np.mean(all_cell_means, axis=0)
+
+    plt.figure()
+    plt.plot(times, mean_of_means, linewidth=2)
+    plt.title(f'{title} - mean of cell means')
+    plt.xlabel('Time (sec)')
+    plt.ylabel('Normalized QC')
+    plt.show()
+
+    return all_cell_means
+
+
+# -----------------------------
+# run both groups
+# -----------------------------
+
+p11_means = process_and_plot_group(data[0], 'P11')
+p38_means = process_and_plot_group(data[1], 'P38')
+
+#%%
+
+#%% QC normalization + per-cell plots + aligned summary subplot (P11 vs P38)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        trace = cell[:, r]
+        base = trace[0]
+        norm[:, r] = trace / base if base != 0 else trace
+    return norm
+
+
+def process_and_plot_group(group_data, title):
+
+    n_cells = group_data.shape[0]
+    cols = 4
+    rows_cells = int(np.ceil(n_cells / cols))
+
+    all_cell_means = []
+
+    # compute cell means
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+        all_cell_means.append(np.mean(norm, axis=1))
+
+    all_cell_means = np.array(all_cell_means)
+    mean_of_means = np.mean(all_cell_means, axis=0)
+
+    # +2 extra rows: one for all means, one for mean of means (combined later)
+    total_rows = rows_cells + 1
+
+    plt.figure(figsize=(15, 3 * total_rows))
+    plt.suptitle(f'{title} - cells + summary', y=1.02)
+
+    # -----------------------------
+    # cell subplots
+    # -----------------------------
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+
+        ax = plt.subplot(total_rows, cols, i + 1)
+
+        for r in range(norm.shape[1]):
+            ax.plot(times, norm[:, r], alpha=0.2)
+
+        ax.plot(times, all_cell_means[i], color='black', linewidth=2)
+
+        ax.set_title(f'Cell {i}')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    # -----------------------------
+    # combined summary subplot (bottom row spanning full width)
+    # -----------------------------
+    ax_sum = plt.subplot(total_rows, 1, rows_cells + 1)
+
+    # all cell means
+    for c in all_cell_means:
+        ax_sum.plot(times, c, alpha=0.4)
+
+    # mean of means
+    ax_sum.plot(times, mean_of_means, color='black', linewidth=3, label='mean of means')
+
+    ax_sum.set_title(f'{title} - all cell means + mean of means')
+    ax_sum.set_xlabel('Time (sec)')
+    ax_sum.set_ylabel('Normalized QC')
+    ax_sum.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return all_cell_means
+
+
+# -----------------------------
+# run both groups
+# -----------------------------
+
+p11_means = process_and_plot_group(data[0], 'P11')
+p38_means = process_and_plot_group(data[1], 'P38')
+
+
+#%% QC normalization + per-cell plots + summary as LAST GRID SUBPLOT (P11 vs P38)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        trace = cell[:, r]
+        base = trace[0]
+        norm[:, r] = trace / base if base != 0 else trace
+    return norm
+
+
+def process_and_plot_group(group_data, title):
+
+    n_cells = group_data.shape[0]
+    cols = 4
+
+    # +1 extra subplot slot for summary (same grid)
+    rows = int(np.ceil((n_cells + 1) / cols))
+
+    all_cell_means = []
+
+    # compute cell means first
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+        all_cell_means.append(np.mean(norm, axis=1))
+
+    all_cell_means = np.array(all_cell_means)
+    mean_of_means = np.mean(all_cell_means, axis=0)
+
+    plt.figure(figsize=(15, 3 * rows))
+    plt.suptitle(f'{title} - cells + summary', y=1.02)
+
+    # -----------------------------
+    # cell subplots
+    # -----------------------------
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+
+        ax = plt.subplot(rows, cols, i + 1)
+
+        for r in range(norm.shape[1]):
+            ax.plot(times, norm[:, r], alpha=0.2)
+
+        ax.plot(times, all_cell_means[i], color='black', linewidth=2)
+
+        ax.set_title(f'Cell {i}')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    # -----------------------------
+    # summary subplot (LAST SLOT in SAME GRID)
+    # -----------------------------
+    ax_sum = plt.subplot(rows, cols, n_cells + 1)
+
+    for c in all_cell_means:
+        ax_sum.plot(times, c, alpha=0.4)
+
+    ax_sum.plot(times, mean_of_means, color='black', linewidth=3)
+
+    ax_sum.set_title('All cell means + mean of means')
+    ax_sum.set_xticks([])
+    ax_sum.set_yticks([])
+
+    plt.tight_layout()
+    plt.show()
+
+    return all_cell_means
+
+
+# -----------------------------
+# run both groups
+# -----------------------------
+
+p11_means = process_and_plot_group(data[0], 'P11')
+p38_means = process_and_plot_group(data[1], 'P38')
+
+#%% QC normalization + per-cell plots + full legend in summary subplot (P11 vs P38)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        trace = cell[:, r]
+        base = trace[0]
+        norm[:, r] = trace / base if base != 0 else trace
+    return norm
+
+
+def process_and_plot_group(group_data, title):
+
+    n_cells = group_data.shape[0]
+    cols = 4
+    rows = int(np.ceil((n_cells + 1) / cols))
+
+    all_cell_means = []
+
+    # compute cell means
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+        all_cell_means.append(np.mean(norm, axis=1))
+
+    all_cell_means = np.array(all_cell_means)
+    mean_of_means = np.mean(all_cell_means, axis=0)
+
+    plt.figure(figsize=(15, 3 * rows))
+    plt.suptitle(f'{title} - cells + summary', y=1.02)
+
+    # -----------------------------
+    # cell subplots
+    # -----------------------------
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+
+        ax = plt.subplot(rows, cols, i + 1)
+
+        for r in range(norm.shape[1]):
+            ax.plot(times, norm[:, r], alpha=0.2)
+
+        ax.plot(times, all_cell_means[i], color='black', linewidth=2)
+
+        ax.set_title(f'Cell {i+1}')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    # -----------------------------
+    # summary subplot (LAST SLOT)
+    # -----------------------------
+    ax_sum = plt.subplot(rows, cols, n_cells + 1)
+
+    # plot ALL cell means WITH labels
+    for i, c in enumerate(all_cell_means):
+        ax_sum.plot(times, c, alpha=0.5, label=f'cell {i+1}')
+
+    # mean of means
+    ax_sum.plot(times, mean_of_means, color='black', linewidth=3, label='mean of means')
+
+    ax_sum.set_title('All cell means + mean of means')
+    ax_sum.set_xticks([])
+    ax_sum.set_yticks([])
+
+    ax_sum.legend(fontsize=6, ncol=2)
+
+    plt.tight_layout()
+    plt.show()
+
+    return all_cell_means
+
+
+# -----------------------------
+# run both groups
+# -----------------------------
+
+p11_means = process_and_plot_group(data[0], 'P11')
+p38_means = process_and_plot_group(data[1], 'P38')
+
+#%% QC normalization + per-cell plots (main grid) + summary (separate window)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        trace = cell[:, r]
+        base = trace[0]
+        norm[:, r] = trace / base if base != 0 else trace
+    return norm
+
+
+def process_and_plot_group(group_data, title):
+
+    n_cells = group_data.shape[0]
+    cols = 4
+    rows = int(np.ceil((n_cells + 1) / cols))
+
+    all_cell_means = []
+
+    # compute cell means
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+        all_cell_means.append(np.mean(norm, axis=1))
+
+    all_cell_means = np.array(all_cell_means)
+    mean_of_means = np.mean(all_cell_means, axis=0)
+
+    # -----------------------------
+    # MAIN GRID (cells only)
+    # -----------------------------
+    plt.figure(figsize=(15, 3 * rows))
+    plt.suptitle(f'{title} - cells', y=1.02)
+
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+
+        ax = plt.subplot(rows, cols, i + 1)
+
+        for r in range(norm.shape[1]):
+            ax.plot(times, norm[:, r], alpha=0.2)
+
+        ax.plot(times, all_cell_means[i], color='black', linewidth=2)
+
+        ax.set_title(f'Cell {i+1}')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.tight_layout()
+    plt.show()
+
+    # -----------------------------
+    # SEPARATE WINDOW (summary)
+    # -----------------------------
+    plt.figure(figsize=(8, 5))
+    ax_sum = plt.gca()
+
+    for i, c in enumerate(all_cell_means):
+        ax_sum.plot(times, c, alpha=0.5, label=f'cell {i+1}')
+
+    ax_sum.plot(times, mean_of_means, color='black', linewidth=3, label='mean of means')
+
+    ax_sum.set_title(f'{title} - all cell means + mean of means')
+    ax_sum.set_xlabel('Time (sec)')
+    ax_sum.set_ylabel('Normalized QC')
+
+    ax_sum.legend(fontsize=6, ncol=2)
+
+    plt.tight_layout()
+    plt.show()
+
+    return all_cell_means
+
+
+# -----------------------------
+# run both groups
+# -----------------------------
+
+p11_means = process_and_plot_group(data[0], 'P11')
+p38_means = process_and_plot_group(data[1], 'P38')
+
+#%%
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+def get_pi_occupied(pi, pr, pd):
+    return pi*(1-pr)+(1-pi*(1-pr))*pd
+
+def bootstrap(data, metric, n_bootstraps=1000, percentiles=(2.5, 97.5)):
+    data = np.asarray(data)
+    n = len(data)
+    vals = [
+        metric(np.random.choice(data, size=n, replace=True))
+        for _ in range(n_bootstraps)
+    ]
+    return metric(data), np.percentile(vals, percentiles)
+
+def get_FF(x):
+    return np.var(x)/np.mean(x)
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+# full data (unchanged)
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0]
+
+# stripped data (remove first row + first column)
+data1 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel1.values()
+])
+
+data2 = np.array([
+    df.to_numpy()[1:, 1:]
+    for df in excel2.values()
+])
+
+data=[data1, data2]
+
+# access:
+# fulldata1[sheet][row][col] -> original
+# data1[sheet][row][col]     -> stripped
+
+# =============================================================================
+# plt.title('Dataset {}'.format(dnum))
+# plt.scatter(times, data1[dnum][:, 2])
+# plt.xlabel('Time (sec)')
+# plt.ylabel('Quantal content')
+# =============================================================================
+
+fnum=0 # 0-P11, 1-P32
+dnum=0 # 0-12 for fnum=0, 0-8 for fnum=1
+
+plt.figure()
+plt.title('{}, dataset {}'.format(fnames[fnum], dnum))
+for i in range(data[fnum][dnum].shape[1]):
+    plt.plot(data[fnum][dnum][:, i], linewidth=1, label='{}'.format(i), alpha=0.5)
+plt.xlabel('Time (sec)')
+plt.ylabel('Quantal content')
+plt.legend()
+
+
+ffs=[]
+for i in range(data[fnum][dnum].shape[0]):
+    ffs.append(get_FF(data[fnum][dnum][i, :]))
+
+M1 = 100 # number of occuiped docking sites in the first pool
+M2 = 100 # number of occupied docking sites in the second pool
+
+pr1=0.8 # release probability in 1st pool
+pr2=pr1 # release probability in 2nd pool
+
+p1=1 # probability a docking site is occupied in the first pool before AP arrival
+p2=1 # probability a docking site is occupied in the second pool before AP arrival
+
+pd1=1 # probability docking site is reoccupied in the first pool
+pd2=1 # NEEDS TO BE A FUNCTION, probability docking site is reoccupied in the second pool
+
+x=[]
+ind=0
+for i,ptype in enumerate(data):
+    x1=[]#bootstrap data
+    for j,cell in enumerate(ptype):
+        first5=(cell.T)[:5]
+        last5=(cell.T)[-5:]
+        x2=[]
+        for k in range(len(first5[0])):
+            ind+=1
+            print(i, len(data), j, len(cell), k, len(first5[0]))
+            mean1, bd1 = bootstrap(first5[:, k], np.mean)
+            mean2, bd2 = bootstrap(last5[:, k], np.mean)
+            x2.append([mean1, bd1, mean2, bd2])
+        x1.append(x2)
+    x.append(x1)
+        
+            
+
+
+# =============================================================================
+# plt.figure()
+# plt.plot(data[fnum][dnum][:, 0], linewidth=1, label='{}'.format(i))
+# plt.plot(data[fnum][dnum][:, 10], linewidth=1, label='{}'.format(i))
+# # plt.plot(data[fnum][dnum][:, 17], linewidth=0.5, label='{}'.format(i))
+# # plt.plot(data[fnum][dnum][:, 19], linewidth=0.5, label='{}'.format(i))
+# =============================================================================
+
+#%%
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = [
+    '100Hz_1s_20_repeats_P11',
+    '100Hz_1s_20_repeats_P38'
+]
+
+# =============================================================================
+# Load Excel files
+# =============================================================================
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0].astype(float)
+
+# Remove first row and first column
+data1 = np.array([
+    df.to_numpy()[1:, 1:].astype(float)
+    for df in excel1.values()
+])
+
+data2 = np.array([
+    df.to_numpy()[1:, 1:].astype(float)
+    for df in excel2.values()
+])
+
+# data[file][cell][timepoint, repeat]
+data = [data1, data2]
+
+# =============================================================================
+# Bootstrap helper
+# =============================================================================
+
+def bootstrap_mean_ci(x, n_boot=10000):
+
+    x = np.asarray(x, dtype=float)
+
+    boots = np.empty(n_boot)
+
+    for i in range(n_boot):
+
+        sample = np.random.choice(
+            x,
+            size=len(x),
+            replace=True
+        )
+
+        boots[i] = np.mean(sample)
+
+    mean = np.mean(x)
+
+    lower, upper = np.percentile(
+        boots,
+        [2.5, 97.5]
+    )
+
+    return mean, lower, upper
+
+# =============================================================================
+# Count total work for progress bar
+# =============================================================================
+
+total_operations = 0
+
+for dataset in data:
+    for cell in dataset:
+
+        n_time = cell.shape[0]
+
+        # first5 bootstrap + last5 bootstrap
+        total_operations += n_time * 2
+
+# =============================================================================
+# Calculate bootstrap statistics
+# =============================================================================
+
+results = []
+
+print(f'Total bootstrap calculations: {total_operations}')
+
+with tqdm(total=total_operations,
+          desc='Overall Progress',
+          unit='bootstrap') as pbar:
+
+    for dataset_idx, dataset in enumerate(data):
+
+        dataset_results = []
+
+        for cell_idx, cell in enumerate(dataset):
+
+            print(
+                f'\nProcessing {fnames[dataset_idx]} '
+                f'Cell {cell_idx+1}/{len(dataset)}'
+            )
+
+            first5 = cell[:, :5]
+            last5 = cell[:, -5:]
+
+            n_time = cell.shape[0]
+
+            first_mean = np.zeros(n_time)
+            first_low = np.zeros(n_time)
+            first_high = np.zeros(n_time)
+
+            last_mean = np.zeros(n_time)
+            last_low = np.zeros(n_time)
+            last_high = np.zeros(n_time)
+
+            for t in range(n_time):
+
+                # -----------------------------------------
+                # First 5 repeats
+                # -----------------------------------------
+
+                m, lo, hi = bootstrap_mean_ci(
+                    first5[t, :]
+                )
+
+                first_mean[t] = m
+                first_low[t] = lo
+                first_high[t] = hi
+
+                pbar.update(1)
+
+                # -----------------------------------------
+                # Last 5 repeats
+                # -----------------------------------------
+
+                m, lo, hi = bootstrap_mean_ci(
+                    last5[t, :]
+                )
+
+                last_mean[t] = m
+                last_low[t] = lo
+                last_high[t] = hi
+
+                pbar.update(1)
+
+            dataset_results.append(
+                {
+                    "first_mean": first_mean,
+                    "first_low": first_low,
+                    "first_high": first_high,
+                    "last_mean": last_mean,
+                    "last_low": last_low,
+                    "last_high": last_high,
+                }
+            )
+
+        results.append(dataset_results)
+
+# =============================================================================
+# Plot P11 and P38
+# =============================================================================
+
+for fnum, fname in enumerate(fnames):
+
+    n_cells = len(results[fnum])
+
+    ncols = 4
+    nrows = int(np.ceil(n_cells / ncols))
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(5*ncols, 4*nrows),
+        sharex=True,
+        sharey=True
+    )
+
+    axes = np.atleast_1d(axes).ravel()
+
+    for cell_idx in range(n_cells):
+
+        ax = axes[cell_idx]
+
+        r = results[fnum][cell_idx]
+
+        # ==================================================
+        # First 5 repeats
+        # ==================================================
+
+        y = r["first_mean"]
+
+        yerr = np.vstack([
+            y - r["first_low"],
+            r["first_high"] - y
+        ])
+
+        ax.errorbar(
+            times,
+            y,
+            yerr=yerr,
+            fmt='o-',
+            capsize=3,
+            linewidth=1,
+            markersize=3,
+            label='First 5'
+        )
+
+        # ==================================================
+        # Last 5 repeats
+        # ==================================================
+
+        y = r["last_mean"]
+
+        yerr = np.vstack([
+            y - r["last_low"],
+            r["last_high"] - y
+        ])
+
+        ax.errorbar(
+            times,
+            y,
+            yerr=yerr,
+            fmt='s-',
+            capsize=3,
+            linewidth=1,
+            markersize=3,
+            label='Last 5'
+        )
+
+        ax.set_title(f'Cell {cell_idx + 1}')
+
+        if cell_idx == 0:
+            ax.legend()
+
+    # remove empty subplots
+    for k in range(n_cells, len(axes)):
+        fig.delaxes(axes[k])
+
+    fig.suptitle(
+        f'{fname}\nMean QC ± 95% Bootstrap CI\nFirst 5 vs Last 5 Repeats',
+        fontsize=14
+    )
+
+    fig.supxlabel('Time')
+    fig.supylabel('Quantal Content')
+
+    plt.tight_layout()
+    plt.show()
+    
+    
+    #%%
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = [
+    '100Hz_1s_20_repeats_P11',
+    '100Hz_1s_20_repeats_P38'
+]
+
+
+# =============================================================================
+# Load Excel files
+# =============================================================================
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0].astype(float)
+
+data1 = np.array([
+    df.to_numpy()[1:, 1:].astype(float)
+    for df in excel1.values()
+])
+
+data2 = np.array([
+    df.to_numpy()[1:, 1:].astype(float)
+    for df in excel2.values()
+])
+
+data = [data1, data2]
+
+# =============================================================================
+# Bootstrap
+# =============================================================================
+
+def bootstrap_mean_ci(x, n_boot=10000):
+
+    x = np.asarray(x, dtype=float)
+
+    boots = np.empty(n_boot)
+
+    for i in range(n_boot):
+
+        sample = np.random.choice(
+            x,
+            size=len(x),
+            replace=True
+        )
+
+        boots[i] = np.mean(sample)
+
+    mean = np.mean(x)
+
+    lower, upper = np.percentile(
+        boots,
+        [2.5, 97.5]
+    )
+
+    return mean, lower, upper
+
+# =============================================================================
+# Progress count
+# =============================================================================
+
+total_operations = sum(cell.shape[0] * 2 for dataset in data for cell in dataset)
+
+results = []
+
+print(f'Total bootstrap calculations: {total_operations}')
+
+with tqdm(total=total_operations, desc='Overall Progress', unit='bootstrap') as pbar:
+
+    for dataset_idx, dataset in enumerate(data):
+
+        dataset_results = []
+
+        for cell_idx, cell in enumerate(dataset):
+
+            print(f'\nProcessing {fnames[dataset_idx]} Cell {cell_idx + 1}/{len(dataset)}')
+
+            first5 = cell[:, :5]
+            last5 = cell[:, -5:]
+
+            n_time = cell.shape[0]
+
+            first_mean = np.zeros(n_time)
+            first_low = np.zeros(n_time)
+            first_high = np.zeros(n_time)
+
+            last_mean = np.zeros(n_time)
+            last_low = np.zeros(n_time)
+            last_high = np.zeros(n_time)
+
+            for t in range(n_time):
+
+                m, lo, hi = bootstrap_mean_ci(first5[t, :])
+                first_mean[t], first_low[t], first_high[t] = m, lo, hi
+                pbar.update(1)
+
+                m, lo, hi = bootstrap_mean_ci(last5[t, :])
+                last_mean[t], last_low[t], last_high[t] = m, lo, hi
+                pbar.update(1)
+
+            dataset_results.append({
+                "first_mean": first_mean,
+                "first_low": first_low,
+                "first_high": first_high,
+                "last_mean": last_mean,
+                "last_low": last_low,
+                "last_high": last_high,
+            })
+
+        results.append(dataset_results)
+
+#%%
+
+# =========================
+# GLOBAL STYLE CONTROLS
+# =========================
+a1 = 1#0.3   # alpha for first 5 repeats
+a2 = 1#0.3   # alpha for last 5 repeats
+
+for fnum, fname in enumerate(fnames):
+
+    n_cells = len(results[fnum])
+
+    ncols = 4
+    nrows = int(np.ceil(n_cells / ncols))
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(5*ncols, 4*nrows)
+    )
+
+    axes = np.atleast_1d(axes).ravel()
+
+    for cell_idx in range(n_cells):
+
+        ax = axes[cell_idx]
+
+        r = results[fnum][cell_idx]
+
+        # -------------------
+        # First 5 repeats
+        # -------------------
+        y1 = r["first_mean"]
+        y1_low = r["first_low"]
+        y1_high = r["first_high"]
+        yerr1 = np.vstack([y1 - y1_low, y1_high - y1])
+
+        # -------------------
+        # Last 5 repeats
+        # -------------------
+        y2 = r["last_mean"]
+        y2_low = r["last_low"]
+        y2_high = r["last_high"]
+        yerr2 = np.vstack([y2 - y2_low, y2_high - y2])
+
+        # -------------------
+        # OVERLAP DETECTION
+        # -------------------
+        overlap_low = np.maximum(y1_low, y2_low)
+        overlap_high = np.minimum(y1_high, y2_high)
+        overlap_mask = overlap_high >= overlap_low
+
+        if np.any(overlap_mask):
+            overlap_center = 0.5 * (overlap_low + overlap_high)
+            overlap_percent = 100 * np.mean(overlap_mask)
+        else:
+            overlap_center = None
+            overlap_percent = 0.0
+
+        # -------------------
+        # PLOTS (NO CONNECTING LINES)
+        # -------------------
+        ax.errorbar(
+            times, y1, yerr=yerr1,
+            fmt='o',              # no line
+            capsize=3,
+            linewidth=1,
+            markersize=3,
+            alpha=a1,
+            label='First 5'
+        )
+
+        ax.errorbar(
+            times, y2, yerr=yerr2,
+            fmt='s',              # no line
+            capsize=3,
+            linewidth=1,
+            markersize=3,
+            alpha=a2,
+            label='Last 5'
+        )
+
+        if np.any(overlap_mask):
+            ax.scatter(
+                times[overlap_mask],
+                overlap_center[overlap_mask],
+                color='red',
+                s=10,
+                zorder=5,
+                label=f'Overlap ({overlap_percent:.1f}%)'
+            )
+
+        ax.set_title(f'Cell {cell_idx + 1}', fontsize=15)
+        ax.set_xlabel('Time', fontsize=15)
+        ax.set_ylabel('Quantal Content', fontsize=15)
+        ax.tick_params(axis='both', labelsize=15)
+
+        ax.legend(fontsize=15)
+
+    for k in range(n_cells, len(axes)):
+        fig.delaxes(axes[k])
+
+    fig.suptitle(
+        f'{fname}\nMean QC ± 95% Bootstrap CI\nFirst 5 vs Last 5 Repeats',
+        fontsize=16
+    )
+
+    plt.tight_layout()
+    plt.show()    
+    
+#%% permutations (analysis + plotting FIXED)
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['P11', 'P38']
+
+# =========================
+# LOAD DATA
+# =========================
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:].astype(float) for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:].astype(float) for df in excel2.values()])
+
+data = [data1, data2]
+
+times = excel1[list(excel1.keys())[0]].to_numpy()[1:, 0].astype(float)
+
+# =========================
+# PERMUTATION TEST (FIXED)
+# =========================
+
+def perm_test(x, y, n_perm=5000):
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    obs = np.mean(x) - np.mean(y)
+
+    pooled = np.concatenate([x, y])
+    n = len(x)
+
+    count = 0
+
+    for _ in range(n_perm):
+
+        perm = np.random.permutation(pooled)
+
+        x_p = perm[:n]
+        y_p = perm[n:]
+
+        stat = np.mean(x_p) - np.mean(y_p)
+
+        if abs(stat) >= abs(obs):
+            count += 1
+
+    return count / n_perm
+
+
+# =========================
+# ANALYSIS + PLOTTING
+# =========================
+
+alpha = 0.05
+
+perm_results = []
+
+for fnum, fname in enumerate(fnames):
+
+    file_results = []
+
+    for cell_idx, cell in enumerate(data[fnum]):
+
+        first5 = cell[:, :5]
+        last5  = cell[:, -5:]
+
+        n_time = cell.shape[0]
+
+        pvals = np.zeros(n_time)
+        sig = np.zeros(n_time, dtype=bool)
+
+        first_mean = np.mean(first5, axis=1)
+        last_mean = np.mean(last5, axis=1)
+
+        for t in tqdm(range(n_time), desc=f'perm {fname} cell {cell_idx+1}'):
+
+            p = perm_test(first5[t, :], last5[t, :])
+
+            pvals[t] = p
+            sig[t] = p < alpha
+
+        file_results.append({
+            "pvals": pvals,
+            "sig": sig,
+            "first_mean": first_mean,
+            "last_mean": last_mean
+        })
+
+    perm_results.append(file_results)
+
+
+# =========================
+# PLOTTING (FIXED VISIBILITY)
+# =========================
+
+for fnum, fname in enumerate(fnames):
+
+    n_cells = len(perm_results[fnum])
+
+    ncols = 4
+    nrows = int(np.ceil(n_cells / ncols))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5*ncols, 4*nrows))
+    axes = np.atleast_1d(axes).ravel()
+
+    for cell_idx in range(n_cells):
+
+        ax = axes[cell_idx]
+        r = perm_results[fnum][cell_idx]
+
+        y1 = r["first_mean"]
+        y2 = r["last_mean"]
+        sig = r["sig"]
+
+        ax.plot(times, y1, 'o-', label='First 5')
+        ax.plot(times, y2, 's-', label='Last 5')
+
+        # RED DOTS = NOT SIGNIFICANT (ensure visibility)
+        ns = ~sig
+
+        if np.any(ns):
+            ax.scatter(
+                times[ns],
+                y2[ns],
+                color='red',
+                s=40,
+                label='not significant',
+                zorder=5
+            )
+
+        ax.set_title(f'Cell {cell_idx+1}')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('QC')
+        ax.legend()
+
+    for k in range(n_cells, len(axes)):
+        fig.delaxes(axes[k])
+
+    fig.suptitle(f'{fname} Permutation Test (per time point)')
+    plt.tight_layout()
+    plt.show()
