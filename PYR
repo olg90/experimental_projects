@@ -606,7 +606,7 @@ def sim(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m):
     print(Vinit)
     V[0] = Vinit
 
-    ratio = 0.3
+    ratio = 0#.3
     rfon = False
     rftimer = np.inf
     
@@ -657,7 +657,7 @@ def sima(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m, alpha, tauvth):
     V[0] = Vinit
     vth[0]=vt
 
-    ratio = 0.3
+    ratio = 0#.3
     rfon = False
     rftimer = np.inf
     
@@ -817,34 +817,129 @@ t_temp, temp= make_normalized_template(td, tr, ttemp, dt, strength)
 dir1=0
 dir2=0
 
-amplitudes = np.array(dlist[dir1])[:,0]  # or whichever you want
-strengths = np.linspace(1e-9, 10e-9, 20)
+# =============================================================================
+# amplitudes = np.array(dlist[dir1])[:,0]  # or whichever you want
+# strengths = np.linspace(1e-9, 10e-9, 20)
+# 
+# res = compute_fout_heatmap(
+#     dir1=dir1, dir2=dir2,
+#     amplitudes=amplitudes,
+#     strengths=strengths,
+#     tmax=tmax, dt=dt, rf=rf,
+#     V0=V0, vr=vr, gL=gL, vt=vt, C_m=C_m,
+#     alpha=alpha, tauvth=tauvth,
+#     tr=tr, td=td, ttemp=ttemp
+# )
+# 
+# # plot
+# plt.figure()
+# plt.imshow(res["fout_map"], aspect='auto', origin='lower',
+#            extent=[res["strengths"][0]*1e9, res["strengths"][-1]*1e9,
+#                    res["amplitudes"][0]*1e9, res["amplitudes"][-1]*1e9])
+# 
+# plt.colorbar(label='fout (Hz)')
+# plt.xlabel('Strength (nA)')
+# plt.ylabel('Amplitude (nA)')
+# plt.title(r'${} \rightarrow {}$'.format(dnames[dir1], dnames[dir2]))
+# plt.show()
+# =============================================================================
 
-res = compute_fout_heatmap(
-    dir1=dir1, dir2=dir2,
-    amplitudes=amplitudes,
-    strengths=strengths,
-    tmax=tmax, dt=dt, rf=rf,
-    V0=V0, vr=vr, gL=gL, vt=vt, C_m=C_m,
-    alpha=alpha, tauvth=tauvth,
-    tr=tr, td=td, ttemp=ttemp
-)
+# =============================================================================
+# # sim test
+# res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+# plt.plot(res[0])
+# plt.plot(res[2])
+# # plt.ylim([-0.08, -0.065])
+# # plt.xlim([0, 3000])
+# plt.show()
+# #%%
+# =============================================================================
 
-# plot
-plt.figure()
-plt.imshow(res["fout_map"], aspect='auto', origin='lower',
-           extent=[res["strengths"][0]*1e9, res["strengths"][-1]*1e9,
-                   res["amplitudes"][0]*1e9, res["amplitudes"][-1]*1e9])
-
-plt.colorbar(label='fout (Hz)')
-plt.xlabel('Strength (nA)')
-plt.ylabel('Amplitude (nA)')
-plt.title(r'${} \rightarrow {}$'.format(dnames[dir1], dnames[dir2]))
+foutslist=[]
+for i, dirtype in enumerate(range(3)):
+    alist=np.array(dlist[i])[:,0] # amplitude list input
+    fouts=[]
+    for a in alist:
+        Iext = geti(tmax, dt, a)
+        res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+        fouts.append(res[1])
+    foutslist.append(fouts)
+    
+for i in range(3):
+    plt.subplot(1,3,i+1)
+    alist=dlist[i][:,0]
+    plt.plot(alist*1e9, dlist[i][:, 1], label='experimental', marker='o')
+    plt.plot(alist*1e9, foutslist[i], label='simulation', marker='o', alpha=0.6)
+    # =============================================================================
+    # plt.plot(alist, data[:, 1], label='experimental', 
+    #             marker='o')
+    # plt.plot(alist, fouts, label='simulation', 
+    #          linewidth=1, alpha=0.8, marker='o')
+    # =============================================================================
+    
+    plt.ylabel('Output frequency')
+    plt.xlabel('Input current amplitude (nA)')
+    plt.plot([],[],' ', label='{}'.format(dirnames[i]))
+    plt.legend()
+    if i == 1:
+        plt.title('\nV0={}, C_m={}, v_r={}, gL={:.3g}, \nvt={}, tauvth={},alpha={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype], tauvth[0], alpha[dirtype][0]))
 plt.show()
 
+foutslist=[]
+for i, dirtype in enumerate(range(3)):
+    alist=np.array(dlist[i])[:,0] # amplitude list input
+    fouts=[]
+    for a in alist:
+        Iext = geti(tmax, dt, a)
+        res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+        fouts.append(res[1])
+    foutslist.append(fouts)
+#%%
+
+import matplotlib.pyplot as plt
+
+plt.rcParams.update({
+    'font.size': 15,
+    'axes.labelsize': 15,
+    'axes.titlesize': 15,
+    'xtick.labelsize': 15,
+    'ytick.labelsize': 15,
+})
+
+Iext = geti(tmax, dt, 0.08e-9)
+t_temp, temp = make_normalized_template(td, tr, ttemp, dt, strength)
+res = sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+out = generate_spike_train(len(res[0]), res[4], temp)
+res2 = sima(V0[dirtype], len(out), out, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+
+fig, ax = plt.subplots(4, 1, figsize=(6, 8))
+
+ax[0].plot(Iext)
+ax[0].set_xticks([])
+ax[0].set_ylabel('Input\ncurrent')
+
+ax[1].plot(res[0])
+ax[1].set_xticks([])
+ax[1].set_ylabel('Membrane\npotential')
+
+ax[2].plot(out)
+ax[2].set_xticks([])
+ax[2].set_ylabel('Input\nspikes')
+
+t = np.arange(len(res2[0])) * dt
+ax[3].plot(t, res2[0])
+ax[3].set_xlabel('Time (sec)')
+ax[3].set_ylabel('2nd neuron\noutput\nfrequency')
+
+# ensure tick params are also set
+for a in ax:
+    a.tick_params(labelsize=15)
+
+plt.tight_layout()
+plt.show()
 
 #%% 3 - calculate heatmap 
-strengths = np.linspace(1e-9, 5e-9, 20)
+strengths = np.linspace(0e-9, 1.5e-9, 20)
 
 outlist=np.zeros((3,3), dtype=object)
 for dir1 in range(3):
@@ -881,6 +976,1022 @@ for dir1 in range(3):
         ax[dir1, dir2].set_xlabel('Strength (nA)')
         ax[dir1, dir2].set_ylabel('Amplitude (nA)')
         ax[dir1, dir2].set_title(r'${} \rightarrow {}$'.format(dnames[dir1], dnames[dir2]))
+
+plt.tight_layout()
+plt.show()
+
+#%% Meeting 3 - Connecting input output of different types
+
+from tqdm import tqdm
+from scipy.optimize import minimize
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+from numba import jit
+import os
+import re
+
+# @jit(nopython=True)
+def sim(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+
+    # Set initial conditions
+    print(Vinit)
+    V[0] = Vinit
+
+    ratio = 0#.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > vt:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+            rfon = True
+            rftimer = rf
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout
+
+def vthfun(v, v1, vt, aval):
+    if v <= v1:
+        return vt
+    else:
+        return vt + aval[0]*(v1-v)
+# @jit(nopython=True)
+
+def sima(Vinit, tlen, Iext, dt, vr, rf, gL, vt, C_m, alpha, tauvth):
+    
+    # Variables initialization
+    V = np.zeros(tlen)
+    aplist = np.zeros_like(V)
+    vth=np.zeros_like(V)
+    apind=[]
+
+    # Set initial conditions
+    V[0] = Vinit
+    vth[0]=vt
+
+    ratio = 0#.3
+    rfon = False
+    rftimer = np.inf
+    
+    for i in range(1, tlen):
+
+        i_ion = gL*(V[i-1]-Vinit)
+
+        dVdt = (1 / C_m) * (Iext[i-1]-i_ion)
+        V[i] = V[i-1] + dVdt * dt*(1-rfon)
+        
+        dvthdt = -(vth[i-1]-vt)/tauvth
+        vth[i] = vth[i-1] + dvthdt * dt 
+
+        if rftimer != np.inf:
+            rftimer -= dt
+
+        if rftimer <= 0:
+            rftimer = np.inf
+            rfon = False
+
+        if V[i] > vth[i]:  # AP
+            if i > int(ratio*tlen) and i < tlen:
+                aplist[i] = i*dt
+                apind.append(i)
+            rfon = True
+            rftimer = rf
+
+            vth[i]+=alpha[0]+alpha[1]*(V[i]/vt)+alpha[2]*(V[i]/vt)**2
+            V[i] = vr
+
+    aps = getaps(aplist, dt)
+    if len(aps) < 2:
+        fout = 0.0  # or np.nan if you want to flag it
+    else:
+        fout = 1/np.mean(np.diff(aps))
+    return V, fout, vth, aplist, apind
+
+# @jit(nopython=True)
+def getaps(aplist, dt):
+    return np.where(aplist != 0)[0]*dt
+
+def geti(tmax, dt, A):
+    Iext = np.zeros(int(tmax/dt))
+    Iext[int(tmax/dt*2/15):int(tmax/dt*4/5)]=A
+    return Iext
+
+def generate_spike_train(foutlen, spike_ind, template):
+    # blank array
+    out = np.zeros(foutlen)
+
+    Ltemp = len(template)
+
+    for pos in spike_ind:
+        end = pos + Ltemp
+        if end > foutlen:
+            end = foutlen
+
+        # add template at spike
+        out[pos:end] += template[:end - pos]
+
+    return out
+
+def make_normalized_template(td, tr, tmax, dt, scale_I):
+    # SynKernel = A * ( exp(-(x)/tauDecay) - exp(-(x)/tauRise) )
+    t = np.arange(0, tmax, dt)
+    A = scale_I / (-(tr/td)**(td/(td-tr)) + (tr/td)**(tr/(td-tr)))
+    template = A * (np.exp(-t / td) - np.exp(-t / tr))
+    return t, template
+
+
+fbdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedback_interneuron_CSV'
+ffdir = r'C:\Users\Oliver\Desktop\Research\PYR\Feedforward_interneuron_Csv'
+somdir=r'C:\Users\Oliver\Desktop\Research\PYR\Pyramidal_neuron_soma_Csv'
+
+files=['F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+
+somfiles=['F-I.csv','t.csv','v-tv1.csv','v-tv10.csv','v-tv11.csv','v-tv12.csv','v-tv13.csv','v-tv14.csv','v-tv15.csv','v-tv16.csv','v-tv17.csv','v-tv18.csv','v-tv19.csv','v-tv2.csv','v-tv20.csv','v-tv21.csv','v-tv22.csv','v-tv23.csv','v-tv24.csv','v-tv25.csv','v-tv26.csv','v-tv27.csv','v-tv28.csv','v-tv29.csv','v-tv3.csv','v-tv30.csv','v-tv31.csv','v-tv32.csv','v-tv33.csv','v-tv34.csv','v-tv4.csv','v-tv5.csv','v-tv6.csv','v-tv7.csv','v-tv8.csv','v-tv9.csv']
+fbfiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'VT csv', 'VT NOISE']
+fffiles=['.DS_Store', 'F-I.csv', 'firing_frequencies.csv', 'v-t', 'v-t noise']
+dirnames=['Som', 'Feedback', 'Feedforward']
+ftype='F-I.csv'
+dirs = [somdir, fbdir, ffdir]
+
+dirtype=0 # <-------------------- 0-som, 1-FB, 2-FF
+dnames=['som', 'feedback', 'feedforward']
+
+dlist=[]
+for dirtype in range(3):
+    data=pd.read_csv(dirs[dirtype]+'\{}'.format(ftype))
+    data=np.array(data.iloc[:, :2])
+    data[:,0]*=1e-9
+    dlist.append(data)
+    
+tmax = 1.5  # simulation run time
+dt = 1e-4 # sample rate
+rf = 1e-3  # refractory period
+
+V0 = [-78e-3, -78e-3, -78e-3]  # reverse potential
+C_m = [300e-12, 250e-12, 650e-12] # capacitance
+vr = [-78e-3, -78e-3, -78e-3] # reset potential after postsynaptic AP
+gL = [1/(50e6), 1/(50.29e6), 1/(120e6)] # 15e-9  # leak conductance
+vt = [-77e-3, -62e-3, -70e-3]  # threshold base level
+tauvth = [7e-3, 1e-3, 1e-3] # threshold time constant
+alpha = [[75e-3, 0e-3, 0e-3], 
+         [1e-3, 1e-3, 1e-3], 
+         [1e-3, 1e-3, 1e-3]]
+
+tr=1e-3
+td=10e-3
+ttemp=1
+tmax=10
+dt=1e-4
+strength = 1e-9
+f=100
+t_temp, temp= make_normalized_template(td, tr, ttemp, dt, strength)
+
+dir1=0
+dir2=0
+
+# =============================================================================
+# amplitudes = np.array(dlist[dir1])[:,0]  # or whichever you want
+# strengths = np.linspace(1e-9, 10e-9, 20)
+# 
+# res = compute_fout_heatmap(
+#     dir1=dir1, dir2=dir2,
+#     amplitudes=amplitudes,
+#     strengths=strengths,
+#     tmax=tmax, dt=dt, rf=rf,
+#     V0=V0, vr=vr, gL=gL, vt=vt, C_m=C_m,
+#     alpha=alpha, tauvth=tauvth,
+#     tr=tr, td=td, ttemp=ttemp
+# )
+# 
+# # plot
+# plt.figure()
+# plt.imshow(res["fout_map"], aspect='auto', origin='lower',
+#            extent=[res["strengths"][0]*1e9, res["strengths"][-1]*1e9,
+#                    res["amplitudes"][0]*1e9, res["amplitudes"][-1]*1e9])
+# 
+# plt.colorbar(label='fout (Hz)')
+# plt.xlabel('Strength (nA)')
+# plt.ylabel('Amplitude (nA)')
+# plt.title(r'${} \rightarrow {}$'.format(dnames[dir1], dnames[dir2]))
+# plt.show()
+# =============================================================================
+
+# =============================================================================
+# # sim test
+# res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+# plt.plot(res[0])
+# plt.plot(res[2])
+# # plt.ylim([-0.08, -0.065])
+# # plt.xlim([0, 3000])
+# plt.show()
+# #%%
+# =============================================================================
+
+foutslist=[]
+for i, dirtype in enumerate(range(3)):
+    alist=np.array(dlist[i])[:,0] # amplitude list input
+    fouts=[]
+    for a in alist:
+        Iext = geti(tmax, dt, a)
+        res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+        fouts.append(res[1])
+    foutslist.append(fouts)
+    
+for i in range(3):
+    plt.subplot(1,3,i+1)
+    alist=dlist[i][:,0]
+    plt.plot(alist*1e9, dlist[i][:, 1], label='experimental', marker='o')
+    plt.plot(alist*1e9, foutslist[i], label='simulation', marker='o', alpha=0.6)
+    # =============================================================================
+    # plt.plot(alist, data[:, 1], label='experimental', 
+    #             marker='o')
+    # plt.plot(alist, fouts, label='simulation', 
+    #          linewidth=1, alpha=0.8, marker='o')
+    # =============================================================================
+    
+    plt.ylabel('Output frequency')
+    plt.xlabel('Input current amplitude (nA)')
+    plt.plot([],[],' ', label='{}'.format(dirnames[i]))
+    plt.legend()
+    if i == 1:
+        plt.title('\nV0={}, C_m={}, v_r={}, gL={:.3g}, \nvt={}, tauvth={},alpha={}'.format(V0[dirtype],C_m[dirtype], vr[dirtype], gL[dirtype], vt[dirtype], tauvth[0], alpha[dirtype][0]))
+plt.show()
+
+foutslist=[]
+for i, dirtype in enumerate(range(3)):
+    alist=np.array(dlist[i])[:,0] # amplitude list input
+    fouts=[]
+    for a in alist:
+        Iext = geti(tmax, dt, a)
+        res=sima(V0[dirtype], len(Iext), Iext, dt, vr[dirtype], rf, gL[dirtype], vt[dirtype], C_m[dirtype], alpha[dirtype], tauvth[dirtype])
+        fouts.append(res[1])
+    foutslist.append(fouts)
+    
+#%% double exponential
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =====================================
+# Simulation parameters
+# =====================================
+dt = 0.01
+T = 1000
+time = np.arange(0, T, dt)
+
+tau_m = 20.0
+Vth = 1.0
+Vreset = 0.0
+
+# Synaptic rise and decay times
+tau_r = 2.0
+tau_d = 10.0
+
+# =====================================
+# Neuron indices
+# =====================================
+PYR1 = 0
+PYR2 = 1
+FB1  = 2
+FB2  = 3
+FF1  = 4
+FF2  = 5
+
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+
+N = 6
+
+# =====================================
+# Weight matrix
+# W[pre, post]
+# =====================================
+W = np.zeros((N, N))
+
+# PYR1 excites
+W[PYR1, PYR2] = 2.0
+W[PYR1, FB1 ] = 2.0
+W[PYR1, FB2 ] = 2.0
+
+# PYR2 excites
+W[PYR2, PYR1] = 2.0
+W[PYR2, FB1 ] = 2.0
+W[PYR2, FB2 ] = 2.0
+
+# FB1 inhibits
+W[FB1, PYR2] = -2.0
+W[FB1, FB2 ] = -2.0
+
+# FB2 inhibits
+W[FB2, PYR1] = -2.0
+W[FB2, PYR2] = -2.0
+W[FB2, FB1 ] = -2.0
+
+# FF1 inhibits
+W[FF1, PYR1] = -2.0
+W[FF1, PYR2] = -2.0
+W[FF1, FF2 ] = -2.0
+
+# FF2 inhibits
+W[FF2, PYR1] = -2.0
+W[FF2, PYR2] = -2.0
+W[FF2, FF1 ] = -2.0
+
+# =====================================
+# External input
+# =====================================
+Iext = np.zeros((N, len(time)))
+
+pulse = np.zeros(len(time))
+
+tstart=100
+tend=800
+pulse[(time >= tstart) & (time < tend)] = 4.5
+
+# Input excites PYR1, PYR2, FF1, FF2
+Iext[PYR1] = pulse
+Iext[PYR2] = pulse
+Iext[FF1 ] = pulse
+Iext[FF2 ] = pulse
+
+# =====================================
+# State variables
+# =====================================
+V = np.zeros((N, len(time)))
+spikes = np.zeros((N, len(time)))
+
+# Synaptic state variables
+xr = np.zeros((N, N))
+xd = np.zeros((N, N))
+
+# =====================================
+# Simulation
+# =====================================
+for t in range(1, len(time)):
+
+    # Decay synapses
+    xr += dt * (-xr / tau_r)
+    xd += dt * (-xd / tau_d)
+
+    # Double exponential conductances
+    g = xd - xr
+
+    for post in range(N):
+
+        Isyn = np.sum(W[:, post] * g[:, post])
+
+        V[post, t] = (
+            V[post, t-1]
+            + dt * (
+                -V[post, t-1]
+                + Iext[post, t-1]
+                + Isyn
+            ) / tau_m
+        )
+
+        if V[post, t] >= Vth:
+
+            spikes[post, t] = 1
+            V[post, t] = Vreset
+
+            # Trigger all outgoing synapses
+            active = (W[post, :] != 0)
+
+            xr[post, active] += 1.0
+            xd[post, active] += 1.0
+
+# =====================================
+# Plot
+# =====================================
+fs = 15
+
+fig, ax = plt.subplots(8, 1, figsize=(12, 12), sharex=True)
+
+ax[0].plot(time, pulse)
+ax[0].set_ylabel("Input", fontsize=fs)
+
+ax[1].plot(time, V[PYR1])
+ax[1].set_ylabel("PYR1", fontsize=fs)
+
+ax[2].plot(time, V[PYR2])
+ax[2].set_ylabel("PYR2", fontsize=fs)
+
+ax[3].plot(time, V[FB1])
+ax[3].set_ylabel("FB1", fontsize=fs)
+
+ax[4].plot(time, V[FB2])
+ax[4].set_ylabel("FB2", fontsize=fs)
+
+ax[5].plot(time, V[FF1])
+ax[5].set_ylabel("FF1", fontsize=fs)
+
+ax[6].plot(time, V[FF2])
+ax[6].set_ylabel("FF2", fontsize=fs)
+
+ax[7].eventplot(
+    [time[spikes[i] == 1] for i in range(N)],
+    lineoffsets=np.arange(1, N + 1)
+)
+
+ax[7].set_yticks(np.arange(1, N + 1))
+ax[7].set_yticklabels(names, fontsize=fs)
+ax[7].set_ylabel("Spikes", fontsize=fs)
+ax[7].set_xlabel("Time (ms)", fontsize=fs)
+
+# Make all tick labels the same size
+for a in ax:
+    a.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% SOM / FB / FF double-exponential network with adaptive LIF neurons
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =====================================
+# Simulation parameters
+# =====================================
+dt = 0.001
+T = 500
+time = np.arange(0, T, dt)
+
+# =====================================
+# Neuron indices
+# =====================================
+PYR1 = 0
+PYR2 = 1
+FB1  = 2
+FB2  = 3
+FF1  = 4
+FF2  = 5
+
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+N = 6
+
+# =====================================
+# Cell-type mapping
+# 0 = SOM, 1 = FB, 2 = FF
+# =====================================
+celltype = np.array([0, 0, 1, 1, 2, 2])
+
+# =====================================
+# SOM / FB / FF parameters (from your earlier code)
+# =====================================
+
+V0 = [-78e-3, -78e-3, -78e-3]
+C_m = [300e-12, 250e-12, 650e-12]
+vr  = [-78e-3, -78e-3, -78e-3]
+gL  = [1/(50e6), 1/(50.29e6), 1/(120e6)]
+vt  = [-77e-3, -62e-3, -70e-3]
+tauvth = [7e-3, 1e-3, 1e-3]
+
+alpha = [
+    [75e-3, 0e-3, 0e-3],
+    [1e-3, 1e-3, 1e-3],
+    [1e-3, 1e-3, 1e-3]
+]
+
+rf = 1e-3
+
+# =====================================
+# Weight matrix (same as before)
+# =====================================
+W = np.zeros((N, N))
+
+W[PYR1, PYR2] = 1e-9
+W[PYR1, FB1 ] = 1e-9
+W[PYR1, FB2 ] = 1e-9
+
+W[PYR2, PYR1] = 1e-9
+W[PYR2, FB1 ] = 1e-9
+W[PYR2, FB2 ] = 1e-9
+
+W[FB1, PYR2] = -1*0
+W[FB1, FB2 ] = -1*0
+
+W[FB2, PYR1] = -1*0
+W[FB2, PYR2] = -1*0
+W[FB2, FB1 ] = -1*0
+
+W[FF1, PYR1] = -1*0
+W[FF1, PYR2] = -1*0
+W[FF1, FF2 ] = -1*0
+
+W[FF2, PYR1] = -1*0
+W[FF2, PYR2] = -1*0
+W[FF2, FF1 ] = -1*0
+
+# =====================================
+# External input
+# =====================================
+Iext = np.zeros((N, len(time)))
+
+pulse = np.zeros(len(time))
+tstart, tend = 100, 400
+pulse[(time >= tstart) & (time < tend)] = 1e-9
+
+Iext[PYR1] = pulse
+Iext[PYR2] = pulse
+Iext[FF1 ] = pulse
+Iext[FF2 ] = pulse
+
+# =====================================
+# State variables
+# =====================================
+V = np.zeros((N, len(time)))
+Vth_net = np.zeros((N, len(time)))
+spikes = np.zeros((N, len(time)))
+
+rfon = np.zeros(N, dtype=bool)
+rftimer = np.ones(N) * np.inf
+
+# init
+for n in range(N):
+    tp = celltype[n]
+    V[n, 0] = V0[tp]
+    Vth_net[n, 0] = vt[tp]
+
+# =====================================
+# Synapses (double exponential)
+# =====================================
+tau_r = 1e-3
+tau_d = 10e-3
+
+xr = np.zeros((N, N))
+xd = np.zeros((N, N))
+
+# =====================================
+# Simulation
+# =====================================
+for t in range(1, len(time)):
+
+    xr += dt * (-xr / tau_r)
+    xd += dt * (-xd / tau_d)
+
+    g = xd - xr
+
+    for post in range(N):
+
+        tp = celltype[post]
+
+        Isyn = np.sum(W[:, post] * g[:, post])
+
+        I_total = Iext[post, t-1] + Isyn
+
+        i_ion = gL[tp] * (V[post, t-1] - V0[tp])
+
+        dVdt = (I_total - i_ion) / C_m[tp]
+
+        if not rfon[post]:
+            V[post, t] = V[post, t-1] + dt * dVdt
+        else:
+            V[post, t] = vr[tp]
+
+        # threshold dynamics
+        dvthdt = -(Vth_net[post, t-1] - vt[tp]) / tauvth[tp]
+        Vth_net[post, t] = Vth_net[post, t-1] + dt * dvthdt
+
+        # refractory
+        if rftimer[post] != np.inf:
+            rftimer[post] -= dt
+            if rftimer[post] <= 0:
+                rftimer[post] = np.inf
+                rfon[post] = False
+
+        # spike
+        if V[post, t] > Vth_net[post, t]:
+
+            spikes[post, t] = 1
+
+            Vth_net[post, t] += (
+                alpha[tp][0]
+                + alpha[tp][1] * (V[post, t] / vt[tp])
+                + alpha[tp][2] * (V[post, t] / vt[tp])**2
+            )
+
+            V[post, t] = vr[tp]
+
+            rfon[post] = True
+            rftimer[post] = rf
+
+            active = (W[post, :] != 0)
+            xr[post, active] += 1.0
+            xd[post, active] += 1.0
+
+# =====================================
+# Plot
+# =====================================
+fs = 15
+
+fig, ax = plt.subplots(8, 1, figsize=(12, 12), sharex=True)
+
+ax[0].plot(time, pulse)
+ax[0].set_ylabel("Input", fontsize=fs)
+
+ax[1].plot(time, V[PYR1])
+ax[1].set_ylabel("PYR1", fontsize=fs)
+
+ax[2].plot(time, V[PYR2])
+ax[2].set_ylabel("PYR2", fontsize=fs)
+
+ax[3].plot(time, V[FB1])
+ax[3].set_ylabel("FB1", fontsize=fs)
+
+ax[4].plot(time, V[FB2])
+ax[4].set_ylabel("FB2", fontsize=fs)
+
+ax[5].plot(time, V[FF1])
+ax[5].set_ylabel("FF1", fontsize=fs)
+
+ax[6].plot(time, V[FF2])
+ax[6].set_ylabel("FF2", fontsize=fs)
+
+ax[7].eventplot(
+    [time[spikes[i] == 1] for i in range(N)],
+    lineoffsets=np.arange(1, N + 1)
+)
+
+ax[7].set_yticks(np.arange(1, N + 1))
+ax[7].set_yticklabels(names, fontsize=fs)
+ax[7].set_ylabel("Spikes", fontsize=fs)
+ax[7].set_xlabel("Time (ms)", fontsize=fs)
+
+for a in ax:
+    a.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Pure recurrent integrate-and-fire network
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =====================================
+# Simulation parameters
+# =====================================
+dt = 0.01
+T = 500
+time = np.arange(0, T, dt)
+
+tau_m = 20.0
+Vth = 1.0
+Vreset = 0.0
+
+# =====================================
+# Neuron indices
+# =====================================
+PYR1 = 0
+PYR2 = 1
+FB1  = 2
+FB2  = 3
+FF1  = 4
+FF2  = 5
+
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+
+N = 6
+
+# =====================================
+# Weight matrix
+# W[pre, post]
+# =====================================
+W = np.zeros((N, N))
+
+# PYR1 excites
+W[PYR1, PYR2] = 2.0
+W[PYR1, FB1 ] = 2.0
+W[PYR1, FB2 ] = 2.0
+
+# PYR2 excites
+W[PYR2, PYR1] = 2.0
+W[PYR2, FB1 ] = 2.0
+W[PYR2, FB2 ] = 2.0
+
+# FB1 inhibits
+W[FB1, PYR2] = -2.0
+W[FB1, FB2 ] = -2.0
+
+# FB2 inhibits
+W[FB2, PYR1] = -2.0
+W[FB2, PYR2] = -2.0
+W[FB2, FB1 ] = -2.0
+
+# FF1 inhibits
+W[FF1, PYR1] = -2.0
+W[FF1, PYR2] = -2.0
+W[FF1, FF2 ] = -2.0
+
+# FF2 inhibits
+W[FF2, PYR1] = -2.0
+W[FF2, PYR2] = -2.0
+W[FF2, FF1 ] = -2.0
+
+# =====================================
+# External input
+# =====================================
+Iext = np.zeros((N, len(time)))
+
+pulse = np.zeros(len(time))
+
+tstart = 100
+tend = 400
+
+pulse[(time >= tstart) & (time < tend)] = 2
+
+# Input excites PYR1, PYR2, FF1, FF2
+Iext[PYR1] = pulse
+Iext[PYR2] = pulse
+Iext[FF1 ] = pulse
+Iext[FF2 ] = pulse
+
+# =====================================
+# State variables
+# =====================================
+V = np.zeros((N, len(time)))
+spikes = np.zeros((N, len(time)))
+
+# =====================================
+# Simulation
+# =====================================
+for t in range(1, len(time)):
+
+    for post in range(N):
+
+        # instantaneous synaptic input
+        Isyn = np.sum(W[:, post] * spikes[:, t-1])
+
+        V[post, t] = (
+            V[post, t-1]
+            + dt * (
+                -V[post, t-1]
+                + Iext[post, t-1]
+                + Isyn
+            ) / tau_m
+        )
+
+        if V[post, t] >= Vth:
+
+            spikes[post, t] = 1
+            V[post, t] = Vreset
+
+# =====================================
+# Plot
+# =====================================
+fs = 15
+
+fig, ax = plt.subplots(8, 1, figsize=(12, 12), sharex=True)
+
+ax[0].plot(time, pulse)
+ax[0].set_ylabel("Input", fontsize=fs)
+
+ax[1].plot(time, V[PYR1])
+ax[1].set_ylabel("PYR1", fontsize=fs)
+
+ax[2].plot(time, V[PYR2])
+ax[2].set_ylabel("PYR2", fontsize=fs)
+
+ax[3].plot(time, V[FB1])
+ax[3].set_ylabel("FB1", fontsize=fs)
+
+ax[4].plot(time, V[FB2])
+ax[4].set_ylabel("FB2", fontsize=fs)
+
+ax[5].plot(time, V[FF1])
+ax[5].set_ylabel("FF1", fontsize=fs)
+
+ax[6].plot(time, V[FF2])
+ax[6].set_ylabel("FF2", fontsize=fs)
+
+ax[7].eventplot(
+    [time[spikes[i] == 1] for i in range(N)],
+    lineoffsets=np.arange(1, N + 1)
+)
+
+ax[7].set_yticks(np.arange(1, N + 1))
+ax[7].set_yticklabels(names, fontsize=fs)
+ax[7].set_ylabel("Spikes", fontsize=fs)
+ax[7].set_xlabel("Time (ms)", fontsize=fs)
+
+for a in ax:
+    a.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Pure recurrent integrate-and-fire network (clean group-symmetric version)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# =====================================
+# Simulation parameters
+# =====================================
+dt = 1e-4
+T = 0.5
+time = np.arange(0, T, dt)
+
+rf = 1e-3
+N = 6
+
+PYR1, PYR2, FB1, FB2, FF1, FF2 = range(6)
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+
+PYR = [PYR1, PYR2]
+FB  = [FB1, FB2]
+FF  = [FF1, FF2]
+
+# =====================================
+# Group-symmetric parameters (FIXED)
+# =====================================
+V0 = np.zeros(N)
+C_m = np.zeros(N)
+vr = np.zeros(N)
+gL = np.zeros(N)
+vt = np.zeros(N)
+tauvth = np.zeros(N)
+alpha = np.zeros((N, 3))
+
+# PYR
+for i in PYR:
+    V0[i] = -78e-3
+    C_m[i] = 300e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(50e6)
+    vt[i] = -77e-3
+    tauvth[i] = 7e-3
+    alpha[i] = [75e-3, 0e-3, 0e-3]
+
+# FB
+for i in FB:
+    V0[i] = -78e-3
+    C_m[i] = 250e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(50e6)
+    vt[i] = -62e-3
+    tauvth[i] = 1e-3
+    alpha[i] = [1e-3, 1e-3, 1e-3]
+
+# FF
+for i in FF:
+    V0[i] = -78e-3
+    C_m[i] = 650e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(120e6)
+    vt[i] = -70e-3
+    tauvth[i] = 1e-3
+    alpha[i] = [1e-3, 1e-3, 1e-3]
+
+# =====================================
+# Weight matrix (UNCHANGED)
+# =====================================
+W = np.zeros((N, N))
+
+W[PYR1, PYR2] = 2e-9
+W[PYR1, FB1 ] = 5e-9
+W[PYR1, FB2 ] = 5e-9
+
+W[PYR2, PYR1] = 2000e-9
+W[PYR2, FB1 ] = 2e-9
+W[PYR2, FB2 ] = 2e-9
+
+W[FB1, PYR2] = -2.0e-9
+W[FB1, FB2 ] = -2.0e-9
+
+W[FB2, PYR1] = -2.0e-9
+W[FB2, PYR2] = -2.0e-9
+W[FB2, FB1 ] = -2.0e-9
+
+W[FF1, PYR1] = -2.0e-9
+W[FF1, PYR2] = -2.0e-9
+W[FF1, FF2 ] = -2.0e-9
+
+W[FF2, PYR1] = -2.0e-9
+W[FF2, PYR2] = -2.0e-9
+W[FF2, FF1 ] = -2.0e-9
+
+# =====================================
+# External input
+# =====================================
+Iext = np.zeros((N, len(time)))
+
+pulse = np.zeros(len(time))
+pulse[(time >= 0.1) & (time < 0.2)] = 2e-9
+
+Iext[PYR1] = pulse
+Iext[PYR2] = pulse
+Iext[FF1 ] = pulse
+Iext[FF2 ] = pulse
+
+# =====================================
+# State variables
+# =====================================
+V = np.zeros((N, len(time)))
+vth = np.zeros((N, len(time)))
+spikes = np.zeros((N, len(time)))
+
+for i in range(N):
+    V[i, 0] = V0[i]
+    vth[i, 0] = vt[i]
+
+rfon = np.zeros(N)
+rftimer = np.ones(N) * np.inf
+
+g_syn = 1e-9
+
+# =====================================
+# Simulation
+# =====================================
+for t in range(1, len(time)):
+
+    for post in range(N):
+
+        Isyn = np.sum(W[:, post] * spikes[:, t-1])
+        I = Iext[post, t-1] + Isyn
+
+        i_ion = gL[post] * (V[post, t-1] - V0[post])
+        dVdt = (1 / C_m[post]) * (I - i_ion)
+
+        V[post, t] = V[post, t-1] + dt * dVdt * (1 - rfon[post])
+
+        dvthdt = -(vth[post, t-1] - vt[post]) / tauvth[post]
+        vth[post, t] = vth[post, t-1] + dt * dvthdt
+
+        if rftimer[post] != np.inf:
+            rftimer[post] -= dt
+
+        if rftimer[post] <= 0:
+            rftimer[post] = np.inf
+            rfon[post] = False
+
+        if V[post, t] > vth[post, t]:
+
+            spikes[post, t] = 1
+            rfon[post] = True
+            rftimer[post] = rf
+
+            vth[post, t] += (
+                alpha[post][0]
+                + alpha[post][1] * (V[post, t] / vt[post])
+                + alpha[post][2] * (V[post, t] / vt[post]) ** 2
+            )
+
+            V[post, t] = vr[post]
+
+# =====================================
+# Plot
+# =====================================
+fs = 15
+
+fig, ax = plt.subplots(8, 1, figsize=(12, 14), sharex=True)
+
+ax[0].plot(time, pulse)
+ax[0].set_ylabel("Input")
+
+for i in range(6):
+    ax[i+1].plot(time, V[i], label="V")
+    ax[i+1].plot(time, vth[i], linestyle="--", label="Vth")
+    ax[i+1].set_ylabel(names[i])
+    ax[i+1].legend(fontsize=8, loc="upper right")
+
+ax[7].eventplot(
+    [time[spikes[i] == 1] for i in range(N)],
+    lineoffsets=np.arange(1, N + 1)
+)
+
+ax[7].set_yticks(np.arange(1, N + 1))
+ax[7].set_yticklabels(names)
+ax[7].set_ylabel("Spikes")
 
 plt.tight_layout()
 plt.show()
