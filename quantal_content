@@ -70,7 +70,6 @@ plt.xlabel('Time (sec)')
 plt.ylabel('Quantal content')
 plt.legend()
 
-
 ffs=[]
 for i in range(data[fnum][dnum].shape[0]):
     ffs.append(get_FF(data[fnum][dnum][i, :]))
@@ -1756,6 +1755,143 @@ for fnum in range(len(data)):
 
 plt.show()
 
+#%% plot all repeats together per cell (ignore first point in error check only)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import math
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = [
+    '100Hz_1s_20_repeats_P11',
+    '100Hz_1s_20_repeats_P38'
+]
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+fulldata2 = np.array([df.to_numpy() for df in excel2.values()])
+
+times = fulldata1[0][1:, 0]
+t = np.asarray(times, dtype=float)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+window = 10
+pct = 30 / 100
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        all_runs = []
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            # =============================================
+            # centered moving average (edge corrected)
+            # =============================================
+            kernel = np.ones(window)
+
+            window_sum = np.convolve(trace, kernel, mode='same')
+            window_count = np.convolve(np.ones_like(trace), kernel, mode='same')
+
+            window_avg = window_sum / window_count
+
+            # =============================================
+            # bounds
+            # =============================================
+            upper = window_avg * (1.0 + pct)
+            lower = window_avg * (1.0 - pct)
+
+            # =============================================
+            # error detection
+            # =============================================
+            out_of_bounds = (
+                (trace > upper) |
+                (trace < lower)
+            )
+
+            # =============================================
+            # IGNORE FIRST POINT ONLY FOR ERROR DETECTION
+            # =============================================
+            out_of_bounds[0] = False
+
+            all_runs.append({
+                'run': run,
+                'trace': trace,
+                'avg': window_avg,
+                'upper': upper,
+                'lower': lower,
+                'mask': out_of_bounds
+            })
+
+        nplots = len(all_runs)
+
+        ncols = min(5, nplots)
+        nrows = math.ceil(nplots / ncols)
+
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(4 * ncols, 3 * nrows),
+            squeeze=False
+        )
+
+        axes = axes.flatten()
+
+        for k, item in enumerate(all_runs):
+
+            ax = axes[k]
+
+            trace = item['trace']
+            avg = item['avg']
+            upper = item['upper']
+            lower = item['lower']
+            mask = item['mask']
+            run = item['run']
+
+            ax.plot(t, trace, linewidth=1)
+            ax.plot(t, avg, '--', linewidth=1)
+            ax.plot(t, upper, ':', linewidth=1)
+            ax.plot(t, lower, ':', linewidth=1)
+
+            ax.fill_between(t, lower, upper, alpha=0.1)
+
+            ax.scatter(
+                t[mask],
+                trace[mask],
+                color='red',
+                s=20
+            )
+
+            ax.set_title(f'repeat {run + 1}')
+            ax.set_xlabel('Time')
+            ax.set_ylabel('QC')
+
+        for k in range(nplots, len(axes)):
+            fig.delaxes(axes[k])
+
+        fig.suptitle(f'{fnames[fnum]} cell {dnum + 1}', fontsize=14)
+
+        plt.tight_layout()
+
+plt.show()
+
 #%% bootstrap 95% CI per cell and flag outliers
 
 import numpy as np
@@ -3174,6 +3310,8 @@ def process_and_plot_group(group_data, title):
     cols = 4
     rows = int(np.ceil((n_cells + 1) / cols))
 
+    fs = 20
+
     all_cell_means = []
 
     # compute cell means
@@ -3189,8 +3327,8 @@ def process_and_plot_group(group_data, title):
     # MAIN GRID (cells only)
     # -----------------------------
     plt.figure(figsize=(15, 3 * rows))
-    plt.suptitle(f'{title} - cells', y=1.02)
-
+    plt.suptitle(f'{title} - cells', fontsize=fs, y=1.02)
+    
     for i in range(n_cells):
         cell = group_data[i]
         norm = normalize_repeats(cell)
@@ -3202,7 +3340,8 @@ def process_and_plot_group(group_data, title):
 
         ax.plot(times, all_cell_means[i], color='black', linewidth=2)
 
-        ax.set_title(f'Cell {i+1}')
+        ax.set_title(f'Cell {i+1}', fontsize=fs)
+        ax.tick_params(axis='both', labelsize=fs)
         ax.set_xticks([])
         ax.set_yticks([])
 
@@ -3212,19 +3351,22 @@ def process_and_plot_group(group_data, title):
     # -----------------------------
     # SEPARATE WINDOW (summary)
     # -----------------------------
+    fs = 15
     plt.figure(figsize=(8, 5))
     ax_sum = plt.gca()
 
     for i, c in enumerate(all_cell_means):
         ax_sum.plot(times, c, alpha=0.5, label=f'cell {i+1}')
 
-    ax_sum.plot(times, mean_of_means, color='black', linewidth=3, label='mean of means')
+    ax_sum.plot(times, mean_of_means, color='black', linewidth=3,
+                label='mean of means')
 
-    ax_sum.set_title(f'{title} - all cell means + mean of means')
-    ax_sum.set_xlabel('Time (sec)')
-    ax_sum.set_ylabel('Normalized QC')
+    ax_sum.set_title(f'{title} - all cell means + mean of means', fontsize=fs)
+    ax_sum.set_xlabel('Time (sec)', fontsize=fs)
+    ax_sum.set_ylabel('Normalized QC', fontsize=fs)
 
-    ax_sum.legend(fontsize=6, ncol=2)
+    ax_sum.tick_params(axis='both', labelsize=fs)
+    ax_sum.legend(fontsize=fs, ncol=2)
 
     plt.tight_layout()
     plt.show()
@@ -3948,88 +4090,18 @@ for fnum, fname in enumerate(fnames):
         })
 
     perm_results.append(file_results)
-
-#%%
-# =========================
-# PLOTTING (SIGNIFICANCE STYLE MARKERS)
-# =========================
-
-for fnum, fname in enumerate(fnames):
-
-    n_cells = len(perm_results[fnum])
-
-    ncols = 4
-    nrows = int(np.ceil(n_cells / ncols))
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=(5*ncols, 4*nrows))
-    axes = np.atleast_1d(axes).ravel()
-
-    for cell_idx in range(n_cells):
-
-        ax = axes[cell_idx]
-        r = perm_results[fnum][cell_idx]
-
-        y1 = r["first_mean"]
-        y2 = r["last_mean"]
-        sig = r["sig"]
-
-        ns = ~sig  # not significant
-
-        # =========================
-        # FIRST 5 (P11) STYLE
-        # =========================
-        ax.scatter(
-            times[ns],
-            y1[ns],
-            facecolors='C0',
-            edgecolors='C0',
-            s=40,
-            label='First 5 (ns)'
-        )
-
-        ax.scatter(
-            times[sig],
-            y1[sig],
-            facecolors='white',
-            edgecolors='C0',
-            s=40,
-            label='First 5 (sig)'
-        )
-
-        # =========================
-        # LAST 5 (P38) STYLE
-        # =========================
-        ax.scatter(
-            times[ns],
-            y2[ns],
-            facecolors='C1',
-            edgecolors='C1',
-            s=40,
-            label='Last 5 (ns)'
-        )
-
-        ax.scatter(
-            times[sig],
-            y2[sig],
-            facecolors='white',
-            edgecolors='C1',
-            s=40,
-            label='Last 5 (sig)'
-        )
-
-        ax.set_title(f'Cell {cell_idx+1}')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('QC')
-        ax.legend()
-
-    for k in range(n_cells, len(axes)):
-        fig.delaxes(axes[k])
-
-    fig.suptitle(f'{fname} Permutation Test (per time point)')
-    plt.tight_layout()
-    plt.show()
     
-#%%
+# =============================================================================
+# import pickle
+# # save
+# with open('mydata.pkl', 'wb') as f:
+#     pickle.dump(perm_results, f)
+# # load
+# with open('mydata.pkl', 'rb') as f:
+#     perm_results = pickle.load(f)
+# =============================================================================
+
+#%% plot permutation results
 # =========================
 # PLOTTING (SIGNIFICANCE STYLE MARKERS)
 # solid = significant, hollow = not significant
@@ -4109,3 +4181,2252 @@ for fnum, fname in enumerate(fnames):
     fig.suptitle(f'{fname} Permutation Test (per time point)')
     plt.tight_layout()
     plt.show()
+    
+#%% plot permutation results
+# =========================
+# PLOTTING (SIGNIFICANCE STYLE MARKERS)
+# solid = significant, hollow = not significant
+# =========================
+
+for fnum, fname in enumerate(fnames):
+
+    n_cells = len(perm_results[fnum])
+
+    ncols = 4
+    nrows = int(np.ceil(n_cells / ncols))
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5*ncols, 4*nrows))
+    axes = np.atleast_1d(axes).ravel()
+
+    for cell_idx in range(n_cells):
+
+        ax = axes[cell_idx]
+        r = perm_results[fnum][cell_idx]
+
+        y1 = r["first_mean"]
+        y2 = r["last_mean"]
+        sig = r["sig"]
+
+        ns = ~sig
+
+        # percentage of non-significant time points
+        percent_ns = 100 * np.mean(ns)
+
+        # =========================
+        # FIRST 5 (P11)
+        # =========================
+        ax.scatter(
+            times[sig],
+            y1[sig],
+            facecolors='C0',
+            edgecolors='C0',
+            s=40,
+            label='First 5 (sig)'
+        )
+
+        ax.scatter(
+            times[ns],
+            y1[ns],
+            facecolors='white',
+            edgecolors='C0',
+            s=40,
+            label='First 5 (ns)'
+        )
+
+        # =========================
+        # LAST 5 (P38)
+        # =========================
+        ax.scatter(
+            times[sig],
+            y2[sig],
+            facecolors='C1',
+            edgecolors='C1',
+            s=40,
+            label='Last 5 (sig)'
+        )
+
+        ax.scatter(
+            times[ns],
+            y2[ns],
+            facecolors='white',
+            edgecolors='C1',
+            s=40,
+            label='Last 5 (ns)'
+        )
+
+        ax.set_title(f'Cell {cell_idx+1}')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('QC')
+
+        ax.legend(
+            title=f'NS = {percent_ns:.1f}%'
+        )
+
+    for k in range(n_cells, len(axes)):
+        fig.delaxes(axes[k])
+
+    fig.suptitle(f'{fname} Permutation Test (per time point)')
+    plt.tight_layout()
+    plt.show()
+    
+#%% 3 - setup
+mbounds=np.load('mbounds.npy', allow_pickle=True)
+ffbounds=np.load('ffbounds.npy', allow_pickle=True)
+
+means=np.load('means.npy', allow_pickle=True)
+ffs=np.load('ffs.npy', allow_pickle=True)
+
+
+fnum = 0   # file number
+dnum = 1   # dataset number
+
+t = np.asarray(times, dtype=float)
+
+# ======================
+# RAW TRACES
+# ======================
+plt.figure(figsize=(7, 5))
+
+ds = np.asarray(data[fnum][dnum], dtype=float)
+
+for run in range(ds.shape[1]):
+    plt.plot(
+        t,
+        ds[:, run],
+        linewidth=1,
+        alpha=0.7,
+        label=f'run {run+1}'
+    )
+
+plt.title(f'{fnames[fnum]} cell {dnum+1} traces')
+plt.xlabel('Time (sec)')
+plt.ylabel('Quantal content')
+plt.legend(framealpha=0.5)
+
+# ======================
+# MEAN + ERROR BARS
+# ======================
+plt.figure(figsize=(7, 5))
+
+y = np.asarray(means[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = plt.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+plt.title(f'{fnames[fnum]} cell {dnum+1} mean')
+plt.xlabel('Time (sec)')
+plt.ylabel('Mean quantal content')
+
+# ======================
+# FF + ERROR BARS
+# ======================
+plt.figure(figsize=(7, 5))
+
+y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = plt.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+plt.title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
+plt.xlabel('Time (sec)')
+plt.ylabel('Fano factor')
+
+plt.show()
+
+#%% 3 - 2x1 + 1 below center
+fnum = 0   # file number
+dnum = 1   # dataset number
+
+t = np.asarray(times, dtype=float)
+
+fig = plt.figure(figsize=(14, 10))
+
+# custom layout
+ax1 = plt.subplot2grid((2, 4), (0, 0), colspan=2)  # traces
+ax2 = plt.subplot2grid((2, 4), (0, 2), colspan=2)  # mean
+ax3 = plt.subplot2grid((2, 4), (1, 1), colspan=2)  # centered FF
+
+# ======================
+# RAW TRACES
+# ======================
+
+ds = np.asarray(data[fnum][dnum], dtype=float)
+
+for run in range(ds.shape[1]):
+
+    ax1.plot(
+        t,
+        ds[:, run],
+        linewidth=1,
+        alpha=0.7,
+        # label=f'run {run+1}'
+    )
+
+ax1.set_title(f'{fnames[fnum]} cell {dnum+1} traces')
+ax1.set_xlabel('Time (sec)')
+ax1.set_ylabel('Quantal content')
+ax1.legend(framealpha=0.5)
+
+# ======================
+# MEAN + ERROR BARS
+# ======================
+
+y = np.asarray(means[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [mbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [mbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax2.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax2.set_title(f'{fnames[fnum]} cell {dnum+1} mean')
+ax2.set_xlabel('Time (sec)')
+ax2.set_ylabel('Mean quantal content')
+
+# ======================
+# FANO FACTOR + ERROR BARS
+# ======================
+
+y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+lower = np.asarray(
+    [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
+    dtype=float
+)
+
+upper = np.asarray(
+    [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
+    dtype=float
+)
+
+yerr = np.vstack((y - lower, upper - y))
+
+eb = ax3.errorbar(
+    t,
+    y,
+    yerr=yerr,
+    fmt='-',
+    capsize=2
+)
+
+eb[0].set_alpha(0.9)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+eb[1][0].set_alpha(0.25)
+eb[1][1].set_alpha(0.25)
+
+ax3.set_title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
+ax3.set_xlabel('Time (sec)')
+ax3.set_ylabel('Fano factor')
+
+plt.tight_layout()
+plt.show()
+
+#%% 3 - QC normalization + per-cell plots (main grid) + summary (separate window)
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        trace = cell[:, r]
+        base = trace[0]
+        norm[:, r] = trace / base if base != 0 else trace
+    return norm
+
+
+def process_and_plot_group(group_data, title):
+
+    n_cells = group_data.shape[0]
+    cols = 4
+    rows = int(np.ceil((n_cells + 1) / cols))
+
+    fs = 20
+
+    all_cell_means = []
+
+    # compute cell means
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+        all_cell_means.append(np.mean(norm, axis=1))
+
+    all_cell_means = np.array(all_cell_means)
+    mean_of_means = np.mean(all_cell_means, axis=0)
+
+    # -----------------------------
+    # MAIN GRID (cells only)
+    # -----------------------------
+    plt.figure(figsize=(15, 3 * rows))
+    plt.suptitle(f'{title} - cells', fontsize=fs, y=1.02)
+    
+    for i in range(n_cells):
+        cell = group_data[i]
+        norm = normalize_repeats(cell)
+
+        ax = plt.subplot(rows, cols, i + 1)
+
+        for r in range(norm.shape[1]):
+            ax.plot(times, norm[:, r], alpha=0.2)
+
+        ax.plot(times, all_cell_means[i], color='black', linewidth=2)
+
+        ax.set_title(f'Cell {i+1}', fontsize=fs)
+        ax.tick_params(axis='both', labelsize=fs)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.tight_layout()
+    plt.show()
+
+    # -----------------------------
+    # SEPARATE WINDOW (summary)
+    # -----------------------------
+    fs = 15
+    plt.figure(figsize=(8, 5))
+    ax_sum = plt.gca()
+
+    for i, c in enumerate(all_cell_means):
+        ax_sum.plot(times, c, alpha=0.5, label=f'cell {i+1}')
+
+    ax_sum.plot(times, mean_of_means, color='black', linewidth=3,
+                label='mean of means')
+
+    ax_sum.set_title(f'{title} - all cell means + mean of means', fontsize=fs)
+    ax_sum.set_xlabel('Time (sec)', fontsize=fs)
+    ax_sum.set_ylabel('Normalized QC', fontsize=fs)
+
+    ax_sum.tick_params(axis='both', labelsize=fs)
+    ax_sum.legend(fontsize=fs, ncol=2)
+
+    plt.tight_layout()
+    plt.show()
+
+    return all_cell_means
+
+
+# -----------------------------
+# run both groups
+# -----------------------------
+
+p11_means = process_and_plot_group(data[0], 'P11')
+p38_means = process_and_plot_group(data[1], 'P38')
+
+#%% COMBINED 5-PANEL FIGURE FOR EVERY CELL
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+fs = 20
+t = np.asarray(times, dtype=float)
+
+def normalize_repeats(cell):
+    norm = np.zeros_like(cell, dtype=float)
+    for r in range(cell.shape[1]):
+        tr = cell[:, r]
+        base = tr[0]
+        norm[:, r] = tr / base if base != 0 else tr
+    return norm
+
+
+for fnum, fname in enumerate(fnames):
+
+    n_cells = len(data[fnum])
+
+    for dnum in range(n_cells):
+
+        fig = plt.figure(figsize=(18, 10))
+
+        ax_raw  = plt.subplot2grid((2, 6), (0, 0), colspan=2)
+        ax_mean = plt.subplot2grid((2, 6), (0, 2), colspan=2)
+        ax_norm = plt.subplot2grid((2, 6), (0, 4), colspan=2)
+
+        ax_ff   = plt.subplot2grid((2, 6), (1, 1), colspan=2)
+        ax_perm = plt.subplot2grid((2, 6), (1, 3), colspan=2)
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)
+
+        # =========================
+        # RAW TRACES
+        # =========================
+        for run in range(ds.shape[1]):
+            ax_raw.plot(t, ds[:, run], alpha=0.5, linewidth=1)
+
+        ax_raw.set_title('All QC repeats', fontsize=fs)
+        ax_raw.set_xlabel('Time (sec)', fontsize=fs)
+        ax_raw.set_ylabel('QC', fontsize=fs)
+        ax_raw.tick_params(labelsize=fs)
+
+        # =========================
+        # MEAN + BOOTSTRAP BOUNDS
+        # =========================
+        y = np.asarray(means[fnum][dnum], dtype=float)
+
+        lower = np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))])
+        upper = np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))])
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_mean.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_mean.set_title('Mean QC + bootstrap bounds', fontsize=fs)
+        ax_mean.set_xlabel('Time (sec)', fontsize=fs)
+        ax_mean.set_ylabel('QC', fontsize=fs)
+        ax_mean.tick_params(labelsize=fs)
+
+        # =========================
+        # NORMALIZED TRACES
+        # =========================
+        norm = normalize_repeats(ds)
+        norm_mean = np.mean(norm, axis=1)
+
+        for run in range(norm.shape[1]):
+            ax_norm.plot(
+                t,
+                norm[:, run],
+                alpha=0.2,
+                linewidth=1,
+                label='_nolegend_'
+            )
+
+        ax_norm.plot(
+            t,
+            norm_mean,
+            color='black',
+            linewidth=3,
+            label='Mean normalized QC'
+        )
+
+        ax_norm.set_title('Normalized QC', fontsize=fs)
+        ax_norm.set_xlabel('Time (sec)', fontsize=fs)
+        ax_norm.set_ylabel('Normalized QC', fontsize=fs)
+        ax_norm.tick_params(labelsize=fs)
+
+        ax_norm.legend(fontsize=fs, frameon=False)
+
+        # =========================
+        # FANO FACTOR
+        # =========================
+        y = np.asarray(ffs[fnum][dnum], dtype=float)
+
+        lower = np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))])
+        upper = np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))])
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_ff.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_ff.set_title('Fano factor', fontsize=fs)
+        ax_ff.set_xlabel('Time (sec)', fontsize=fs)
+        ax_ff.set_ylabel('Fano factor', fontsize=fs)
+        ax_ff.tick_params(labelsize=fs)
+
+        # =========================
+        # PERMUTATION PLOT
+        # =========================
+        r = perm_results[fnum][dnum]
+
+        y1 = r["first_mean"]
+        y2 = r["last_mean"]
+
+        sig = r["sig"]
+        ns = ~sig
+
+        ax_perm.scatter(t[sig], y1[sig], facecolors='C0', edgecolors='C0', s=50)
+        ax_perm.scatter(t[ns], y1[ns], facecolors='white', edgecolors='C0', s=50)
+
+        ax_perm.scatter(t[sig], y2[sig], facecolors='C1', edgecolors='C1', s=50)
+        ax_perm.scatter(t[ns], y2[ns], facecolors='white', edgecolors='C1', s=50)
+
+        ax_perm.set_title('First 5 vs Last 5', fontsize=fs)
+        ax_perm.set_xlabel('Time (sec)', fontsize=fs)
+        ax_perm.set_ylabel('QC', fontsize=fs)
+        ax_perm.tick_params(labelsize=fs)
+
+        legend_handles = [
+            Line2D([0], [0], marker='o', linestyle='None',
+                   markerfacecolor='C0', markeredgecolor='C0', markersize=8,
+                   label='First 5 significant'),
+
+            Line2D([0], [0], marker='o', linestyle='None',
+                   markerfacecolor='C1', markeredgecolor='C1', markersize=8,
+                   label='Last 5 significant'),
+
+            Line2D([0], [0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C0', markersize=8,
+                   label='First 5 not significant'),
+
+            Line2D([0], [0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C1', markersize=8,
+                   label='Last 5 not significant'),
+        ]
+
+        ax_perm.legend(handles=legend_handles, fontsize=fs, frameon=False)
+
+        fig.suptitle(f'{fname} Cell {dnum+1}', fontsize=fs)
+
+        plt.tight_layout()
+        plt.show()
+#%% 3 - ndev standard deviation bounds per cell (across repeats) - plot ALL repeats
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import math
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+fulldata1 = np.array([df.to_numpy() for df in excel1.values()])
+times = fulldata1[0][1:, 0]
+t = np.asarray(times, dtype=float)
+
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+
+data = [data1, data2]
+
+ndev = 2
+
+for fnum in range(len(data)):
+
+    for dnum in range(len(data[fnum])):
+
+        ds = np.asarray(data[fnum][dnum], dtype=float)  # (time, repeats)
+
+        # =====================================================
+        # mean + std across repeats at each time point
+        # =====================================================
+        mean = np.mean(ds, axis=1)
+        std = np.std(ds, axis=1)
+
+        upper = mean + ndev * std
+        lower = mean - ndev * std
+
+        all_runs = []
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            out_of_bounds = (trace > upper) | (trace < lower)
+
+            # ignore first point only for detection
+            out_of_bounds[0] = False
+
+            all_runs.append((run, trace, out_of_bounds))
+
+        nplots = len(all_runs)
+
+        ncols = min(5, nplots)
+        nrows = math.ceil(nplots / ncols)
+
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(4 * ncols, 3 * nrows),
+            squeeze=False
+        )
+
+        axes = axes.flatten()
+
+        for k, (run, trace, mask) in enumerate(all_runs):
+
+            ax = axes[k]
+
+            ax.plot(t, trace, linewidth=1, label='trace')
+            ax.plot(t, mean, '--', linewidth=1, label='mean')
+
+            ax.plot(t, upper, ':', linewidth=1, label=f'+{ndev} std')
+            ax.plot(t, lower, ':', linewidth=1, label=f'-{ndev} std')
+
+            ax.fill_between(t, lower, upper, alpha=0.15)
+
+            ax.scatter(
+                t[mask],
+                trace[mask],
+                color='red',
+                s=20,
+                label='out of bounds'
+            )
+
+            ax.set_title(f'repeat {run + 1}')
+            ax.set_xlabel('Time')
+            ax.set_ylabel('QC')
+
+        for k in range(nplots, len(axes)):
+            fig.delaxes(axes[k])
+
+        fig.suptitle(f'{fnames[fnum]} cell {dnum + 1}')
+
+        plt.tight_layout()
+
+plt.show()
+
+#%%  3 - setup cells_lisa.xlsx
+import os
+import pandas as pd
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+
+file3='cells_lisa.xlsx'
+excel3 = pd.read_excel(file3, sheet_name=None, header=None)
+files3=['260302_2', '260227_2', '260227_3']
+
+ds=[excel3[d] for d in files3]
+
+data3=[
+       
+       [np.array(ds[0].iloc[2:21+1, 7:46+1]), # low calcium 20
+       np.array(ds[0].iloc[26:45+1, 7:46+1]), # low calcium 100 Hz
+       np.array(ds[0].iloc[2:21+1, 55:90+1]),
+       np.array(ds[0].iloc[26:45+1, 55:91+1])],
+       
+       [np.array(ds[1].iloc[2:21+1, 7:46+1]), # low calcium 20
+       np.array(ds[1].iloc[26:45+1, 7:46+1]), # low calcium 100 Hz
+       np.array(ds[1].iloc[2:21+1, 55:69+1]),
+       np.array(ds[1].iloc[26:45+1, 55:69+1])],
+       
+       [np.array(ds[2].iloc[2:21+1, 7:49+1]), # low calcium 20
+       np.array(ds[2].iloc[26:45+1, 7:49+1]), # low calcium 100 Hz
+       np.array(ds[2].iloc[2:21+1, 58:77+1]),
+       np.array(ds[2].iloc[26:45+1, 58:77+1])],
+       
+       ]
+
+temp=[]
+for dset in data3:
+    tests=[]
+    for test in dset:
+        tests.append(test/(-50e-12))
+    temp.append(tests)
+data3=temp
+del(temp)
+
+#data[cell][testnum], low ca 20, low ca 100, high ca 20, high ca 100
+
+d3names=['low Ca 20 Hz', 'Low Ca 100 Hz',
+         'High Ca 20 Hz', 'High Ca 100 Hz']
+
+#%% 3 - calculate the analysis for the Lisa data
+
+import numpy as np
+
+n_boot = 10000
+rng = np.random.default_rng(0)
+
+n_cells = len(data3)
+n_tests = len(data3[0])
+
+total_jobs = n_cells * n_tests
+
+results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
+
+job = 0
+
+for cell in range(n_cells):
+    for test in range(n_tests):
+
+        job += 1
+
+        X = np.asarray(data3[cell][test], dtype=float)
+
+        n_time, n_repeats = X.shape
+
+        # -------------------------
+        # Mean + CI
+        # -------------------------
+
+        mean_trace = np.nanmean(X, axis=1)
+
+        boot_means = np.empty((n_boot, n_time))
+
+        for b in range(n_boot):
+            idx = rng.integers(0, n_repeats, n_repeats)
+            boot_means[b] = np.nanmean(X[:, idx], axis=1)
+
+        mean_lo = np.percentile(boot_means, 2.5, axis=0)
+        mean_hi = np.percentile(boot_means, 97.5, axis=0)
+
+        print(
+            f"Mean/CI: {100*job/total_jobs:.1f}% complete "
+            f"({job}/{total_jobs})"
+        )
+
+        # -------------------------
+        # Normalized repeats
+        # -------------------------
+
+        normX = X / X[0:1, :]
+        norm_mean = np.nanmean(normX, axis=1)
+
+        print(
+            f"Normalization: {100*job/total_jobs:.1f}% complete "
+            f"({job}/{total_jobs})"
+        )
+
+        # -------------------------
+        # Fano factor + CI
+        # -------------------------
+
+        fano = np.nanvar(X, axis=1, ddof=1) / np.nanmean(X, axis=1)
+
+        boot_fano = np.empty((n_boot, n_time))
+
+        for b in range(n_boot):
+            idx = rng.integers(0, n_repeats, n_repeats)
+
+            Xb = X[:, idx]
+
+            m = np.nanmean(Xb, axis=1)
+            v = np.nanvar(Xb, axis=1, ddof=1)
+
+            boot_fano[b] = v / m
+
+        fano_lo = np.percentile(boot_fano, 2.5, axis=0)
+        fano_hi = np.percentile(boot_fano, 97.5, axis=0)
+
+        print(
+            f"Fano/CI: {100*job/total_jobs:.1f}% complete "
+            f"({job}/{total_jobs})"
+        )
+
+        results[cell][test] = {
+            'raw': X,
+            'mean': mean_trace,
+            'mean_lo': mean_lo,
+            'mean_hi': mean_hi,
+            'norm': normX,
+            'norm_mean': norm_mean,
+            'fano': fano,
+            'fano_lo': fano_lo,
+            'fano_hi': fano_hi
+        }
+
+#%% 3 - plot the analysis for the Lisa data
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+fs = 20
+
+t = np.arange(1, results[0][0]['raw'].shape[0] + 1)
+
+for cell in range(n_cells):
+    for test in range(n_tests):
+
+        r = results[cell][test]
+
+        fig = plt.figure(figsize=(18, 10))
+
+        ax_raw  = plt.subplot2grid((2, 6), (0, 0), colspan=3)
+        ax_mean = plt.subplot2grid((2, 6), (0, 3), colspan=3)
+
+        ax_norm = plt.subplot2grid((2, 6), (1, 0), colspan=3)
+        ax_ff   = plt.subplot2grid((2, 6), (1, 3), colspan=3)
+
+        # =========================
+        # RAW TRACES
+        # =========================
+
+        X = r['raw']
+
+        for rep in range(X.shape[1]):
+            ax_raw.plot(
+                t,
+                X[:, rep],
+                alpha=0.4,
+                linewidth=1
+            )
+
+        ax_raw.set_title('All repeats', fontsize=fs)
+        ax_raw.set_xlabel('Pulse #', fontsize=fs)
+        ax_raw.set_ylabel('QC', fontsize=fs)
+        ax_raw.tick_params(labelsize=fs)
+
+        # =========================
+        # MEAN + BOOTSTRAP BOUNDS
+        # =========================
+
+        y = np.asarray(r['mean'])
+
+        lower = np.asarray(r['mean_lo'])
+        upper = np.asarray(r['mean_hi'])
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_mean.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2
+        )
+
+        eb[0].set_alpha(0.9)
+
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_mean.set_title('Mean + bootstrap bounds', fontsize=fs)
+        ax_mean.set_xlabel('Pulse #', fontsize=fs)
+        ax_mean.set_ylabel('QC', fontsize=fs)
+        ax_mean.tick_params(labelsize=fs)
+
+        # =========================
+        # NORMALIZED TRACES
+        # =========================
+
+        norm = r['norm']
+        norm_mean = r['norm_mean']
+
+        for rep in range(norm.shape[1]):
+            ax_norm.plot(
+                t,
+                norm[:, rep],
+                alpha=0.2,
+                linewidth=1,
+                label='_nolegend_'
+            )
+
+        ax_norm.plot(
+            t,
+            norm_mean,
+            color='black',
+            linewidth=3,
+            label='Mean normalized QC'
+        )
+
+        ax_norm.set_title('Normalized repeats', fontsize=fs)
+        ax_norm.set_xlabel('Pulse #', fontsize=fs)
+        ax_norm.set_ylabel('Normalized QC', fontsize=fs)
+        ax_norm.tick_params(labelsize=fs)
+        ax_norm.legend(fontsize=fs-2, frameon=False)
+
+        # =========================
+        # FANO FACTOR
+        # =========================
+
+        y = np.asarray(r['fano'])
+
+        lower = np.asarray(r['fano_lo'])
+        upper = np.asarray(r['fano_hi'])
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_ff.errorbar(
+            t,
+            y,
+            yerr=yerr,
+            fmt='-',
+            capsize=2
+        )
+
+        eb[0].set_alpha(0.9)
+
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_ff.set_title('Fano factor', fontsize=fs)
+        ax_ff.set_xlabel('Pulse #', fontsize=fs)
+        ax_ff.set_ylabel('Fano factor', fontsize=fs)
+        ax_ff.tick_params(labelsize=fs)
+
+        fig.suptitle(
+            f'{files3[cell]} : {d3names[test]}',
+            fontsize=fs
+        )
+
+        plt.tight_layout()
+        plt.show()
+        
+#%% 3 - lisa - ndev standard deviation bounds per cell/test (across repeats) - plot ALL repeats
+
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+
+fs = 15
+ndev = 2
+
+# pulse number axis
+t = np.arange(1, data3[0][0].shape[0] + 1)
+
+for cell in range(len(data3)):
+
+    for test in range(len(data3[cell])):
+
+        ds = np.asarray(data3[cell][test], dtype=float)  # (pulse, repeats)
+
+        # =====================================================
+        # mean + std across repeats at each pulse
+        # =====================================================
+
+        mean = np.mean(ds, axis=1)
+        std = np.std(ds, axis=1)
+
+        upper = mean + ndev * std
+        lower = mean - ndev * std
+
+        all_runs = []
+
+        for run in range(ds.shape[1]):
+
+            trace = ds[:, run]
+
+            out_of_bounds = (
+                (trace > upper) |
+                (trace < lower)
+            )
+
+            # ignore first pulse only for detection
+            out_of_bounds[0] = False
+
+            all_runs.append(
+                (run, trace, out_of_bounds)
+            )
+
+        nplots = len(all_runs)
+
+        # =========================
+        # balanced grid (closest to square)
+        # =========================
+        ncols = math.ceil(np.sqrt(nplots))
+        nrows = math.ceil(nplots / ncols)
+
+        fig, axes = plt.subplots(
+            nrows,
+            ncols,
+            figsize=(4 * ncols, 3 * nrows),
+            squeeze=False
+        )
+
+        axes = axes.flatten()
+
+        for k, (run, trace, mask) in enumerate(all_runs):
+
+            ax = axes[k]
+
+            ax.plot(
+                t,
+                trace,
+                linewidth=1,
+                label='Repeat'
+            )
+
+            ax.plot(
+                t,
+                mean,
+                '--',
+                linewidth=1,
+                label='Mean'
+            )
+
+            ax.plot(
+                t,
+                upper,
+                ':',
+                linewidth=1,
+                label=f'+{ndev} SD'
+            )
+
+            ax.plot(
+                t,
+                lower,
+                ':',
+                linewidth=1,
+                label=f'-{ndev} SD'
+            )
+
+            ax.fill_between(
+                t,
+                lower,
+                upper,
+                alpha=0.15
+            )
+
+            ax.scatter(
+                t[mask],
+                trace[mask],
+                color='red',
+                s=20,
+                label='Out of bounds'
+            )
+
+            ax.set_title(
+                f'Repeat {run + 1}',
+                fontsize=fs
+            )
+
+            ax.set_xlabel(
+                'Pulse #',
+                fontsize=fs
+            )
+
+            ax.set_ylabel(
+                'QC',
+                fontsize=fs
+            )
+
+            ax.tick_params(
+                labelsize=fs
+            )
+
+            if k == 0:
+                ax.legend(
+                    fontsize=fs-2,
+                    frameon=False
+                )
+
+        for k in range(nplots, len(axes)):
+            fig.delaxes(axes[k])
+
+        fig.suptitle(
+            f'{files3[cell]} : {d3names[test]}',
+            fontsize=fs
+        )
+
+        plt.tight_layout()
+        plt.show()
+        
+#%% 3 - permutations (analysis + plotting FIXED)
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+
+fnames = ['P11', 'P38']
+
+# =========================
+# LOAD DATA
+# =========================
+
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+
+data1 = np.array([df.to_numpy()[1:, 1:].astype(float) for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:].astype(float) for df in excel2.values()])
+
+data = [data1, data2]
+
+times = excel1[list(excel1.keys())[0]].to_numpy()[1:, 0].astype(float)
+
+# =========================
+# PERMUTATION TEST (FIXED)
+# =========================
+
+def perm_test(x, y, n_perm=5000):
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    obs = np.mean(x) - np.mean(y)
+
+    pooled = np.concatenate([x, y])
+    n = len(x)
+
+    count = 0
+
+    for _ in range(n_perm):
+
+        perm = np.random.permutation(pooled)
+
+        x_p = perm[:n]
+        y_p = perm[n:]
+
+        stat = np.mean(x_p) - np.mean(y_p)
+
+        if abs(stat) >= abs(obs):
+            count += 1
+
+    return count / n_perm
+
+
+# =========================
+# ANALYSIS + PLOTTING
+# =========================
+
+alpha = 0.05
+
+perm_results = []
+
+for fnum, fname in enumerate(fnames):
+
+    file_results = []
+
+    for cell_idx, cell in enumerate(data[fnum]):
+
+        first5 = cell[:, :5]
+        last5  = cell[:, -5:]
+
+        n_time = cell.shape[0]
+
+        pvals = np.zeros(n_time)
+        sig = np.zeros(n_time, dtype=bool)
+
+        first_mean = np.mean(first5, axis=1)
+        last_mean = np.mean(last5, axis=1)
+
+        for t in tqdm(range(n_time), desc=f'perm {fname} cell {cell_idx+1}'):
+
+            p = perm_test(first5[t, :], last5[t, :])
+
+            pvals[t] = p
+            sig[t] = p < alpha
+
+        file_results.append({
+            "pvals": pvals,
+            "sig": sig,
+            "first_mean": first_mean,
+            "last_mean": last_mean
+        })
+
+    perm_results.append(file_results)
+    
+# =============================================================================
+# import pickle
+# # save
+# with open('mydata.pkl', 'wb') as f:
+#     pickle.dump(perm_results, f)
+# # load
+# with open('mydata.pkl', 'rb') as f:
+#     perm_results = pickle.load(f)
+# =============================================================================
+#%% first and last 5 analysis for cells_lisa.xlsx
+
+alpha = 0.05
+
+perm_results = []
+
+n_cells = len(data3)
+
+for cell_idx in range(n_cells):
+
+    cell_results = []
+
+    for test_idx in range(4):
+
+        cell = data3[cell_idx][test_idx]
+
+        first5 = cell[:, :5]
+        last5  = cell[:, -5:]
+
+        n_time = cell.shape[0]
+
+        pvals = np.zeros(n_time)
+        sig = np.zeros(n_time, dtype=bool)
+
+        first_mean = np.mean(first5, axis=1)
+        last_mean  = np.mean(last5, axis=1)
+
+        for t in tqdm(range(n_time),
+                      desc=f'cell {cell_idx+1} test {test_idx+1}'):
+
+            p = perm_test(first5[t, :], last5[t, :])
+
+            pvals[t] = p
+            sig[t] = p < alpha
+
+        cell_results.append({
+            'pvals': pvals,
+            'sig': sig,
+            'first_mean': first_mean,
+            'last_mean': last_mean
+        })
+
+    perm_results.append(cell_results)
+
+
+# =========================
+# PLOTTING
+# one subplot per test of each cell
+# =========================
+
+nrows = len(data3)
+ncols = 4
+
+fig, axes = plt.subplots(
+    nrows,
+    ncols,
+    figsize=(4*ncols, 3*nrows),
+    sharex=False,
+    squeeze=False
+)
+
+for cell_idx in range(nrows):
+
+    for test_idx in range(ncols):
+
+        ax = axes[cell_idx, test_idx]
+
+        result = perm_results[cell_idx][test_idx]
+
+        cell = data3[cell_idx][test_idx]
+
+        n_time = cell.shape[0]
+        time = np.arange(n_time)
+
+        first_mean = result['first_mean']
+        last_mean = result['last_mean']
+        sig = result['sig']
+
+        ax.plot(
+            time,
+            first_mean,
+            lw=2,
+            label='First 5'
+        )
+
+        ax.plot(
+            time,
+            last_mean,
+            lw=2,
+            label='Last 5'
+        )
+
+        ax.scatter(
+            time[sig],
+            np.maximum(first_mean[sig], last_mean[sig]),
+            s=30,
+            marker='o',
+            facecolors='k',
+            edgecolors='k',
+            zorder=10
+        )
+
+        pct_sig = 100 * np.mean(sig)
+
+        ax.set_title(
+            f'Cell {cell_idx+1}\n{d3names[test_idx]}\n'
+            f'{pct_sig:.1f}% significant',
+            fontsize=10
+        )
+
+        if cell_idx == nrows - 1:
+            ax.set_xlabel('Time Point')
+
+        if test_idx == 0:
+            ax.set_ylabel('Quantal Content')
+
+        if cell_idx == 0 and test_idx == 0:
+            ax.legend()
+
+plt.tight_layout()
+plt.show()
+        
+#%% 3 - plot permutation results
+# =========================
+# PLOTTING (SIGNIFICANCE STYLE MARKERS)
+# solid = significant, hollow = not significant
+# =========================
+
+n_cells = len(data3)
+n_tests = 4
+
+fig, axes = plt.subplots(
+    n_cells,
+    n_tests,
+    figsize=(5*n_tests, 4*n_cells)
+)
+
+axes = np.atleast_2d(axes)
+
+for cell_idx in range(n_cells):
+
+    for test_idx in range(n_tests):
+
+        ax = axes[cell_idx, test_idx]
+
+        r = perm_results[cell_idx][test_idx]
+
+        y1 = r["first_mean"]
+        y2 = r["last_mean"]
+
+        sig = r["sig"]
+        ns = ~sig
+
+        percent_ns = 100 * np.mean(ns)
+
+        # highlight highly stable datasets
+        if percent_ns >= 90:
+            for spine in ax.spines.values():
+                spine.set_color('red')
+                spine.set_linewidth(3)
+
+        t = np.arange(len(y1))
+
+        # =========================
+        # LINES
+        # =========================
+
+        ax.plot(
+            t,
+            y1,
+            color='C0',
+            lw=1
+        )
+
+        ax.plot(
+            t,
+            y2,
+            color='C1',
+            lw=1
+        )
+
+        # =========================
+        # FIRST 5 markers
+        # =========================
+
+        ax.plot(
+            t[sig],
+            y1[sig],
+            'o',
+            markerfacecolor='C0',
+            markeredgecolor='C0',
+            markersize=10,
+            linestyle='None',
+            label='First 5 (sig)'
+        )
+
+        ax.plot(
+            t[ns],
+            y1[ns],
+            'o',
+            markerfacecolor='white',
+            markeredgecolor='C0',
+            markersize=6,
+            linestyle='None',
+            label='First 5 (ns)'
+        )
+
+        # =========================
+        # LAST 5 markers
+        # =========================
+
+        ax.plot(
+            t[sig],
+            y2[sig],
+            'o',
+            markerfacecolor='C1',
+            markeredgecolor='C1',
+            markersize=10,
+            linestyle='None',
+            label='Last 5 (sig)'
+        )
+
+        ax.plot(
+            t[ns],
+            y2[ns],
+            'o',
+            markerfacecolor='white',
+            markeredgecolor='C1',
+            markersize=6,
+            linestyle='None',
+            label='Last 5 (ns)'
+        )
+
+        ax.set_title(
+            f'Cell {cell_idx+1}\n{d3names[test_idx]}'
+        )
+
+        ax.set_xlabel('Time Point')
+        ax.set_ylabel('Mean QC')
+
+        ax.legend(
+            title=f'NS = {percent_ns:.1f}%',
+            fontsize=8
+        )
+
+plt.tight_layout()
+plt.show()
+
+#%% CALCULATION
+
+import numpy as np
+from tqdm import tqdm
+
+def perm_test(x, y, n_perm=5000):
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    obs = np.mean(x) - np.mean(y)
+
+    pooled = np.concatenate([x, y])
+    n = len(x)
+
+    count = 0
+
+    for _ in range(n_perm):
+
+        perm = np.random.permutation(pooled)
+
+        x_p = perm[:n]
+        y_p = perm[n:]
+
+        stat = np.mean(x_p) - np.mean(y_p)
+
+        if abs(stat) >= abs(obs):
+            count += 1
+
+    return count / n_perm
+
+
+n_boot = 10000
+rng = np.random.default_rng(0)
+
+alpha = 0.05
+
+n_cells = len(data3)
+n_tests = len(data3[0])
+
+total_jobs = n_cells * n_tests
+job = 0
+
+results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
+
+for cell in range(n_cells):
+
+    for test in range(n_tests):
+
+        job += 1
+
+        X = np.asarray(data3[cell][test], dtype=float)
+
+        n_time, n_repeats = X.shape
+
+        # ==================================================
+        # MEAN + BOOTSTRAP CI
+        # ==================================================
+
+        mean_trace = np.nanmean(X, axis=1)
+
+        boot_means = np.empty((n_boot, n_time))
+
+        for b in range(n_boot):
+
+            idx = rng.integers(0, n_repeats, n_repeats)
+
+            boot_means[b] = np.nanmean(
+                X[:, idx],
+                axis=1
+            )
+
+        mean_lo = np.percentile(
+            boot_means,
+            2.5,
+            axis=0
+        )
+
+        mean_hi = np.percentile(
+            boot_means,
+            97.5,
+            axis=0
+        )
+
+        # ==================================================
+        # NORMALIZED
+        # ==================================================
+
+        normX = X / X[0:1, :]
+
+        norm_mean = np.nanmean(
+            normX,
+            axis=1
+        )
+
+        # ==================================================
+        # FANO
+        # ==================================================
+
+        fano = (
+            np.nanvar(X, axis=1, ddof=1)
+            /
+            np.nanmean(X, axis=1)
+        )
+
+        boot_fano = np.empty(
+            (n_boot, n_time)
+        )
+
+        for b in range(n_boot):
+
+            idx = rng.integers(
+                0,
+                n_repeats,
+                n_repeats
+            )
+
+            Xb = X[:, idx]
+
+            m = np.nanmean(
+                Xb,
+                axis=1
+            )
+
+            v = np.nanvar(
+                Xb,
+                axis=1,
+                ddof=1
+            )
+
+            boot_fano[b] = v / m
+
+        fano_lo = np.percentile(
+            boot_fano,
+            2.5,
+            axis=0
+        )
+
+        fano_hi = np.percentile(
+            boot_fano,
+            97.5,
+            axis=0
+        )
+
+        # ==================================================
+        # FIRST 5 vs LAST 5
+        # ==================================================
+
+        first5 = X[:, :5]
+        last5  = X[:, -5:]
+
+        pvals = np.zeros(n_time)
+
+        sig = np.zeros(
+            n_time,
+            dtype=bool
+        )
+
+        first_mean = np.mean(
+            first5,
+            axis=1
+        )
+
+        last_mean = np.mean(
+            last5,
+            axis=1
+        )
+
+        for tt in range(n_time):
+
+            p = perm_test(
+                first5[tt, :],
+                last5[tt, :]
+            )
+
+            pvals[tt] = p
+            sig[tt] = p < alpha
+
+        print(
+            f'{100*job/total_jobs:.1f}% '
+            f'({job}/{total_jobs})'
+        )
+
+        results[cell][test] = {
+
+            'raw': X,
+
+            'mean': mean_trace,
+            'mean_lo': mean_lo,
+            'mean_hi': mean_hi,
+
+            'norm': normX,
+            'norm_mean': norm_mean,
+
+            'fano': fano,
+            'fano_lo': fano_lo,
+            'fano_hi': fano_hi,
+
+            'perm_pvals': pvals,
+            'perm_sig': sig,
+
+            'perm_first_mean': first_mean,
+            'perm_last_mean': last_mean
+        }
+        
+#%% plotting all 5 (spaced out + centered outside legend)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+fs = 20
+
+for cell in range(n_cells):
+
+    for test in range(n_tests):
+
+        r = results[cell][test]
+
+        t = np.arange(1, r['raw'].shape[0] + 1)
+
+        fig = plt.figure(figsize=(20, 11))
+
+        ax_raw  = plt.subplot2grid((2, 6), (0, 0), colspan=2)
+        ax_mean = plt.subplot2grid((2, 6), (0, 2), colspan=2)
+        ax_norm = plt.subplot2grid((2, 6), (0, 4), colspan=2)
+
+        ax_ff   = plt.subplot2grid((2, 6), (1, 1), colspan=2)
+        ax_perm = plt.subplot2grid((2, 6), (1, 3), colspan=2)
+
+        # =====================================
+        # RAW
+        # =====================================
+
+        X = r['raw']
+
+        for rep in range(X.shape[1]):
+            ax_raw.plot(t, X[:, rep], alpha=0.5, linewidth=1)
+
+        ax_raw.set_title('All repeats', fontsize=fs)
+        ax_raw.set_xlabel('Pulse #', fontsize=fs)
+        ax_raw.set_ylabel('QC', fontsize=fs)
+        ax_raw.tick_params(labelsize=fs)
+
+        # =====================================
+        # MEAN
+        # =====================================
+
+        y = r['mean']
+        lower = r['mean_lo']
+        upper = r['mean_hi']
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_mean.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_mean.set_title('Mean + bootstrap bounds', fontsize=fs)
+        ax_mean.set_xlabel('Pulse #', fontsize=fs)
+        ax_mean.set_ylabel('QC', fontsize=fs)
+        ax_mean.tick_params(labelsize=fs)
+
+        # =====================================
+        # NORMALIZED
+        # =====================================
+
+        norm = r['norm']
+
+        for rep in range(norm.shape[1]):
+            ax_norm.plot(t, norm[:, rep], alpha=0.2, linewidth=1)
+
+        ax_norm.plot(t, r['norm_mean'], color='black', linewidth=3)
+
+        ax_norm.set_title('Normalized repeats', fontsize=fs)
+        ax_norm.set_xlabel('Pulse #', fontsize=fs)
+        ax_norm.set_ylabel('Normalized QC', fontsize=fs)
+        ax_norm.tick_params(labelsize=fs)
+
+        # =====================================
+        # FANO
+        # =====================================
+
+        y = r['fano']
+        lower = r['fano_lo']
+        upper = r['fano_hi']
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_ff.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_ff.set_title('Fano factor', fontsize=fs)
+        ax_ff.set_xlabel('Pulse #', fontsize=fs)
+        ax_ff.set_ylabel('Fano factor', fontsize=fs)
+        ax_ff.tick_params(labelsize=fs)
+
+        # =====================================
+        # PERMUTATION PANEL
+        # =====================================
+
+        y1 = r['perm_first_mean']
+        y2 = r['perm_last_mean']
+
+        sig = r['perm_sig']
+        ns = ~sig
+
+        percent_ns = 100 * np.mean(ns)
+
+# =============================================================================
+#         if percent_ns >= 90:
+#             for spine in ax_perm.spines.values():
+#                 spine.set_color('red')
+#                 spine.set_linewidth(3)
+# =============================================================================
+
+        ax_perm.plot(t, y1, color='C0', lw=1)
+        ax_perm.plot(t, y2, color='C1', lw=1)
+
+        ax_perm.plot(t[sig], y1[sig], 'o',
+                     markerfacecolor='C0',
+                     markeredgecolor='C0',
+                     markersize=10,
+                     linestyle='None')
+
+        ax_perm.plot(t[ns], y1[ns], 'o',
+                     markerfacecolor='white',
+                     markeredgecolor='C0',
+                     markersize=6,
+                     linestyle='None')
+
+        ax_perm.plot(t[sig], y2[sig], 'o',
+                     markerfacecolor='C1',
+                     markeredgecolor='C1',
+                     markersize=10,
+                     linestyle='None')
+
+        ax_perm.plot(t[ns], y2[ns], 'o',
+                     markerfacecolor='white',
+                     markeredgecolor='C1',
+                     markersize=6,
+                     linestyle='None')
+
+        # =========================
+        # LEGEND (NS text now matches fs exactly)
+        # =========================
+
+        legend_handles = [
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='C0', markeredgecolor='C0',
+                   markersize=8, label='First 5 significant'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C0',
+                   markersize=8, label='First 5 not significant'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='C1', markeredgecolor='C1',
+                   markersize=8, label='Last 5 significant'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C1',
+                   markersize=8, label='Last 5 not significant'),
+        ]
+
+        ax_perm.legend(
+            handles=legend_handles,
+            loc='center left',
+            bbox_to_anchor=(1.02, 0.5),
+            borderaxespad=0,
+            fontsize=fs,
+            title=f'% of stimulli with \nsignificant differences\n = {percent_ns:.1f}%',
+            title_fontsize=fs
+        )
+
+        ax_perm.set_title('First 5 vs Last 5', fontsize=fs)
+        ax_perm.set_xlabel('Pulse #', fontsize=fs)
+        ax_perm.set_ylabel('Mean QC', fontsize=fs)
+        ax_perm.tick_params(labelsize=fs)
+
+        # =========================
+        # spacing fix (balanced)
+        # =========================
+
+        plt.subplots_adjust(
+            left=0.03,
+            right=0.96,
+            top=0.90,
+            bottom=0.08,
+            wspace=0.55,
+            hspace=0.35
+        )
+
+        fig.suptitle(
+            f'{files3[cell]} : {d3names[test]}',
+            fontsize=fs
+        )
+
+        plt.show()
+
+#%% CALCULATION t-test
+
+import numpy as np
+from tqdm import tqdm
+from scipy.stats import ttest_ind
+
+n_boot = 10000
+rng = np.random.default_rng(0)
+
+n_cells = len(data3)
+n_tests = len(data3[0])
+
+total_jobs = n_cells * n_tests
+job = 0
+
+results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
+
+for cell in range(n_cells):
+
+    for test in range(n_tests):
+
+        job += 1
+
+        X = np.asarray(data3[cell][test], dtype=float)
+
+        n_time, n_repeats = X.shape
+
+        # ==================================================
+        # MEAN + BOOTSTRAP CI
+        # ==================================================
+
+        mean_trace = np.nanmean(X, axis=1)
+
+        boot_means = np.empty((n_boot, n_time))
+
+        for b in range(n_boot):
+
+            idx = rng.integers(0, n_repeats, n_repeats)
+
+            boot_means[b] = np.nanmean(
+                X[:, idx],
+                axis=1
+            )
+
+        mean_lo = np.percentile(boot_means, 2.5, axis=0)
+        mean_hi = np.percentile(boot_means, 97.5, axis=0)
+
+        # ==================================================
+        # NORMALIZED
+        # ==================================================
+
+        normX = X / X[0:1, :]
+
+        norm_mean = np.nanmean(normX, axis=1)
+
+        # ==================================================
+        # FANO
+        # ==================================================
+
+        fano = (
+            np.nanvar(X, axis=1, ddof=1)
+            / np.nanmean(X, axis=1)
+        )
+
+        boot_fano = np.empty((n_boot, n_time))
+
+        for b in range(n_boot):
+
+            idx = rng.integers(0, n_repeats, n_repeats)
+
+            Xb = X[:, idx]
+
+            m = np.nanmean(Xb, axis=1)
+            v = np.nanvar(Xb, axis=1, ddof=1)
+
+            boot_fano[b] = v / m
+
+        fano_lo = np.percentile(boot_fano, 2.5, axis=0)
+        fano_hi = np.percentile(boot_fano, 97.5, axis=0)
+
+        # ==================================================
+        # FIRST 5 vs LAST 5 (t-test)
+        # ==================================================
+
+        first5 = X[:, :5]
+        last5  = X[:, -5:]
+
+        pvals = np.zeros(n_time)
+        sig = np.zeros(n_time, dtype=bool)
+        sig_hard = np.zeros(n_time, dtype=bool)
+
+        first_mean = np.mean(first5, axis=1)
+        last_mean = np.mean(last5, axis=1)
+
+        for tt in range(n_time):
+
+            x = first5[tt, :]
+            y = last5[tt, :]
+
+            _, p = ttest_ind(x, y, equal_var=False, nan_policy='omit')
+
+            pvals[tt] = p
+            sig[tt] = p < 0.05
+            sig_hard[tt] = p < 0.01
+
+        print(f'{100*job/total_jobs:.1f}% ({job}/{total_jobs})')
+
+        results[cell][test] = {
+
+            'raw': X,
+
+            'mean': mean_trace,
+            'mean_lo': mean_lo,
+            'mean_hi': mean_hi,
+
+            'norm': normX,
+            'norm_mean': norm_mean,
+
+            'fano': fano,
+            'fano_lo': fano_lo,
+            'fano_hi': fano_hi,
+
+            'ttest_pvals': pvals,
+            'ttest_sig': sig,
+            'ttest_sig_hard': sig_hard,
+
+            'ttest_first_mean': first_mean,
+            'ttest_last_mean': last_mean
+        }
+        
+#%% plotting all 5 (spaced out + centered outside legend) — UPDATED FOR T-TEST
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+fs = 20
+
+for cell in range(n_cells):
+
+    for test in range(n_tests):
+
+        r = results[cell][test]
+
+        t = np.arange(1, r['raw'].shape[0] + 1)
+
+        fig = plt.figure(figsize=(20, 11))
+
+        ax_raw  = plt.subplot2grid((2, 6), (0, 0), colspan=2)
+        ax_mean = plt.subplot2grid((2, 6), (0, 2), colspan=2)
+        ax_norm = plt.subplot2grid((2, 6), (0, 4), colspan=2)
+
+        ax_ff   = plt.subplot2grid((2, 6), (1, 1), colspan=2)
+        ax_tt   = plt.subplot2grid((2, 6), (1, 3), colspan=2)
+
+        # =====================================
+        # RAW
+        # =====================================
+
+        X = r['raw']
+
+        for rep in range(X.shape[1]):
+            ax_raw.plot(t, X[:, rep], alpha=0.5, linewidth=1)
+
+        ax_raw.set_title('All repeats', fontsize=fs)
+        ax_raw.set_xlabel('Pulse #', fontsize=fs)
+        ax_raw.set_ylabel('QC', fontsize=fs)
+        ax_raw.tick_params(labelsize=fs)
+
+        # =====================================
+        # MEAN
+        # =====================================
+
+        y = r['mean']
+        lower = r['mean_lo']
+        upper = r['mean_hi']
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_mean.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_mean.set_title('Mean + bootstrap bounds', fontsize=fs)
+        ax_mean.set_xlabel('Pulse #', fontsize=fs)
+        ax_mean.set_ylabel('QC', fontsize=fs)
+        ax_mean.tick_params(labelsize=fs)
+
+        # =====================================
+        # NORMALIZED
+        # =====================================
+
+        norm = r['norm']
+
+        for rep in range(norm.shape[1]):
+            ax_norm.plot(t, norm[:, rep], alpha=0.2, linewidth=1)
+
+        ax_norm.plot(t, r['norm_mean'], color='black', linewidth=3)
+
+        ax_norm.set_title('Normalized repeats', fontsize=fs)
+        ax_norm.set_xlabel('Pulse #', fontsize=fs)
+        ax_norm.set_ylabel('Normalized QC', fontsize=fs)
+        ax_norm.tick_params(labelsize=fs)
+
+        # =====================================
+        # FANO
+        # =====================================
+
+        y = r['fano']
+        lower = r['fano_lo']
+        upper = r['fano_hi']
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_ff.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_ff.set_title('Fano factor', fontsize=fs)
+        ax_ff.set_xlabel('Pulse #', fontsize=fs)
+        ax_ff.set_ylabel('Fano factor', fontsize=fs)
+        ax_ff.tick_params(labelsize=fs)
+
+        # =====================================
+        # T-TEST PANEL (UPDATED)
+        # =====================================
+
+        y1 = r['ttest_first_mean']
+        y2 = r['ttest_last_mean']
+
+        sig_05 = r['ttest_sig']
+        sig_01 = r['ttest_sig_hard']
+
+        ns = ~sig_05
+
+        percent_sig = 100 * np.mean(sig_05)
+        percent_sig01 = 100 * np.mean(sig_01)
+
+        ax_tt.plot(t, y1, color='C0', lw=1)
+        ax_tt.plot(t, y2, color='C1', lw=1)
+
+        # p < 0.01 (strong significance)
+        ax_tt.plot(t[sig_01], y1[sig_01], 's',
+                   markerfacecolor='C0',
+                   markeredgecolor='C0',
+                   markersize=15,
+                   linestyle='None')
+
+        ax_tt.plot(t[sig_01], y2[sig_01], 's',
+                   markerfacecolor='C1',
+                   markeredgecolor='C1',
+                   markersize=15,
+                   linestyle='None')
+
+        # 0.05 significant but not 0.01
+        mid = sig_05 & ~sig_01
+
+        ax_tt.plot(t[mid], y1[mid], 'o',
+                   markerfacecolor='C0',
+                   markeredgecolor='white',
+                   markersize=12,
+                   linestyle='None')
+
+        ax_tt.plot(t[mid], y2[mid], 'o',
+                   markerfacecolor='C1',
+                   markeredgecolor='white',
+                   markersize=12,
+                   linestyle='None')
+
+        # not significant
+        ax_tt.plot(t[ns], y1[ns], 'o',
+                   markerfacecolor='white',
+                   markeredgecolor='C0',
+                   markersize=6,
+                   linestyle='None')
+
+        ax_tt.plot(t[ns], y2[ns], 'o',
+                   markerfacecolor='white',
+                   markeredgecolor='C1',
+                   markersize=6,
+                   linestyle='None')
+
+        # =========================
+        # LEGEND
+        # =========================
+
+        legend_handles = [
+
+            Line2D([0],[0], marker='s', linestyle='None',
+                   markerfacecolor='C0', markeredgecolor='C0',
+                   markersize=15, label='First 5 (p < 0.01)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='C0', markeredgecolor='white',
+                   markersize=12, label='First 5 (0.01 ≤ p < 0.05)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C0',
+                   markersize=8, label='First 5 (insignificant)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C1',
+                   markersize=8, label='Last 5 (insignificant)'),
+
+            Line2D([0],[0], marker='s', linestyle='None',
+                   markerfacecolor='C1', markeredgecolor='C1',
+                   markersize=15, label='Last 5 (p < 0.01)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='C1', markeredgecolor='white',
+                   markersize=12, label='Last 5 (0.01 ≤ p < 0.05)'),
+        ]
+
+        ax_tt.legend(
+            handles=legend_handles,
+            loc='center left',
+            bbox_to_anchor=(1.02, 0.5),
+            borderaxespad=0,
+            fontsize=fs,
+            title=f'Significant time points\np<0.05: {percent_sig:.1f}%\np<0.01: {percent_sig01:.1f}%',
+            title_fontsize=fs
+        )
+
+        ax_tt.set_title('First 5 vs Last 5 (t-test)', fontsize=fs)
+        ax_tt.set_xlabel('Pulse #', fontsize=fs)
+        ax_tt.set_ylabel('Mean QC', fontsize=fs)
+        ax_tt.tick_params(labelsize=fs)
+
+        # =========================
+        # spacing fix
+        # =========================
+
+        plt.subplots_adjust(
+            left=0.03,
+            right=0.96,
+            top=0.90,
+            bottom=0.08,
+            wspace=0.55,
+            hspace=0.35
+        )
+
+        fig.suptitle(
+            f'{files3[cell]} : {d3names[test]}',
+            fontsize=fs
+        )
+
+        plt.show()
