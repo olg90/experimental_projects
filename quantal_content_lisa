@@ -3853,8 +3853,20 @@ def sim(ninit, nuinit, pr, M, kin, kd, tauc, ca, c, cb, delta_t, aptimerinit, na
     
     return tlist, nlist, nulist, bavs, prelist, calist
 
+# =============================================================================
+# def pr(ca):
+#     return 0.3
+# =============================================================================
+
 def pr(ca):
-    return 0.3
+    return 1-(1-0.22)*np.exp(-(ca-cb))
+
+fnum=0
+f=[20, 100]
+aptimer=1/f[fnum]
+delta_t = 1e-3
+naps=20
+navgs = 1000
 
 M=30
 kin=150 # refilling reserve pool
@@ -3862,16 +3874,12 @@ kd=1.5 # docking
 
 tauc=10e-3
 ca=50e-3
-cinc=100e-3 # 0.0042
+caincs=[100e-3, 500e-3]
+cinc=caincs[fnum]
 cb=ca
 
 n=0
 nu=80
-
-aptimer=50e-3
-delta_t = 1e-3
-naps=20
-navgs = 1000
 
 res=sim(n, nu, pr, M, kin, kd, tauc, ca, cinc, cb, delta_t, aptimer, naps, navgs)
 # =============================================================================
