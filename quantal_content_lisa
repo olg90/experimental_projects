@@ -3874,44 +3874,38 @@ naps=20
 navgs = 1000
 
 res=sim(n, nu, pr, M, kin, kd, tauc, ca, cinc, cb, delta_t, aptimer, naps, navgs)
-fig,ax=plt.subplots(4,1)
-ax[0].plot(res[0], res[2])
-ax[0].set_ylabel('nu')
-ax[1].plot(res[0], res[1])
-ax[1].set_ylabel('n')
-ax[2].plot(res[0], res[5])
-ax[2].set_ylabel('ca')
-ax[3].plot(range(1,len(res[3])+1),res[3], marker='o')
-
-# ============================================================
-# 4th panel: QC (20 Hz low Ca) - FROM PRECOMPUTED RESULTS ONLY
-# ============================================================
-
-# pick: cell 0, test 0 = "low Ca 20 Hz" in your labeling
-r = results[2][0]
-
-y = r['mean']
-lower = r['mean_lo']
-upper = r['mean_hi']
-
-t = np.arange(1, len(y) + 1)
-
-yerr = np.vstack((y - lower, upper - y))
-
-eb = ax[3].errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
-
-eb[0].set_alpha(0.9)
-for bar in eb[2]:
-    bar.set_alpha(0.25)
-eb[1][0].set_alpha(0.25)
-eb[1][1].set_alpha(0.25)
-
-ax[3].set_ylabel('QC (20 Hz low Ca)')
-ax[3].set_xlabel('Pulse #')
-
-# ============================================================
-# SEPARATE FIGURE: QC (simulation + data)
-# ============================================================
+# =============================================================================
+# fig,ax=plt.subplots(4,1)
+# ax[0].plot(res[0], res[2])
+# ax[0].set_ylabel('nu')
+# ax[1].plot(res[0], res[1])
+# ax[1].set_ylabel('n')
+# ax[2].plot(res[0], res[5])
+# ax[2].set_ylabel('ca')
+# ax[3].plot(range(1,len(res[3])+1),res[3], marker='o')
+# # ============================================================
+# # 4th panel: QC (20 Hz low Ca) - FROM PRECOMPUTED RESULTS ONLY
+# # ============================================================
+# # pick: cell 0, test 0 = "low Ca 20 Hz" in your labeling
+# tnum=0 #0-20L, 1-100L, 2-20H, 3-100H
+# r = results[2][tnum]
+# y = r['mean']
+# lower = r['mean_lo']
+# upper = r['mean_hi']
+# t = np.arange(1, len(y) + 1)
+# yerr = np.vstack((y - lower, upper - y))
+# eb = ax[3].errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+# eb[0].set_alpha(0.9)
+# for bar in eb[2]:
+#     bar.set_alpha(0.25)
+# eb[1][0].set_alpha(0.25)
+# eb[1][1].set_alpha(0.25)
+# ax[3].set_ylabel('QC (20 Hz low Ca)')
+# ax[3].set_xlabel('Pulse #')
+# # ============================================================
+# # SEPARATE FIGURE: QC (simulation + data)
+# # ============================================================
+# =============================================================================
 
 import numpy as np
 import matplotlib.pyplot as plt
