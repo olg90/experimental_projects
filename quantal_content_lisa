@@ -3945,3 +3945,322 @@ ax2.tick_params(axis='both', labelsize=fs)
 ax2.legend(fontsize=fs)
 plt.tight_layout()
 plt.show()
+
+#%% testing pr(ca)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def sim(ninit, nuinit, pr, taup, M, kin, kd, tauc, ca, c, cb, 
+        delta_t, aptimerinit, naps, navgs):
+
+    bavs=[]
+
+    for _ in range(navgs):
+
+        nlist=[]
+        nulist=[]
+        blist=[]
+        calist=[]
+        tlist=[]
+        prelist=[]
+
+        n=ninit
+        nu=nuinit
+        tcurr=0
+        timer = delta_t
+        apcount=0
+        aptimer=aptimerinit
+        e=1e-6
+
+        while apcount<naps:
+
+            t0=exponential(1/(kin+e))
+            t1=exponential(1/(kd*nu*(M-n)+e))
+            t2=aptimer
+            t3=timer
+
+            if t0<t1 and t0<t2 and t0<t3:
+                nu+=1
+                tmin=t0
+                aptimer-=tmin
+                timer-=tmin
+
+            elif t1<t0 and t1<t2 and t1<t3:
+                nu-=1
+                n+=1
+                tmin=t1
+                aptimer-=tmin
+                timer-=tmin
+
+            if t2<t0 and t2<t1 and t2<t3:
+                ca+=c
+                b=binomial(n,pr(ca, cb, taup))
+                n-=b
+                blist.append(b)
+                apcount+=1
+
+                tmin=t2
+                timer-=tmin
+                aptimer=aptimerinit
+                prelist.append(tcurr+tmin)
+
+            else:
+                tmin=t3
+                timer=delta_t
+                aptimer-=tmin
+                nlist.append(n)
+                nulist.append(nu)
+                tlist.append(tcurr)
+                calist.append(ca)
+
+            tcurr+=tmin
+
+            # Calcium decay
+            ca += -(ca-cb)/tauc*tmin
+
+        bavs.append(blist)
+
+    minlen=np.min([len(x) for x in bavs])
+    bavs=np.array([x[:minlen] for x in bavs])
+    bavs=np.mean(bavs,axis=0)
+
+    return tlist,nlist,nulist,bavs,prelist,calist
+
+# great fit for 20HzL
+def pr(ca,cb, taup):
+    pmax=1
+    pmin=0.1
+    return pmax-(pmax-pmin)*np.exp(-(ca-cb)/taup)
+
+M=100
+kin=180
+kd=5
+
+tauc=20e-3
+cb=10e-3
+caincs=[5e-3,100e-3]
+
+taup=3
+
+nu=60 # number of SVs in the reserve pool
+n=30 # number of docked SVs initially
+
+# =============================================================================
+# # great fit for 20HzL
+# def pr(ca,cb):
+#     pmax=0.7
+#     pmin=0.1
+#     return pmax-(pmax-pmin)*np.exp(-(ca-cb))
+# 
+# M=100
+# kin=180 # rate of refilling the pool
+# kd=5 # rate of docking from the pool
+# 
+# tauc=15e-3
+# cb=10e-3
+# caincs=[5e-3,100e-3]
+# 
+# nu=60 # number of SVs in the reserve pool
+# n=30 # number of docked SVs initially
+# =============================================================================
+
+# -----------------------------------------------------------
+freqs=[20,100]
+delta_t=1e-3
+naps=20
+navgs=1000
+
+fs=15
+
+# =============================================================================
+# # ============================================================
+# # Plot simulations and experimental data
+# # ============================================================
+# 
+# fig,ax=plt.subplots(2,1,figsize=(8,7),sharex=True)
+# 
+# for i in range(2):
+# 
+#     freq=freqs[i]
+#     aptimer=1/freq
+#     cinc=caincs[i]
+#     ca=cb
+# 
+#     # Run simulation
+#     res=sim(
+#         n,
+#         nu,
+#         pr,
+#         taup,
+#         M,
+#         kin,
+#         kd,
+#         tauc,
+#         ca,
+#         cinc,
+#         cb,
+#         delta_t,
+#         aptimer,
+#         naps,
+#         navgs
+#     )
+# 
+#     # -----------------------------
+#     # Experimental data
+#     # -----------------------------
+#     # results[2][0] = 20 Hz Low Ca
+#     # results[2][1] = 100 Hz Low Ca
+# 
+#     r=results[2][i]
+# 
+#     y=r['mean']
+#     lower=r['mean_lo']
+#     upper=r['mean_hi']
+# 
+#     t=np.arange(1,len(y)+1)
+#     yerr=np.vstack((y-lower,upper-y))
+# 
+#     eb=ax[i].errorbar(
+#         t,
+#         y,
+#         yerr=yerr,
+#         fmt='-',
+#         capsize=2,
+#         label='Data'
+#     )
+# 
+#     eb[0].set_alpha(0.9)
+# 
+#     for bar in eb[2]:
+#         bar.set_alpha(0.35)
+# 
+#     eb[1][0].set_alpha(0.35)
+#     eb[1][1].set_alpha(0.35)
+# 
+#     # -----------------------------
+#     # Simulation
+#     # -----------------------------
+#     tsim=np.arange(1,len(res[3])+1)
+# 
+#     ax[i].plot(
+#         tsim,
+#         res[3],
+#         '-o',
+#         linewidth=1.5,
+#         label='Simulation'
+#     )
+# 
+#     ax[i].set_title(f'{freq} Hz Low Calcium',fontsize=fs)
+#     ax[i].set_ylabel('Mean QC',fontsize=fs)
+#     ax[i].tick_params(labelsize=fs)
+#     ax[i].legend(fontsize=fs)
+# 
+# ax[1].set_xlabel('Pulse #',fontsize=fs)
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
+
+# Plot all parameters
+
+fig,ax=plt.subplots(2,4,figsize=(16,7),sharex=False)
+
+for i in range(2):
+
+    freq=freqs[i]
+    aptimer=1/freq
+    cinc=caincs[i]
+    ca=cb
+
+    # Run simulation
+    res=sim(
+        n,
+        nu,
+        pr,
+        taup,
+        M,
+        kin,
+        kd,
+        tauc,
+        ca,
+        cinc,
+        cb,
+        delta_t,
+        aptimer,
+        naps,
+        navgs
+    )
+
+    # -----------------------------
+    # Experimental data
+    # -----------------------------
+    r=results[2][i]
+
+    y=r['mean']
+    lower=r['mean_lo']
+    upper=r['mean_hi']
+
+    t=np.arange(1,len(y)+1)
+    yerr=np.vstack((y-lower,upper-y))
+
+    eb=ax[i,0].errorbar(
+        t,
+        y,
+        yerr=yerr,
+        fmt='-',
+        capsize=2,
+        label='Data'
+    )
+
+    eb[0].set_alpha(0.9)
+
+    for bar in eb[2]:
+        bar.set_alpha(0.35)
+
+    eb[1][0].set_alpha(0.35)
+    eb[1][1].set_alpha(0.35)
+
+    # -----------------------------
+    # Simulation
+    # -----------------------------
+    tsim=np.arange(1,len(res[3])+1)
+
+    ax[i,0].plot(
+        tsim,
+        res[3],
+        '-o',
+        linewidth=1.5,
+        label='Simulation'
+    )
+
+    ax[i,0].set_title(f'{freq} Hz Low Calcium',fontsize=fs)
+    ax[i,0].set_ylabel('Mean QC',fontsize=fs)
+    ax[i,0].tick_params(labelsize=fs)
+    ax[i,0].legend(fontsize=fs)
+
+    # -----------------------------
+    # nu, n, and calcium
+    # -----------------------------
+    t = res[0]
+
+    ax[i,1].plot(t,res[2])
+    ax[i,1].set_title(f'{freq} Hz')
+    ax[i,1].set_ylabel('nu')
+
+    ax[i,2].plot(t,res[1])
+    ax[i,2].set_title(f'{freq} Hz')
+    ax[i,2].set_ylabel('n')
+
+    ax[i,3].plot(t,res[5])
+    ax[i,3].set_title(f'{freq} Hz')
+    ax[i,3].set_ylabel('Ca')
+
+ax[1,0].set_xlabel('Pulse #')
+ax[1,1].set_xlabel('Time (s)')
+ax[1,2].set_xlabel('Time (s)')
+ax[1,3].set_xlabel('Time (s)')
+
+plt.tight_layout()
+plt.show()
