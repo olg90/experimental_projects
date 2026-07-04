@@ -3493,6 +3493,214 @@ print("Rates shape:", rates.shape)
 mean_rates = np.nanmean(rates, axis=0)
 print("Mean rates across configs:", mean_rates)
 
+#%% 5 - avg - random stimulation for calibrating parameters (ALL 64 connectivity configs)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import product
+from tqdm import tqdm
+
+# =====================================
+# Simulation parameters
+# =====================================
+N = 6
+
+PYR1, PYR2, FB1, FB2, FF1, FF2 = range(6)
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+
+PYR = [PYR1, PYR2]
+FB  = [FB1, FB2]
+FF  = [FF1, FF2]
+
+# =====================================
+# Group-symmetric parameters
+# =====================================
+V0 = np.zeros(N)
+C_m = np.zeros(N)
+vr = np.zeros(N)
+gL = np.zeros(N)
+vt = np.zeros(N)
+tauvth = np.zeros(N)
+alpha = np.zeros((N, 3))
+
+for i in PYR:
+    V0[i] = -78e-3
+    C_m[i] = 300e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(50e6)
+    vt[i] = -77e-3
+    tauvth[i] = 7e-3
+    alpha[i] = [75e-3, 0e-3, 0e-3]
+
+for i in FB:
+    V0[i] = -78e-3
+    C_m[i] = 250e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(50e6)
+    vt[i] = -62e-3
+    tauvth[i] = 1e-3
+    alpha[i] = [1e-3, 1e-3, 1e-3]
+
+for i in FF:
+    V0[i] = -78e-3
+    C_m[i] = 650e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(120e6)
+    vt[i] = -70e-3
+    tauvth[i] = 1e-3
+    alpha[i] = [1e-3, 1e-3, 1e-3]
+
+# =====================================
+# Weight matrix
+# =====================================
+W = np.zeros((N, N))
+
+W[PYR1, PYR2] = 1e-9
+W[PYR1, FB1 ] = 35e-9
+W[PYR1, FB2 ] = 35e-9
+
+W[PYR2, PYR1] = 1e-9
+W[PYR2, FB1 ] = 2e-9
+W[PYR2, FB2 ] = 2e-9
+
+sfb = -2e-9
+W[FB1, PYR2] = -2.0e-9
+W[FB1, FB2 ] = sfb
+W[FB2, PYR1] = -2.0e-9
+W[FB2, PYR2] = -2.0e-9
+W[FB2, FB1 ] = sfb
+
+sff = -2e-9
+W[FF1, PYR1] = -2.0e-9
+W[FF1, PYR2] = -2.0e-9
+W[FF1, FF2 ] = sff
+W[FF2, PYR1] = -2.0e-9
+W[FF2, PYR2] = -2.0e-9
+W[FF2, FF1 ] = sff
+
+# =====================================
+# Simulation setup
+# =====================================
+T = 20
+navg = 1  # number of averages per configuration
+dt = 1e-4
+time = np.arange(0, T, dt)
+rf = 1e-3
+
+noise = [0.146e-9, 2.75e-9, 2.95e-9]
+
+def getnoise(noise, i):
+    if i in [0, 1]:
+        return np.random.normal(0, noise[0])
+    if i in [2, 3]:
+        return np.random.normal(0, noise[1])
+    return np.random.normal(0, noise[2])
+
+# =====================================
+# ALL 64 CONNECTIVITY MASKS
+# =====================================
+configs = list(product([0, 1], repeat=N))
+n_configs = len(configs)
+
+rates = np.full((n_configs, N), np.nan)
+
+# =====================================
+# MAIN LOOP WITH NAVG
+# =====================================
+with tqdm(total=n_configs) as pbar:
+
+    for c_idx, mask in enumerate(configs):
+
+        rate_accum = np.zeros(N)
+        valid_counts = np.zeros(N)
+
+        for rep in range(navg):
+
+            V = np.zeros((N, len(time)))
+            vth = np.zeros((N, len(time)))
+            spikes = np.zeros((N, len(time)))
+
+            rfon = np.zeros(N)
+            rftimer = np.ones(N) * np.inf
+
+            V[:, 0] = V0
+            vth[:, 0] = vt
+
+            # =========================
+            # SIMULATION
+            # =========================
+            for t in range(1, len(time)):
+                for post in range(N):
+
+                    Inoise = getnoise(noise, post)
+
+                    Isyn = np.sum(W[:, post] * spikes[:, t-1] * np.array(mask))
+                    I = Isyn + Inoise
+
+                    i_ion = gL[post] * (V[post, t-1] - V0[post])
+                    dVdt = (1 / C_m[post]) * (I - i_ion)
+
+                    V[post, t] = V[post, t-1] + dt * dVdt * (1 - rfon[post])
+
+                    dvthdt = -(vth[post, t-1] - vt[post]) / tauvth[post]
+                    vth[post, t] = vth[post, t-1] + dt * dvthdt
+
+                    if rftimer[post] != np.inf:
+                        rftimer[post] -= dt
+                    if rftimer[post] <= 0:
+                        rftimer[post] = np.inf
+                        rfon[post] = False
+
+                    if V[post, t] > vth[post, t]:
+                        spikes[post, t] = 1
+                        rfon[post] = True
+                        rftimer[post] = rf
+
+                        vth[post, t] += (
+                            alpha[post][0]
+                            + alpha[post][1] * (V[post, t] / vt[post])
+                            + alpha[post][2] * (V[post, t] / vt[post])**2
+                        )
+
+                        V[post, t] = vr[post]
+
+            # =========================
+            # FIRING RATE
+            # =========================
+            for i in range(N):
+
+                if mask[i] == 0:
+                    continue
+
+                spike_times = time[spikes[i] == 1]
+
+                if len(spike_times) > 1:
+                    isi = np.diff(spike_times)
+                    r = 1.0 / np.mean(isi)
+
+                    rate_accum[i] += r
+                    valid_counts[i] += 1
+
+        # =========================
+        # FINAL AVERAGE OVER NAVG
+        # =========================
+        for i in range(N):
+            if valid_counts[i] > 0:
+                rates[c_idx, i] = rate_accum[i] / valid_counts[i]
+            else:
+                rates[c_idx, i] = np.nan
+
+        pbar.update(1)
+
+# =====================================
+# OUTPUT
+# =====================================
+print("Done.")
+print("Rates shape:", rates.shape)
+
+mean_rates = np.nanmean(rates, axis=0)
+print("Mean rates across configs:", mean_rates)
+
 
 #%% 6 - visualize all 64 configurations (4x16 panels, 6 neurons per config)
 
@@ -3572,6 +3780,109 @@ for r in range(16):
 # -------------------------------------------------------
 # COLUMN DIVIDERS (correct placement)
 # -------------------------------------------------------
+
+fig.canvas.draw()
+
+for c in range(3):
+    left_box = axes[0, c].get_position()
+    right_box = axes[0, c + 1].get_position()
+
+    x_mid = (left_box.x1 + right_box.x0) / 2
+
+    fig.add_artist(Line2D(
+        [x_mid, x_mid],
+        [0, 1],
+        transform=fig.transFigure,
+        color="black",
+        linewidth=6,
+        solid_capstyle="butt"
+    ))
+
+plt.show()
+
+#%% 6 - visualize all 64 configurations (4x16 panels, 6 neurons per config)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+from matplotlib.lines import Line2D
+
+N = 6
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+
+n_configs = len(configs)
+# configs_grid = np.arange(n_configs).reshape(16, 4) # left to right
+configs_grid = np.arange(n_configs).reshape(16, 4, order="F") # down a column
+
+fig, axes = plt.subplots(16, 4, figsize=(12, 20), constrained_layout=True)
+
+group_color = {
+    0: "#f8c8c8",
+    1: "#f8c8c8",
+    2: "#c8e6ff",
+    3: "#c8e6ff",
+    4: "#c8f7c8",
+    5: "#c8f7c8",
+}
+
+def get_label_color(name):
+    if "PYR" in name:
+        return "red"
+    elif "FB" in name:
+        return "blue"
+    elif "FF" in name:
+        return "green"
+    else:
+        return "black"
+
+for r in range(16):
+    for c in range(4):
+
+        ax = axes[r, c]
+        ax.set_xlim(0, 6)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+
+        cfg_idx = configs_grid[r, c]
+        mask = configs[cfg_idx]
+        rate = rates[cfg_idx]
+
+        # configuration index (only top-left box of each row)
+        ax.text(
+            0.01, 0.95,
+            str(cfg_idx),
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=8
+        )
+
+        for i in range(N):
+            face = group_color[i] if mask[i] == 1 else "white"
+
+            ax.add_patch(Rectangle(
+                (i, 0), 1, 1,
+                edgecolor="black",
+                facecolor=face,
+                linewidth=1
+            ))
+
+            if mask[i] == 1 and np.isfinite(rate[i]):
+                ax.text(i + 0.5, 0.5, f"{rate[i]:.1f}",
+                        ha="center", va="center", fontsize=22)
+
+        if r == 0:
+            for i, name in enumerate(names):
+                ax.text(
+                    i + 0.5, 1.05,
+                    name,
+                    ha="center",
+                    va="bottom",
+                    fontsize=15,
+                    fontweight="bold",
+                    color=get_label_color(name),
+                    transform=ax.transData
+                )
 
 fig.canvas.draw()
 
