@@ -2956,30 +2956,53 @@ for i in FF:
     vt[i] = -70e-3
     tauvth[i] = 1e-3
     alpha[i] = [1e-3, 1e-3, 1e-3]
-
+    
 # =====================================
-# Weight matrix (unused in current I)
+# Weight matrix
 # =====================================
 W = np.zeros((N, N))
 
+W[PYR1, PYR2] = 1e-9
+W[PYR1, FB1 ] = 35e-9
+W[PYR1, FB2 ] = 35e-9
+
+W[PYR2, PYR1] = 1e-9
+W[PYR2, FB1 ] = 2e-9
+W[PYR2, FB2 ] = 2e-9
+
+sfb = -2e-9
+W[FB1, PYR2] = -2.0e-9
+W[FB1, FB2 ] = sfb
+W[FB2, PYR1] = -2.0e-9
+W[FB2, PYR2] = -2.0e-9
+W[FB2, FB1 ] = sfb
+
+sff = -2e-9
+W[FF1, PYR1] = -2.0e-9
+W[FF1, PYR2] = -2.0e-9
+W[FF1, FF2 ] = sff
+W[FF2, PYR1] = -2.0e-9
+W[FF2, PYR2] = -2.0e-9
+W[FF2, FF1 ] = sff
+
+
+# For calibration turn everything off
+# W=0*W
+
 # =====================================
-# Simulation
+# Simulation setup
 # =====================================
-T = 10
+T = 1
+navgs = 1
 dt = 1e-4
 time = np.arange(0, T, dt)
-
 rf = 1e-3
-
-V = np.zeros((N, len(time)))
-vth = np.zeros((N, len(time)))
-spikes = np.zeros((N, len(time)))
 
 rfon = np.zeros(N)
 rftimer = np.ones(N) * np.inf
 
-#        SOM    FB    FF
-noise = [0.15e-9, 2.75e-9, 3e-9]
+#         SOM       FB       FF
+noise = [0.146e-9, 2.75e-9, 2.95e-9]
 # ----------------   SOM    FB     FF
 # output should be:  2.6     9     7
 
@@ -2991,88 +3014,115 @@ def getnoise(noise, i):
     return np.random.normal(0, noise[2])
 
 # =====================================
-# Run simulation
+# NAVGS SIMULATIONS
 # =====================================
-for t in range(1, len(time)):
-    for post in range(N):
 
-        I = getnoise(noise, post)
+rate_acc = np.zeros((navgs, N))
 
-        i_ion = gL[post] * (V[post, t-1] - V0[post])
-        dVdt = (1 / C_m[post]) * (I - i_ion)
+for run in range(navgs):
 
-        V[post, t] = V[post, t-1] + dt * dVdt * (1 - rfon[post])
+    V = np.zeros((N, len(time)))
+    vth = np.zeros((N, len(time)))
+    spikes = np.zeros((N, len(time)))
+    
+        # Initialize membrane potential and threshold
+    V[:, 0] = V0
+    vth[:, 0] = vt
 
-        dvthdt = -(vth[post, t-1] - vt[post]) / tauvth[post]
-        vth[post, t] = vth[post, t-1] + dt * dvthdt
+    rfon = np.zeros(N)
+    rftimer = np.ones(N) * np.inf
 
-        if rftimer[post] != np.inf:
-            rftimer[post] -= dt
-        if rftimer[post] <= 0:
-            rftimer[post] = np.inf
-            rfon[post] = False
+    for t in range(1, len(time)):
+        for post in range(N):
 
-        if V[post, t] > vth[post, t]:
+            Inoise = getnoise(noise, post)
+            
+            Isyn = np.sum(W[:, post] * spikes[:, t-1])
+            I = Isyn+Inoise
 
-            spikes[post, t] = 1
-            rfon[post] = True
-            rftimer[post] = rf
+            i_ion = gL[post] * (V[post, t-1] - V0[post])
+            dVdt = (1 / C_m[post]) * (I - i_ion)
 
-            vth[post, t] += (
-                alpha[post][0]
-                + alpha[post][1] * (V[post, t] / vt[post])
-                + alpha[post][2] * (V[post, t] / vt[post])**2
-            )
+            V[post, t] = V[post, t-1] + dt * dVdt * (1 - rfon[post])
 
-            V[post, t] = vr[post]
+            dvthdt = -(vth[post, t-1] - vt[post]) / tauvth[post]
+            vth[post, t] = vth[post, t-1] + dt * dvthdt
+
+            if rftimer[post] != np.inf:
+                rftimer[post] -= dt
+            if rftimer[post] <= 0:
+                rftimer[post] = np.inf
+                rfon[post] = False
+
+            if V[post, t] > vth[post, t]:
+
+                spikes[post, t] = 1
+                rfon[post] = True
+                rftimer[post] = rf
+
+                vth[post, t] += (
+                    alpha[post][0]
+                    + alpha[post][1] * (V[post, t] / vt[post])
+                    + alpha[post][2] * (V[post, t] / vt[post])**2
+                )
+
+                V[post, t] = vr[post]
+
+    # =====================================
+    # compute firing rate for THIS run
+    # =====================================
+    for i in range(N):
+        spike_times = time[spikes[i] == 1]
+
+        if len(spike_times) > 1:
+            isi = np.diff(spike_times)
+            rate_acc[run, i] = 1.0 / np.mean(isi)
+        else:
+            rate_acc[run, i] = np.nan
+
+    # keep last run for plotting
+    if run == navgs - 1:
+        V_last = V.copy()
+        vth_last = vth.copy()
+        spikes_last = spikes.copy()
 
 # =====================================
-# Compute mean ISI
+# FINAL RESULTS
 # =====================================
-mean_ISI = np.zeros(N)
+mean_rate = np.nanmean(rate_acc, axis=0)
 
-for i in range(N):
-    spike_times = time[spikes[i] == 1]
+print("Mean firing rates (Hz):")
+print(mean_rate)
 
-    if len(spike_times) > 1:
-        ISI = np.diff(spike_times)
-        mean_ISI[i] = np.mean(ISI)
+# =====================================
+# Plot (LAST RUN ONLY - unchanged structure)
+# =====================================
+fs = 15
+
+fig, ax = plt.subplots(6, 1, figsize=(12, 12), sharex=True)
+
+for i in range(6):
+
+    if not np.isnan(mean_rate[i]):
+        rate_text = f", rate = {mean_rate[i]:.2f} Hz"
     else:
-        mean_ISI[i] = np.nan  # not enough spikes
-        
-print(1/mean_ISI)
+        rate_text = ", rate = N/A"
 
-# =============================================================================
-# # =====================================
-# # Plot
-# # =====================================
-# fs = 15
-# 
-# fig, ax = plt.subplots(6, 1, figsize=(12, 12), sharex=True)
-# 
-# for i in range(6):
-# 
-#     if not np.isnan(mean_ISI[i]) and mean_ISI[i] > 0:
-#         rate = 1.0 / mean_ISI[i]
-#         rate_text = f", rate = {rate:.2f} Hz"
-#     else:
-#         rate_text = ", rate = N/A"
-# 
-#     ax[i].plot(time, V[i], label="V")
-#     ax[i].plot(time, vth[i], "--", label="Vth")
-# 
-#     ax[i].set_ylabel(names[i], fontsize=fs)
-#     ax[i].set_title(names[i] + rate_text, fontsize=fs)
-# 
-#     ax[i].legend(fontsize=fs-2, loc="upper right")
-#     ax[i].tick_params(axis='both', labelsize=fs)
-# 
-# ax[-1].set_xlabel("Time", fontsize=fs)
-# 
-# plt.tight_layout()
-# plt.show()
-# =============================================================================
-#%% 5 - random stimulation for calibrating parameters
+    ax[i].plot(time, V_last[i], label="V")
+    # ax[i].plot(time, vth_last[i], "--", label="Vth")
+
+    ax[i].set_ylabel(names[i], fontsize=fs)
+    ax[i].set_title(names[i] + rate_text, fontsize=fs)
+
+    ax[i].legend(fontsize=fs-2, loc="upper right")
+    ax[i].tick_params(axis='both', labelsize=fs)
+
+ax[-1].set_xlabel("Time", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% 5 - plotting the 5 averages
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -3130,8 +3180,8 @@ for i in FF:
 # =====================================
 # Simulation setup
 # =====================================
-T = 20
-navgs = 20
+T = 0.1
+navgs = 5
 dt = 1e-4
 time = np.arange(0, T, dt)
 rf = 1e-3
@@ -3139,10 +3189,7 @@ rf = 1e-3
 rfon = np.zeros(N)
 rftimer = np.ones(N) * np.inf
 
-#         SOM       FB       FF
 noise = [0.146e-9, 2.75e-9, 2.95e-9]
-# ----------------   SOM    FB     FF
-# output should be:  2.6     9     7
 
 def getnoise(noise, i):
     if i in [0, 1]:
@@ -3154,14 +3201,20 @@ def getnoise(noise, i):
 # =====================================
 # NAVGS SIMULATIONS
 # =====================================
-
 rate_acc = np.zeros((navgs, N))
+
+V_all = np.zeros((navgs, N, len(time)))
+vth_all = np.zeros((navgs, N, len(time)))
+spikes_all = np.zeros((navgs, N, len(time)))
 
 for run in range(navgs):
 
     V = np.zeros((N, len(time)))
     vth = np.zeros((N, len(time)))
     spikes = np.zeros((N, len(time)))
+
+    V[:, 0] = V0
+    vth[:, 0] = vt
 
     rfon = np.zeros(N)
     rftimer = np.ones(N) * np.inf
@@ -3181,6 +3234,7 @@ for run in range(navgs):
 
             if rftimer[post] != np.inf:
                 rftimer[post] -= dt
+
             if rftimer[post] <= 0:
                 rftimer[post] = np.inf
                 rfon[post] = False
@@ -3199,23 +3253,17 @@ for run in range(navgs):
 
                 V[post, t] = vr[post]
 
-    # =====================================
-    # compute firing rate for THIS run
-    # =====================================
+    V_all[run] = V
+    vth_all[run] = vth
+    spikes_all[run] = spikes
+
     for i in range(N):
         spike_times = time[spikes[i] == 1]
-
         if len(spike_times) > 1:
             isi = np.diff(spike_times)
             rate_acc[run, i] = 1.0 / np.mean(isi)
         else:
             rate_acc[run, i] = np.nan
-
-    # keep last run for plotting
-    if run == navgs - 1:
-        V_last = V.copy()
-        vth_last = vth.copy()
-        spikes_last = spikes.copy()
 
 # =====================================
 # FINAL RESULTS
@@ -3225,32 +3273,321 @@ mean_rate = np.nanmean(rate_acc, axis=0)
 print("Mean firing rates (Hz):")
 print(mean_rate)
 
-# =============================================================================
-# # =====================================
-# # Plot (LAST RUN ONLY - unchanged structure)
-# # =====================================
-# fs = 15
-# 
-# fig, ax = plt.subplots(6, 1, figsize=(12, 12), sharex=True)
-# 
-# for i in range(6):
-# 
-#     if not np.isnan(mean_rate[i]):
-#         rate_text = f", rate = {mean_rate[i]:.2f} Hz"
-#     else:
-#         rate_text = ", rate = N/A"
-# 
-#     ax[i].plot(time, V_last[i], label="V")
-#     ax[i].plot(time, vth_last[i], "--", label="Vth")
-# 
-#     ax[i].set_ylabel(names[i], fontsize=fs)
-#     ax[i].set_title(names[i] + rate_text, fontsize=fs)
-# 
-#     ax[i].legend(fontsize=fs-2, loc="upper right")
-#     ax[i].tick_params(axis='both', labelsize=fs)
-# 
-# ax[-1].set_xlabel("Time", fontsize=fs)
-# 
-# plt.tight_layout()
-# plt.show()
-# =============================================================================
+V_last = V_all[-1]
+
+# =====================================
+# PLOT (ALL RUNS, ALPHA OVERLAID)
+# =====================================
+fs = 15
+
+fig, ax = plt.subplots(6, 1, figsize=(12, 12), sharex=True)
+
+for i in range(6):
+
+    if not np.isnan(mean_rate[i]):
+        rate_text = f", rate = {mean_rate[i]:.2f} Hz"
+    else:
+        rate_text = ", rate = N/A"
+
+    for run in range(navgs):
+        ax[i].plot(
+            time,
+            V_all[run, i],
+        )
+
+    ax[i].set_ylabel(names[i], fontsize=fs)
+    # ax[i].set_title(names[i] + rate_text, fontsize=fs)
+    ax[i].tick_params(axis='both', labelsize=fs)
+
+ax[-1].set_xlabel("Time", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% 5 - random stimulation for calibrating parameters (ALL 64 connectivity configs)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import product
+from tqdm import tqdm
+
+# =====================================
+# Simulation parameters
+# =====================================
+N = 6
+
+PYR1, PYR2, FB1, FB2, FF1, FF2 = range(6)
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+
+PYR = [PYR1, PYR2]
+FB  = [FB1, FB2]
+FF  = [FF1, FF2]
+
+# =====================================
+# Group-symmetric parameters
+# =====================================
+V0 = np.zeros(N)
+C_m = np.zeros(N)
+vr = np.zeros(N)
+gL = np.zeros(N)
+vt = np.zeros(N)
+tauvth = np.zeros(N)
+alpha = np.zeros((N, 3))
+
+for i in PYR:
+    V0[i] = -78e-3
+    C_m[i] = 300e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(50e6)
+    vt[i] = -77e-3
+    tauvth[i] = 7e-3
+    alpha[i] = [75e-3, 0e-3, 0e-3]
+
+for i in FB:
+    V0[i] = -78e-3
+    C_m[i] = 250e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(50e6)
+    vt[i] = -62e-3
+    tauvth[i] = 1e-3
+    alpha[i] = [1e-3, 1e-3, 1e-3]
+
+for i in FF:
+    V0[i] = -78e-3
+    C_m[i] = 650e-12
+    vr[i] = -78e-3
+    gL[i] = 1/(120e6)
+    vt[i] = -70e-3
+    tauvth[i] = 1e-3
+    alpha[i] = [1e-3, 1e-3, 1e-3]
+
+# =====================================
+# Weight matrix
+# =====================================
+W = np.zeros((N, N))
+
+W[PYR1, PYR2] = 1e-9
+W[PYR1, FB1 ] = 35e-9
+W[PYR1, FB2 ] = 35e-9
+
+W[PYR2, PYR1] = 1e-9
+W[PYR2, FB1 ] = 2e-9
+W[PYR2, FB2 ] = 2e-9
+
+sfb = -2e-9
+W[FB1, PYR2] = -2.0e-9
+W[FB1, FB2 ] = sfb
+W[FB2, PYR1] = -2.0e-9
+W[FB2, PYR2] = -2.0e-9
+W[FB2, FB1 ] = sfb
+
+sff = -2e-9
+W[FF1, PYR1] = -2.0e-9
+W[FF1, PYR2] = -2.0e-9
+W[FF1, FF2 ] = sff
+W[FF2, PYR1] = -2.0e-9
+W[FF2, PYR2] = -2.0e-9
+W[FF2, FF1 ] = sff
+
+# =====================================
+# Simulation setup
+# =====================================
+T = 1
+dt = 1e-4
+time = np.arange(0, T, dt)
+rf = 1e-3
+
+noise = [0.146e-9, 2.75e-9, 2.95e-9]
+
+def getnoise(noise, i):
+    if i in [0, 1]:
+        return np.random.normal(0, noise[0])
+    if i in [2, 3]:
+        return np.random.normal(0, noise[1])
+    return np.random.normal(0, noise[2])
+
+# =====================================
+# ALL 64 CONNECTIVITY MASKS
+# =====================================
+configs = list(product([0, 1], repeat=N))
+n_configs = len(configs)
+
+rates = np.full((n_configs, N), np.nan)
+
+# =====================================
+# MAIN LOOP WITH PROGRESS BAR
+# =====================================
+with tqdm(total=n_configs) as pbar:
+
+    for c_idx, mask in enumerate(configs):
+
+        V = np.zeros((N, len(time)))
+        vth = np.zeros((N, len(time)))
+        spikes = np.zeros((N, len(time)))
+
+        rfon = np.zeros(N)
+        rftimer = np.ones(N) * np.inf
+
+        V[:, 0] = V0
+        vth[:, 0] = vt
+
+        for t in range(1, len(time)):
+            for post in range(N):
+
+                Inoise = getnoise(noise, post)
+
+                Isyn = np.sum(W[:, post] * spikes[:, t-1] * np.array(mask))
+                I = Isyn + Inoise
+
+                i_ion = gL[post] * (V[post, t-1] - V0[post])
+                dVdt = (1 / C_m[post]) * (I - i_ion)
+
+                V[post, t] = V[post, t-1] + dt * dVdt * (1 - rfon[post])
+
+                dvthdt = -(vth[post, t-1] - vt[post]) / tauvth[post]
+                vth[post, t] = vth[post, t-1] + dt * dvthdt
+
+                if rftimer[post] != np.inf:
+                    rftimer[post] -= dt
+                if rftimer[post] <= 0:
+                    rftimer[post] = np.inf
+                    rfon[post] = False
+
+                if V[post, t] > vth[post, t]:
+                    spikes[post, t] = 1
+                    rfon[post] = True
+                    rftimer[post] = rf
+
+                    vth[post, t] += (
+                        alpha[post][0]
+                        + alpha[post][1] * (V[post, t] / vt[post])
+                        + alpha[post][2] * (V[post, t] / vt[post])**2
+                    )
+
+                    V[post, t] = vr[post]
+
+        # =====================================
+        # FIRING RATE (inverse mean ISI)
+        # =====================================
+        for i in range(N):
+
+            if mask[i] == 0:
+                continue
+
+            spike_times = time[spikes[i] == 1]
+
+            if len(spike_times) > 1:
+                isi = np.diff(spike_times)
+                rates[c_idx, i] = 1.0 / np.mean(isi)
+            else:
+                rates[c_idx, i] = np.nan
+
+        pbar.update(1)
+
+# =====================================
+# OUTPUT
+# =====================================
+print("Done.")
+print("Rates shape:", rates.shape)
+
+mean_rates = np.nanmean(rates, axis=0)
+print("Mean rates across configs:", mean_rates)
+
+
+#%% 6 - visualize all 64 configurations (4x16 panels, 6 neurons per config)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+from matplotlib.lines import Line2D
+
+N = 6
+names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+
+n_configs = len(configs)
+configs_grid = np.arange(n_configs).reshape(16, 4)
+
+fig, axes = plt.subplots(16, 4, figsize=(12, 20), constrained_layout=True)
+
+group_color = {
+    0: "#f8c8c8",
+    1: "#f8c8c8",
+    2: "#c8e6ff",
+    3: "#c8e6ff",
+    4: "#c8f7c8",
+    5: "#c8f7c8",
+}
+
+# neuron class label colors
+def get_label_color(name):
+    if "PYR" in name:
+        return "red"
+    elif "FB" in name:
+        return "blue"
+    elif "FF" in name:
+        return "green"
+    else:
+        return "black"
+
+for r in range(16):
+    for c in range(4):
+
+        ax = axes[r, c]
+        ax.set_xlim(0, 6)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+
+        cfg_idx = configs_grid[r, c]
+        mask = configs[cfg_idx]
+        rate = rates[cfg_idx]
+
+        for i in range(N):
+            face = group_color[i] if mask[i] == 1 else "white"
+
+            ax.add_patch(Rectangle(
+                (i, 0), 1, 1,
+                edgecolor="black",
+                facecolor=face,
+                linewidth=1
+            ))
+
+            if mask[i] == 1 and np.isfinite(rate[i]):
+                ax.text(i + 0.5, 0.5, f"{rate[i]:.1f}",
+                        ha="center", va="center", fontsize=22)
+
+        # top row labels (bold + class-colored)
+        if r == 0:
+            for i, name in enumerate(names):
+                ax.text(
+                    i + 0.5, 1.05,
+                    name,
+                    ha="center",
+                    va="bottom",
+                    fontsize=15,
+                    fontweight="bold",
+                    color=get_label_color(name),
+                    transform=ax.transData
+                )
+
+# -------------------------------------------------------
+# COLUMN DIVIDERS (correct placement)
+# -------------------------------------------------------
+
+fig.canvas.draw()
+
+for c in range(3):
+    left_box = axes[0, c].get_position()
+    right_box = axes[0, c + 1].get_position()
+
+    x_mid = (left_box.x1 + right_box.x0) / 2
+
+    fig.add_artist(Line2D(
+        [x_mid, x_mid],
+        [0, 1],
+        transform=fig.transFigure,
+        color="black",
+        linewidth=6,
+        solid_capstyle="butt"
+    ))
+
+plt.show()
