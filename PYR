@@ -3690,7 +3690,7 @@ W[FF2,FF1]=sff
 taui_exc=20e-3
 taui_inh=10e-3
 
-T=0.1
+T=20
 navgs=1
 ttype=9
 
@@ -3709,8 +3709,8 @@ if ttype==2:
     W[4,0],W[5,0],W[4,1],W[5,1]=0,0,0,0
     W[0,4],W[0,5],W[1,4],W[1,5]=0,0,0,0
 
-noise=np.array([0.17e-9*0, #pyr, output mean is 2.6 Hz
-                2.5e-9*0,#ff, output mean is 7 Hz
+noise=np.array([0.17e-9, #pyr, output mean is 2.6 Hz
+                2.5e-9,#ff, output mean is 7 Hz
                 2.98e-9])#fb, output mean is 9 Hz
 
 def getnoise(noise,i):
@@ -3824,17 +3824,16 @@ print(mean_rate)
 
 fs=15
 
-fig,ax=plt.subplots(6,2,figsize=(14,14),sharex=True)
+fig,ax=plt.subplots(6,1,figsize=(12,12),sharex=True)
 
 for i in range(6):
 
     rate_text=f", rate = {mean_rate[i]:.2f} Hz" if not np.isnan(mean_rate[i]) else ", rate = N/A"
 
-    # membrane voltage
-    ax[i,0].plot(time,V_last[i],label="V")
+    ax[i].plot(time,V_last[i],label="V")
 
     mask=~np.isnan(spike_peak_last[i])
-    ax[i,0].scatter(
+    ax[i].scatter(
         time[mask],
         spike_peak_last[i,mask],
         s=60,
@@ -3843,29 +3842,61 @@ for i in range(6):
         label="Spike"
     )
 
-    ax[i,0].set_ylabel(names[i],fontsize=fs)
-    ax[i,0].set_title(names[i]+rate_text+" Voltage",fontsize=fs)
-    ax[i,0].legend(fontsize=fs-2,loc="upper right")
+    ax[i].set_ylabel(names[i],fontsize=fs)
+    ax[i].set_title(names[i]+rate_text,fontsize=fs)
+    ax[i].legend(fontsize=fs-2,loc="upper right")
+    ax[i].tick_params(axis="both",labelsize=fs)
 
-    # total synaptic current
-    ax[i,1].plot(time,I_last[i]*1e9,label="I_syn")
-
-    ax[i,1].set_title(names[i]+" Synaptic Current",fontsize=fs)
-    ax[i,1].set_ylabel("nA",fontsize=fs)
-    ax[i,1].legend(fontsize=fs-2,loc="upper right")
-
-    ax[i,0].tick_params(axis="both",labelsize=fs)
-    ax[i,1].tick_params(axis="both",labelsize=fs)
-
-ax[-1,0].set_xlabel("Time (sec)",fontsize=fs)
-ax[-1,1].set_xlabel("Time (sec)",fontsize=fs)
+ax[-1].set_xlabel("Time (sec)",fontsize=fs)
 
 plt.tight_layout()
 plt.show()
 
-def dist(V_last,i):
-    return np.max(V_last[i])-np.min(V_last[i])
-    
+# =============================================================================
+# # Membrane potential + current plot
+# fs=15
+# 
+# fig,ax=plt.subplots(6,2,figsize=(14,14),sharex=True)
+# 
+# for i in range(6):
+# 
+#     rate_text=f", rate = {mean_rate[i]:.2f} Hz" if not np.isnan(mean_rate[i]) else ", rate = N/A"
+# 
+#     # membrane voltage
+#     ax[i,0].plot(time,V_last[i],label="V")
+# 
+#     mask=~np.isnan(spike_peak_last[i])
+#     ax[i,0].scatter(
+#         time[mask],
+#         spike_peak_last[i,mask],
+#         s=60,
+#         color="black",
+#         zorder=5,
+#         label="Spike"
+#     )
+# 
+#     ax[i,0].set_ylabel(names[i],fontsize=fs)
+#     ax[i,0].set_title(names[i]+rate_text+" Voltage",fontsize=fs)
+#     ax[i,0].legend(fontsize=fs-2,loc="upper right")
+# 
+#     # total synaptic current
+#     ax[i,1].plot(time,I_last[i]*1e9,label="I_syn")
+# 
+#     ax[i,1].set_title(names[i]+" Synaptic Current",fontsize=fs)
+#     ax[i,1].set_ylabel("nA",fontsize=fs)
+#     ax[i,1].legend(fontsize=fs-2,loc="upper right")
+# 
+#     ax[i,0].tick_params(axis="both",labelsize=fs)
+#     ax[i,1].tick_params(axis="both",labelsize=fs)
+# 
+# ax[-1,0].set_xlabel("Time (sec)",fontsize=fs)
+# ax[-1,1].set_xlabel("Time (sec)",fontsize=fs)
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
 
-dists=[dist(V_last, i) for i in range(len(V_last))]
-print(np.array(dists)*1000)
+# def dist(V_last,i):
+#     return np.max(V_last[i])-np.min(V_last[i])
+# dists=[dist(V_last, i) for i in range(len(V_last))]
+# print(np.array(dists)*1000)
