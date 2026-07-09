@@ -3214,8 +3214,8 @@ W[FF2, FF1 ] = sff
 # =====================================
 # Simulation setup
 # =====================================
-T = 20
-navgs = 20
+T = 0.1
+navgs = 1
 ttype=9 # 0-PYR/PYR, 1-FB/PYR, 2-FF/PYR
 
 dt = 1e-4
@@ -3235,7 +3235,7 @@ if ttype==2:
     W[0,4],W[0,5],W[1,4],W[1,5]=0,0,0,0
 
 #         SOM       FB       FF
-noise = [0.17e-9, 2.55e-9, 2.98e-9]
+noise = np.array([0.17e-9, 2.5e-9, 2.98e-9])
 # output:  2.6      9      7
 
 def getnoise(noise, i):
@@ -3477,6 +3477,7 @@ if ttype==2:
     # FF and PYR off 2301
     W[4,0],W[5,0],W[4,1],W[5,1]=0,0,0,0
     W[0,4],W[0,5],W[1,4],W[1,5]=0,0,0,0
+
 noise = [0.146e-9, 2.75e-9, 2.95e-9]
 
 def getnoise(noise, i):
@@ -3605,674 +3606,266 @@ ax[-1].set_xlabel("Time (sec)", fontsize=fs)
 
 plt.tight_layout()
 plt.show()
-#%% 5 - calculate ALL 64 connectivity configs with avgs
+
+#%% random stimulation with independent synaptic currents
 
 import numpy as np
 import matplotlib.pyplot as plt
-from itertools import product
 from tqdm import tqdm
 
-# =====================================
-# Simulation parameters
-# =====================================
-N = 6
+N=6
+PYR1,PYR2,FB1,FB2,FF1,FF2=range(6)
+names=["PYR1","PYR2","FB1","FB2","FF1","FF2"]
 
-PYR1, PYR2, FB1, FB2, FF1, FF2 = range(6)
-names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+PYR=[PYR1,PYR2]
+FB=[FB1,FB2]
+FF=[FF1,FF2]
 
-PYR = [PYR1, PYR2]
-FB  = [FB1, FB2]
-FF  = [FF1, FF2]
-
-# =====================================
-# Group-symmetric parameters
-# =====================================
-V0 = np.zeros(N)
-C_m = np.zeros(N)
-vr = np.zeros(N)
-gL = np.zeros(N)
-vt = np.zeros(N)
-tauvth = np.zeros(N)
-alpha = np.zeros((N, 3))
+V0=np.zeros(N)
+C_m=np.zeros(N)
+vr=np.zeros(N)
+gL=np.zeros(N)
+vt=np.zeros(N)
+tauvth=np.zeros(N)
+alpha=np.zeros((N,3))
 
 for i in PYR:
-    V0[i] = -78e-3
-    C_m[i] = 300e-12
-    vr[i] = -78e-3
-    gL[i] = 1/(50e6)
-    vt[i] = -77e-3
-    tauvth[i] = 7e-3
-    alpha[i] = [75e-3, 0e-3, 0e-3]
+    V0[i]=-78e-3
+    C_m[i]=300e-12
+    vr[i]=-78e-3
+    gL[i]=1/(50e6)
+    vt[i]=-77e-3
+    tauvth[i]=7e-3
+    alpha[i]=[75e-3,0,0]
 
 for i in FB:
-    V0[i] = -78e-3
-    C_m[i] = 250e-12
-    vr[i] = -78e-3
-    gL[i] = 1/(50e6)
-    vt[i] = -62e-3
-    tauvth[i] = 1e-3
-    alpha[i] = [1e-3, 1e-3, 1e-3]
+    V0[i]=-78e-3
+    C_m[i]=250e-12
+    vr[i]=-78e-3
+    gL[i]=1/(50e6)
+    vt[i]=-62e-3
+    tauvth[i]=1e-3
+    alpha[i]=[1e-3,1e-3,1e-3]
 
 for i in FF:
-    V0[i] = -78e-3
-    C_m[i] = 650e-12
-    vr[i] = -78e-3
-    gL[i] = 1/(120e6)
-    vt[i] = -70e-3
-    tauvth[i] = 1e-3
-    alpha[i] = [1e-3, 1e-3, 1e-3]
+    V0[i]=-78e-3
+    C_m[i]=650e-12
+    vr[i]=-78e-3
+    gL[i]=1/(120e6)
+    vt[i]=-70e-3
+    tauvth[i]=1e-3
+    alpha[i]=[1e-3,1e-3,1e-3]
 
-# =====================================
-# Weight matrix
-# =====================================
-W = np.zeros((N, N))
+W=np.zeros((N,N))
 
-W[PYR1, PYR2] = 1e-9
-W[PYR1, FB1 ] = 35e-9
-W[PYR1, FB2 ] = 35e-9
+spyr=4.75e-12 #good
+spyrfb=17.46e-12 #GOOD, 0.4e-3 should be peak amplitude of current pulse
 
-W[PYR2, PYR1] = 1e-9
-W[PYR2, FB1 ] = 2e-9
-W[PYR2, FB2 ] = 2e-9
+W[PYR1,PYR2]=spyr
+W[PYR1,FB1]=spyrfb
+W[PYR1,FB2]=spyrfb
+W[PYR2,PYR1]=spyr
+W[PYR2,FB1]=spyrfb
+W[PYR2,FB2]=spyrfb
 
-sfb = -2e-9
-W[FB1, PYR2] = -2.0e-9
-W[FB1, FB2 ] = sfb
-W[FB2, PYR1] = -2.0e-9
-W[FB2, PYR2] = -2.0e-9
-W[FB2, FB1 ] = sfb
+sfb=-203.8e-12 #good
+W[FB1,PYR1]=sfb
+W[FB1,PYR2]=sfb
+W[FB1,FB2]=sfb
+W[FB2,PYR1]=sfb
+W[FB2,PYR2]=sfb
+W[FB2,FB1]=sfb
 
-sff = -2e-9
-W[FF1, PYR1] = -2.0e-9
-W[FF1, PYR2] = -2.0e-9
-W[FF1, FF2 ] = sff
-W[FF2, PYR1] = -2.0e-9
-W[FF2, PYR2] = -2.0e-9
-W[FF2, FF1 ] = sff
+sff=-203.8e-12 #good
+sffpyr=-203.8e-12#good
 
-# W=0*W # for calibration
+W[FF1,PYR1]=sffpyr
+W[FF1,PYR2]=sffpyr
+W[FF1,FF2]=sff
 
-# =====================================
-# Simulation setup
-# =====================================
-T = 20
-navg = 10  # number of averages per configuration
-dt = 1e-4
-time = np.arange(0, T, dt)
-rf = 1e-3
+W[FF2,PYR1]=sffpyr
+W[FF2,PYR2]=sffpyr
+W[FF2,FF1]=sff
 
-noise = [0.146e-9, 2.75e-9, 2.95e-9]
+taui_exc=20e-3
+taui_inh=10e-3
 
-def getnoise(noise, i):
-    if i in [0, 1]:
-        return np.random.normal(0, noise[0])
-    if i in [2, 3]:
-        return np.random.normal(0, noise[1])
-    return np.random.normal(0, noise[2])
+T=0.1
+navgs=1
+ttype=9
 
-# =====================================
-# ALL 64 CONNECTIVITY MASKS
-# =====================================
-configs = list(product([0, 1], repeat=N))
-n_configs = len(configs)
+dt=1e-4
+time=np.arange(0,T,dt)
+rf=1e-3
 
-rates = np.full((n_configs, N), np.nan)
+if ttype==0:
+    W[1,0],W[0,1]=0,0
 
-# =====================================
-# MAIN LOOP WITH NAVG
-# =====================================
-with tqdm(total=n_configs) as pbar:
+if ttype==1:
+    W[2,0],W[3,0],W[2,1],W[3,1]=0,0,0,0
+    W[0,2],W[0,3],W[1,2],W[1,3]=0,0,0,0
 
-    for c_idx, mask in enumerate(configs):
+if ttype==2:
+    W[4,0],W[5,0],W[4,1],W[5,1]=0,0,0,0
+    W[0,4],W[0,5],W[1,4],W[1,5]=0,0,0,0
 
-        rate_accum = np.zeros(N)
-        valid_counts = np.zeros(N)
+noise=np.array([0.17e-9*0, #pyr, output mean is 2.6 Hz
+                2.5e-9*0,#ff, output mean is 7 Hz
+                2.98e-9])#fb, output mean is 9 Hz
 
-        for rep in range(navg):
+def getnoise(noise,i):
+    if i in [0,1]:
+        return np.random.normal(0,noise[0])
+    if i in [2,3]:
+        return np.random.normal(0,noise[1])
+    return np.random.normal(0,noise[2])
 
-            V = np.zeros((N, len(time)))
-            vth = np.zeros((N, len(time)))
-            spikes = np.zeros((N, len(time)))
+rate_acc=np.zeros((navgs,N))
 
-            rfon = np.zeros(N)
-            rftimer = np.ones(N) * np.inf
+V_last=None
+I_last=None
+spike_peak_last=None
 
-            V[:, 0] = V0
-            vth[:, 0] = vt
+for run in tqdm(range(navgs),desc="Running simulations",unit="run"):
 
-            # =========================
-            # SIMULATION
-            # =========================
-            for t in range(1, len(time)):
-                for post in range(N):
+    V=np.zeros((N,len(time)))
+    vth=np.zeros((N,len(time)))
+    spikes=np.zeros((N,len(time)))
 
-                    Inoise = getnoise(noise, post)
-                    Isyn = np.sum(W[:, post] * spikes[:, t-1] * np.array(mask))
-                    I = Isyn + Inoise
+    # independent synaptic current for every connection
+    Ispike=np.zeros((N,N))
 
-                    i_ion = gL[post] * (V[post, t-1] - V0[post])
-                    dVdt = (1 / C_m[post]) * (I - i_ion)
+    if run==navgs-1:
+        spike_peak_last=np.full((N,len(time)),np.nan)
+        I_last=np.zeros((N,len(time)))
 
-                    V[post, t] = V[post, t-1] + dt * dVdt * (1 - rfon[post])
+    V[:,0]=V0
+    vth[:,0]=vt
 
-                    dvthdt = -(vth[post, t-1] - vt[post]) / tauvth[post]
-                    vth[post, t] = vth[post, t-1] + dt * dvthdt
+    rfon=np.zeros(N)
+    rftimer=np.ones(N)*np.inf
 
-                    if rftimer[post] != np.inf:
-                        rftimer[post] -= dt
-                    if rftimer[post] <= 0:
-                        rftimer[post] = np.inf
-                        rfon[post] = False
+    for t in range(1,len(time)):
 
-                    if V[post, t] > vth[post, t]:
-                        spikes[post, t] = 1
-                        rfon[post] = True
-                        rftimer[post] = rf
+        # decay each presynaptic->postsynaptic current separately
+        for pre in range(N):
+            taui=taui_exc if pre in PYR else taui_inh
+            for post in range(N):
+                Ispike[pre,post]+=dt*(-Ispike[pre,post]/taui)
 
-                        vth[post, t] += (
-                            alpha[post][0]
-                            + alpha[post][1] * (V[post, t] / vt[post])
-                            + alpha[post][2] * (V[post, t] / vt[post])**2
-                        )
+        # store total incoming current
+        if run==navgs-1:
+            for post in range(N):
+                I_last[post,t]=np.sum(Ispike[:,post])
 
-                        V[post, t] = vr[post]
+        for post in range(N):
 
-            # =========================
-            # FIRING RATE
-            # =========================
-            for i in range(N):
+            Inoise=getnoise(noise,post)
+            if post==PYR2:
+                Inoise=0
 
-                if mask[i] == 0:
-                    continue
+            # total current into neuron
+            Isyn=np.sum(Ispike[:,post])
+            I=Isyn+Inoise
 
-                spike_times = time[spikes[i] == 1]
+            i_ion=gL[post]*(V[post,t-1]-V0[post])
+            dVdt=(I-i_ion)/C_m[post]
 
-                if len(spike_times) > 1:
-                    isi = np.diff(spike_times)
-                    r = 1.0 / np.mean(isi)
+            V[post,t]=V[post,t-1]+dt*dVdt*(1-rfon[post])
 
-                    rate_accum[i] += r
-                    valid_counts[i] += 1
+            dvthdt=-(vth[post,t-1]-vt[post])/tauvth[post]
+            vth[post,t]=vth[post,t-1]+dt*dvthdt
 
-        # =========================
-        # FINAL AVERAGE OVER NAVG
-        # =========================
-        for i in range(N):
-            if valid_counts[i] > 0:
-                rates[c_idx, i] = rate_accum[i] / valid_counts[i]
-            else:
-                rates[c_idx, i] = np.nan
+            if rftimer[post]!=np.inf:
+                rftimer[post]-=dt
 
-        pbar.update(1)
+            if rftimer[post]<=0:
+                rftimer[post]=np.inf
+                rfon[post]=False
 
-# =====================================
-# OUTPUT
-# =====================================
-print("Done.")
-print("Rates shape:", rates.shape)
+            if V[post,t]>vth[post,t]:
 
-mean_rates = np.nanmean(rates, axis=0)
-print("Mean rates across configs:", mean_rates)
+                spikes[post,t]=1
 
-#%% 6 - visualize all 64 configurations (4x16 panels, 6 neurons per config)
+                if run==navgs-1:
+                    spike_peak_last[post,t]=V[post,t]
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-from matplotlib.lines import Line2D
+                rfon[post]=True
+                rftimer[post]=rf
 
-N = 6
-names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
+                # add current to every postsynaptic target
+                for target in range(N):
+                    if W[post,target]!=0:
+                        Ispike[post,target]+=W[post,target]
 
-n_configs = len(configs)
-# configs_grid = np.arange(n_configs).reshape(16, 4) # left to right
-configs_grid = np.arange(n_configs).reshape(16, 4, order="F") # down a column
-
-fig, axes = plt.subplots(16, 4, figsize=(12, 20), constrained_layout=True)
-
-group_color = {
-    0: "#f8c8c8",
-    1: "#f8c8c8",
-    2: "#c8e6ff",
-    3: "#c8e6ff",
-    4: "#c8f7c8",
-    5: "#c8f7c8",
-}
-
-def get_label_color(name):
-    if "PYR" in name:
-        return "red"
-    elif "FB" in name:
-        return "blue"
-    elif "FF" in name:
-        return "green"
-    else:
-        return "black"
-
-for r in range(16):
-    for c in range(4):
-
-        ax = axes[r, c]
-        ax.set_xlim(0, 6)
-        ax.set_ylim(0, 1)
-        ax.axis("off")
-
-        cfg_idx = configs_grid[r, c]
-        mask = configs[cfg_idx]
-        rate = rates[cfg_idx]
-
-        # configuration index (only top-left box of each row)
-        ax.text(
-            0.01, 0.95,
-            str(cfg_idx),
-            transform=ax.transAxes,
-            ha="left",
-            va="top",
-            fontsize=8
-        )
-
-        for i in range(N):
-            face = group_color[i] if mask[i] == 1 else "white"
-
-            ax.add_patch(Rectangle(
-                (i, 0), 1, 1,
-                edgecolor="black",
-                facecolor=face,
-                linewidth=1
-            ))
-
-            if mask[i] == 1 and np.isfinite(rate[i]):
-                ax.text(i + 0.5, 0.5, f"{rate[i]:.1f}",
-                        ha="center", va="center", fontsize=22)
-
-        if r == 0:
-            for i, name in enumerate(names):
-                ax.text(
-                    i + 0.5, 1.05,
-                    name,
-                    ha="center",
-                    va="bottom",
-                    fontsize=15,
-                    fontweight="bold",
-                    color=get_label_color(name),
-                    transform=ax.transData
+                vth[post,t]+=(
+                    alpha[post,0]
+                    +alpha[post,1]*(V[post,t]/vt[post])
+                    +alpha[post,2]*(V[post,t]/vt[post])**2
                 )
 
-fig.canvas.draw()
+                V[post,t]=vr[post]
 
-for c in range(3):
-    left_box = axes[0, c].get_position()
-    right_box = axes[0, c + 1].get_position()
+    if run==navgs-1:
+        V_last=V.copy()
 
-    x_mid = (left_box.x1 + right_box.x0) / 2
+    for i in range(N):
+        spike_times=time[spikes[i]==1]
+        if len(spike_times)>1:
+            isi=np.diff(spike_times)
+            rate_acc[run,i]=1/np.mean(isi)
+        else:
+            rate_acc[run,i]=np.nan
+            
+mean_rate=np.nanmean(rate_acc,axis=0)
 
-    fig.add_artist(Line2D(
-        [x_mid, x_mid],
-        [0, 1],
-        transform=fig.transFigure,
+print("Mean firing rates (Hz):")
+print(mean_rate)
+
+fs=15
+
+fig,ax=plt.subplots(6,2,figsize=(14,14),sharex=True)
+
+for i in range(6):
+
+    rate_text=f", rate = {mean_rate[i]:.2f} Hz" if not np.isnan(mean_rate[i]) else ", rate = N/A"
+
+    # membrane voltage
+    ax[i,0].plot(time,V_last[i],label="V")
+
+    mask=~np.isnan(spike_peak_last[i])
+    ax[i,0].scatter(
+        time[mask],
+        spike_peak_last[i,mask],
+        s=60,
         color="black",
-        linewidth=6,
-        solid_capstyle="butt"
-    ))
+        zorder=5,
+        label="Spike"
+    )
 
+    ax[i,0].set_ylabel(names[i],fontsize=fs)
+    ax[i,0].set_title(names[i]+rate_text+" Voltage",fontsize=fs)
+    ax[i,0].legend(fontsize=fs-2,loc="upper right")
+
+    # total synaptic current
+    ax[i,1].plot(time,I_last[i]*1e9,label="I_syn")
+
+    ax[i,1].set_title(names[i]+" Synaptic Current",fontsize=fs)
+    ax[i,1].set_ylabel("nA",fontsize=fs)
+    ax[i,1].legend(fontsize=fs-2,loc="upper right")
+
+    ax[i,0].tick_params(axis="both",labelsize=fs)
+    ax[i,1].tick_params(axis="both",labelsize=fs)
+
+ax[-1,0].set_xlabel("Time (sec)",fontsize=fs)
+ax[-1,1].set_xlabel("Time (sec)",fontsize=fs)
+
+plt.tight_layout()
 plt.show()
 
-#%% 5 - calculate connection removal tests with avgs
-
-import numpy as np
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-
-# =====================================
-# Simulation parameters
-# =====================================
-N = 6
-
-PYR1, PYR2, FB1, FB2, FF1, FF2 = range(6)
-names = ["PYR1", "PYR2", "FB1", "FB2", "FF1", "FF2"]
-
-PYR = [PYR1, PYR2]
-FB  = [FB1, FB2]
-FF  = [FF1, FF2]
-
-
-# =====================================
-# Group-symmetric parameters
-# =====================================
-V0 = np.zeros(N)
-C_m = np.zeros(N)
-vr = np.zeros(N)
-gL = np.zeros(N)
-vt = np.zeros(N)
-tauvth = np.zeros(N)
-alpha = np.zeros((N, 3))
-
-
-for i in PYR:
-    V0[i] = -78e-3
-    C_m[i] = 300e-12
-    vr[i] = -78e-3
-    gL[i] = 1/(50e6)
-    vt[i] = -77e-3
-    tauvth[i] = 7e-3
-    alpha[i] = [75e-3, 0e-3, 0e-3]
-
-
-for i in FB:
-    V0[i] = -78e-3
-    C_m[i] = 250e-12
-    vr[i] = -78e-3
-    gL[i] = 1/(50e6)
-    vt[i] = -62e-3
-    tauvth[i] = 1e-3
-    alpha[i] = [1e-3, 1e-3, 1e-3]
-
-
-for i in FF:
-    V0[i] = -78e-3
-    C_m[i] = 650e-12
-    vr[i] = -78e-3
-    gL[i] = 1/(120e6)
-    vt[i] = -70e-3
-    tauvth[i] = 1e-3
-    alpha[i] = [1e-3, 1e-3, 1e-3]
-
-
-# =====================================
-# Weight matrix
-# =====================================
-W = np.zeros((N, N))
-
-
-# PYR connections
-W[PYR1, PYR2] = 1e-9
-
-W[PYR1, FB1] = 35e-9
-W[PYR1, FB2] = 35e-9
-
-W[PYR2, PYR1] = 1e-9
-
-W[PYR2, FB1] = 2e-9
-W[PYR2, FB2] = 2e-9
-
-
-# FB connections
-sfb = -2e-9
-
-W[FB1, PYR2] = -2.0e-9
-W[FB1, FB2] = sfb
-
-W[FB2, PYR1] = -2.0e-9
-W[FB2, PYR2] = -2.0e-9
-W[FB2, FB1] = sfb
-
-
-# FF connections
-sff = -2e-9
-
-W[FF1, PYR1] = -2.0e-9
-W[FF1, PYR2] = -2.0e-9
-W[FF1, FF2] = sff
-
-W[FF2, PYR1] = -2.0e-9
-W[FF2, PYR2] = -2.0e-9
-W[FF2, FF1] = sff
-
-
-
-# =====================================
-# Simulation setup
-# =====================================
-T = 20
-navg = 10
-
-dt = 1e-4
-time = np.arange(0, T, dt)
-
-rf = 1e-3
-
-
-noise = [0.146e-9, 2.75e-9, 2.95e-9]
-
-
-def getnoise(noise, i):
-
-    if i in [0, 1]:
-        return np.random.normal(0, noise[0])
-
-    elif i in [2, 3]:
-        return np.random.normal(0, noise[1])
-
-    else:
-        return np.random.normal(0, noise[2])
+def dist(V_last,i):
+    return np.max(V_last[i])-np.min(V_last[i])
     
-# =====================================
-# CONNECTION REMOVAL TESTS
-# =====================================
 
-tests = [
-    "remove_FF_PYR",
-    "remove_FB_PYR",
-    "remove_PYR_PYR"
-]
-
-n_tests = len(tests)
-
-mean_rates = np.zeros((n_tests, N))
-
-
-# =====================================
-# MAIN LOOP
-# =====================================
-
-with tqdm(total=n_tests) as pbar:
-
-    for test_idx, test in enumerate(tests):
-
-        # Copy original network
-        W_test = W.copy()
-
-
-        # =====================================
-        # Remove specified connection classes
-        # =====================================
-
-        if test == "remove_FF_PYR":
-
-            for pre in FF:
-                for post in PYR:
-                    W_test[pre, post] = 0
-                    W_test[post, pre] = 0
-
-
-        elif test == "remove_FB_PYR":
-
-            for pre in FB:
-                for post in PYR:
-                    W_test[pre, post] = 0
-                    W_test[post, pre] = 0
-
-
-        elif test == "remove_PYR_PYR":
-
-            for pre in PYR:
-                for post in PYR:
-                    W_test[pre, post] = 0
-
-
-
-        rate_accum = np.zeros(N)
-        valid_counts = np.zeros(N)
-
-
-
-        # =====================================
-        # AVERAGING LOOP
-        # =====================================
-
-        for rep in range(navg):
-
-            V = np.zeros((N, len(time)))
-            vth = np.zeros((N, len(time)))
-            spikes = np.zeros((N, len(time)))
-
-            rfon = np.zeros(N)
-            rftimer = np.ones(N) * np.inf
-
-
-            V[:, 0] = V0
-            vth[:, 0] = vt
-
-
-
-            # =====================================
-            # SIMULATION
-            # =====================================
-
-            for t in range(1, len(time)):
-
-                for post in range(N):
-
-                    Inoise = getnoise(noise, post)
-
-
-                    # synaptic input with modified W
-                    Isyn = np.sum(
-                        W_test[:, post] * spikes[:, t-1]
-                    )
-
-
-                    I = Isyn + Inoise
-
-
-                    i_ion = gL[post] * (
-                        V[post, t-1] - V0[post]
-                    )
-
-
-                    dVdt = (
-                        1 / C_m[post]
-                    ) * (
-                        I - i_ion
-                    )
-
-
-                    V[post, t] = (
-                        V[post, t-1]
-                        + dt * dVdt * (1-rfon[post])
-                    )
-
-
-
-                    # threshold dynamics
-                    dvthdt = (
-                        -(vth[post, t-1] - vt[post])
-                        / tauvth[post]
-                    )
-
-
-                    vth[post, t] = (
-                        vth[post, t-1]
-                        + dt * dvthdt
-                    )
-
-
-
-                    # refractory period
-                    if rftimer[post] != np.inf:
-                        rftimer[post] -= dt
-
-
-                    if rftimer[post] <= 0:
-                        rftimer[post] = np.inf
-                        rfon[post] = False
-
-
-
-                    # spike event
-                    if V[post, t] > vth[post, t]:
-
-                        spikes[post, t] = 1
-
-                        rfon[post] = True
-                        rftimer[post] = rf
-
-
-                        vth[post, t] += (
-                            alpha[post][0]
-                            + alpha[post][1] *
-                            (V[post, t] / vt[post])
-                            + alpha[post][2] *
-                            (V[post, t] / vt[post])**2
-                        )
-
-
-                        V[post, t] = vr[post]
-
-
-
-            # =====================================
-            # FIRING RATE
-            # =====================================
-
-            for i in range(N):
-
-                spike_times = time[spikes[i] == 1]
-
-
-                if len(spike_times) > 1:
-
-                    isi = np.diff(spike_times)
-
-                    r = 1 / np.mean(isi)
-
-                    rate_accum[i] += r
-                    valid_counts[i] += 1
-
-
-
-        # =====================================
-        # FINAL NAVG AVERAGE
-        # =====================================
-
-        for i in range(N):
-
-            if valid_counts[i] > 0:
-                mean_rates[test_idx, i] = (
-                    rate_accum[i]
-                    / valid_counts[i]
-                )
-            else:
-                mean_rates[test_idx, i] = np.nan
-
-
-        pbar.update(1)
-
-
-
-# =====================================
-# OUTPUT
-# =====================================
-
-print("Done.")
-print()
-
-for i, test in enumerate(tests):
-
-    print(test)
-    for j, name in enumerate(names):
-        print(
-            f"{name}: {mean_rates[i,j]:.3f} Hz"
-        )
-    print()
-
-
-# =====================================
-# OPTIONAL: overall mean firing rate
-# =====================================
-
-network_mean_rates = np.nanmean(mean_rates, axis=1)
-
-print("Network average firing rates:")
-for test, rate in zip(tests, network_mean_rates):
-    print(f"{test}: {rate:.3f} Hz")
+dists=[dist(V_last, i) for i in range(len(V_last))]
+print(np.array(dists)*1000)
