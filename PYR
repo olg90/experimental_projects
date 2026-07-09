@@ -3691,7 +3691,7 @@ taui_exc=20e-3
 taui_inh=10e-3
 
 T=20
-navgs=1
+navgs=20
 ttype=9
 
 dt=1e-4
@@ -3709,9 +3709,9 @@ if ttype==2:
     W[4,0],W[5,0],W[4,1],W[5,1]=0,0,0,0
     W[0,4],W[0,5],W[1,4],W[1,5]=0,0,0,0
 
-noise=np.array([0.17e-9, #pyr, output mean is 2.6 Hz
-                2.5e-9,#ff, output mean is 7 Hz
-                2.98e-9])#fb, output mean is 9 Hz
+noise=np.array([0.28e-9, #pyr, output mean is 2.6 Hz
+                2.64e-9,#ff, output mean is 7 Hz
+                3.93e-9])#fb, output mean is 9 Hz
 
 def getnoise(noise,i):
     if i in [0,1]:
@@ -3761,8 +3761,6 @@ for run in tqdm(range(navgs),desc="Running simulations",unit="run"):
         for post in range(N):
 
             Inoise=getnoise(noise,post)
-            if post==PYR2:
-                Inoise=0
 
             # total current into neuron
             Isyn=np.sum(Ispike[:,post])
