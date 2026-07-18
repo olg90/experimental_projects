@@ -7330,20 +7330,21 @@ ffei=vei/mqc
 fs=15
 plt.figure(figsize=(6,7))
 plt.subplot(2,1,1)
-plt.plot(times,mqc,label='model',color='tab:blue')
-plt.plot(times,np.mean(data[1][2],axis=1),label='data mean',marker='o',markersize=3,
-         markerfacecolor='none',markeredgecolor='k',
+plt.plot(times,np.mean(data[1][2],axis=1),label='data mean',marker='o',
+         markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
          linewidth=0.5, color='k')
+plt.plot(times,mqc,label='model',color='tab:orange',linewidth=3,alpha=1)
 plt.xlabel('Time (sec)', fontsize=fs)
 plt.ylabel('Mean quantal content', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(fontsize=fs)
 
 plt.subplot(2,1,2)
-plt.plot(times,ffei,label='model',color='tab:blue')
-plt.plot(times,np.var(data[1][2],axis=1)/np.mean(data[1][2],axis=1),label='data CV2',marker='o',markersize=3,
-         markerfacecolor='none',markeredgecolor='k',
-         linewidth=0.5, color='k')
+plt.plot(times,ffei,label='model',color='tab:orange',linewidth=3)
+plt.plot(times,np.var(data[1][2],axis=1)/np.mean(data[1][2],axis=1),
+         label='data CV2',marker='o',markersize=3,
+         markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='tab:blue')
 plt.xlabel('Time (sec)', fontsize=fs)
 plt.ylabel('Mean quantal content', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
