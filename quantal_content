@@ -150,120 +150,127 @@ ffs = np.array(ffs, dtype=object)
 # np.save('ffs.npy', ffs)
 # =============================================================================
 
-#%% Plot traces + mean + FF for one dataset
+#%% Plot all the quantal content repeats, the mean quantal content
+# and the fano factor for a test dataset in three separate windows
 
-mbounds=np.load('mbounds.npy', allow_pickle=True)
-ffbounds=np.load('ffbounds.npy', allow_pickle=True)
+import numpy as np
+import matplotlib.pyplot as plt
 
-means=np.load('means.npy', allow_pickle=True)
-ffs=np.load('ffs.npy', allow_pickle=True)
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
 
+fnum=1
+dnum=7
+fs=15
 
-fnum = 0   # file number
-dnum = 1   # dataset number
-
-t = np.asarray(times, dtype=float)
-
-# ======================
+#======================
 # RAW TRACES
-# ======================
-plt.figure(figsize=(7, 5))
+#======================
+plt.figure(figsize=(7,5))
+ds=np.asarray(data[fnum][dnum],dtype=float)
 
-ds = np.asarray(data[fnum][dnum], dtype=float)
-
+tplot=np.linspace(0,1, len(ds[:,0]))
 for run in range(ds.shape[1]):
-    plt.plot(
-        t,
-        ds[:, run],
-        linewidth=1,
-        alpha=0.7,
-        label=f'run {run+1}'
-    )
+    plt.plot(tplot,ds[:,run],linewidth=1,alpha=0.7)
 
-plt.title(f'{fnames[fnum]} cell {dnum+1} traces')
-plt.xlabel('Time (sec)')
-plt.ylabel('Quantal content')
-plt.legend(framealpha=0.5)
+plt.title(f'{fnames[fnum]} cell {dnum+1} traces',fontsize=fs)
+plt.xlabel('Time (sec)',fontsize=fs)
+plt.ylabel('Quantal content',fontsize=fs)
+plt.legend(framealpha=0.5,fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
 
-# ======================
+#======================
 # MEAN + ERROR BARS
-# ======================
-plt.figure(figsize=(7, 5))
+#======================
+plt.figure(figsize=(7,5))
 
-y = np.asarray(means[fnum][dnum], dtype=float)
+y=np.asarray(means[fnum][dnum],dtype=float)
+lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
 
-lower = np.asarray(
-    [mbounds[fnum][dnum][i][0] for i in range(len(y))],
-    dtype=float
-)
-
-upper = np.asarray(
-    [mbounds[fnum][dnum][i][1] for i in range(len(y))],
-    dtype=float
-)
-
-yerr = np.vstack((y - lower, upper - y))
-
-eb = plt.errorbar(
-    t,
-    y,
-    yerr=yerr,
-    fmt='-',
-    capsize=2
-)
-
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='-',capsize=2)
 eb[0].set_alpha(0.9)
-
 for bar in eb[2]:
     bar.set_alpha(0.25)
-
 eb[1][0].set_alpha(0.25)
 eb[1][1].set_alpha(0.25)
 
-plt.title(f'{fnames[fnum]} cell {dnum+1} mean')
-plt.xlabel('Time (sec)')
-plt.ylabel('Mean quantal content')
+plt.title(f'{fnames[fnum]} cell {dnum+1}',fontsize=fs)
+plt.xlabel('Time (sec)',fontsize=fs)
+plt.ylabel('Mean quantal content',fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
 
-# ======================
+#======================
 # FF + ERROR BARS
-# ======================
-plt.figure(figsize=(7, 5))
+#======================
+plt.figure(figsize=(7,5))
 
-y = np.asarray(ffs[fnum][dnum], dtype=float)
+y=np.asarray(ffs[fnum][dnum],dtype=float)
+lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
 
-lower = np.asarray(
-    [ffbounds[fnum][dnum][i][0] for i in range(len(y))],
-    dtype=float
-)
-
-upper = np.asarray(
-    [ffbounds[fnum][dnum][i][1] for i in range(len(y))],
-    dtype=float
-)
-
-yerr = np.vstack((y - lower, upper - y))
-
-eb = plt.errorbar(
-    t,
-    y,
-    yerr=yerr,
-    fmt='-',
-    capsize=2
-)
-
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='-',capsize=2)
 eb[0].set_alpha(0.9)
-
 for bar in eb[2]:
     bar.set_alpha(0.25)
-
 eb[1][0].set_alpha(0.25)
 eb[1][1].set_alpha(0.25)
 
-plt.title(f'{fnames[fnum]} cell {dnum+1} Fano factor')
-plt.xlabel('Time (sec)')
-plt.ylabel('Fano factor')
+plt.title(f'{fnames[fnum]} cell {dnum+1}',fontsize=fs)
+plt.xlabel('Time (sec)',fontsize=fs)
+plt.ylabel('Fano factor',fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
 
 plt.show()
+
+#%% Plot multiple figures of the traces
+
+fnum=1
+dnum=7
+fs=15
+
+t=np.asarray(times,dtype=float)
+
+#======================
+# RAW TRACES
+#======================
+ds=np.asarray(data[fnum][dnum],dtype=float).T
+
+
+
+fig,ax=plt.subplots(4,5,figsize=(10,6))
+q=0
+for i in range(4):
+    for j in range(5):
+        ax[i,j].plot(t,ds[q], marker='o', linewidth=0.2, markersize=2)
+        ax[i,j].set_xticks([])
+        ax[i,j].set_yticks([])
+        if i==0 and j==0:
+            ax[i,j].text(0.43,np.max(ds[q])-3,'Repeat #{}'.format(q+1), fontsize=10)
+        else:
+            ax[i,j].text(0.79,np.max(ds[q])-3,'#{}'.format(q+1), fontsize=10)
+
+        q+=1
+ax[2,0].set_ylabel('               Quantal content',fontsize=fs)
+ax[3,2].set_xlabel('Time (sec)', fontsize=fs)
+
+plt.show()
+    
+# =============================================================================
+# plt.figure(figsize=(7,5))
+# ds=np.asarray(data[fnum][dnum],dtype=float).T
+# for trial in range(len(ds)//4):
+#     plt.plot(t,ds[trial],linewidth=1,alpha=0.7)
+# plt.title(f'{fnames[fnum]} cell {dnum+1} traces',fontsize=fs)
+# plt.xlabel('Time (sec)',fontsize=fs)
+# plt.ylabel('Quantal content',fontsize=fs)
+# plt.legend(framealpha=0.5,fontsize=fs)
+# plt.tick_params(axis='both',labelsize=fs)
+# =============================================================================
 
 #%% 3x1
 
@@ -3991,7 +3998,7 @@ for fnum, fname in enumerate(fnames):
     plt.tight_layout()
     plt.show()    
     
-#%% permutations (analysis + plotting FIXED)
+#%% Calculate the permutation tests for every cell - good
 import numpy as np
 import pandas as pd
 import os
@@ -4101,88 +4108,7 @@ for fnum, fname in enumerate(fnames):
 #     perm_results = pickle.load(f)
 # =============================================================================
 
-#%% plot permutation results
-# =========================
-# PLOTTING (SIGNIFICANCE STYLE MARKERS)
-# solid = significant, hollow = not significant
-# =========================
-
-for fnum, fname in enumerate(fnames):
-
-    n_cells = len(perm_results[fnum])
-
-    ncols = 4
-    nrows = int(np.ceil(n_cells / ncols))
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=(5*ncols, 4*nrows))
-    axes = np.atleast_1d(axes).ravel()
-
-    for cell_idx in range(n_cells):
-
-        ax = axes[cell_idx]
-        r = perm_results[fnum][cell_idx]
-
-        y1 = r["first_mean"]
-        y2 = r["last_mean"]
-        sig = r["sig"]
-
-        ns = ~sig  # not significant
-
-        # =========================
-        # FIRST 5 (P11)
-        # =========================
-        ax.scatter(
-            times[sig],
-            y1[sig],
-            facecolors='C0',
-            edgecolors='C0',
-            s=40,
-            label='First 5 (sig)'
-        )
-
-        ax.scatter(
-            times[ns],
-            y1[ns],
-            facecolors='white',
-            edgecolors='C0',
-            s=40,
-            label='First 5 (ns)'
-        )
-
-        # =========================
-        # LAST 5 (P38)
-        # =========================
-        ax.scatter(
-            times[sig],
-            y2[sig],
-            facecolors='C1',
-            edgecolors='C1',
-            s=40,
-            label='Last 5 (sig)'
-        )
-
-        ax.scatter(
-            times[ns],
-            y2[ns],
-            facecolors='white',
-            edgecolors='C1',
-            s=40,
-            label='Last 5 (ns)'
-        )
-
-        ax.set_title(f'Cell {cell_idx+1}')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('QC')
-        ax.legend()
-
-    for k in range(n_cells, len(axes)):
-        fig.delaxes(axes[k])
-
-    fig.suptitle(f'{fname} Permutation Test (per time point)')
-    plt.tight_layout()
-    plt.show()
-    
-#%% plot permutation results
+#%% Plot the permutation tests for every cell - good
 # =========================
 # PLOTTING (SIGNIFICANCE STYLE MARKERS)
 # solid = significant, hollow = not significant
@@ -4496,8 +4422,8 @@ ax3.set_ylabel('Fano factor')
 plt.tight_layout()
 plt.show()
 
-#%% 3 - QC normalization + per-cell plots (main grid) + summary (separate window)
-
+#%% 3 Calculate and plot all the normalized QC of each cell with the mean of means
+# and the mean of each normalized cell with each repeats
 import numpy as np
 import pandas as pd
 import os
@@ -4595,7 +4521,6 @@ def process_and_plot_group(group_data, title):
     plt.show()
 
     return all_cell_means
-
 
 # -----------------------------
 # run both groups
@@ -4772,7 +4697,8 @@ for fnum, fname in enumerate(fnames):
 
         plt.tight_layout()
         plt.show()
-#%% 3 - ndev standard deviation bounds per cell (across repeats) - plot ALL repeats
+#%% 3 - Calculate and plot "ndev" standard deviation bounds per cell (across repeats) - plot ALL repeats
+# and then plot the results
 
 import numpy as np
 import pandas as pd
@@ -4876,437 +4802,6 @@ for fnum in range(len(data)):
 
 plt.show()
 
-#%%  3 - setup cells_lisa.xlsx
-import os
-import pandas as pd
-os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
-
-
-file3='cells_lisa.xlsx'
-excel3 = pd.read_excel(file3, sheet_name=None, header=None)
-files3=['260302_2', '260227_2', '260227_3']
-
-ds=[excel3[d] for d in files3]
-
-data3=[
-       
-       [np.array(ds[0].iloc[2:21+1, 7:46+1]), # low calcium 20
-       np.array(ds[0].iloc[26:45+1, 7:46+1]), # low calcium 100 Hz
-       np.array(ds[0].iloc[2:21+1, 55:90+1]),
-       np.array(ds[0].iloc[26:45+1, 55:91+1])],
-       
-       [np.array(ds[1].iloc[2:21+1, 7:46+1]), # low calcium 20
-       np.array(ds[1].iloc[26:45+1, 7:46+1]), # low calcium 100 Hz
-       np.array(ds[1].iloc[2:21+1, 55:69+1]),
-       np.array(ds[1].iloc[26:45+1, 55:69+1])],
-       
-       [np.array(ds[2].iloc[2:21+1, 7:49+1]), # low calcium 20
-       np.array(ds[2].iloc[26:45+1, 7:49+1]), # low calcium 100 Hz
-       np.array(ds[2].iloc[2:21+1, 58:77+1]),
-       np.array(ds[2].iloc[26:45+1, 58:77+1])],
-       
-       ]
-
-temp=[]
-for dset in data3:
-    tests=[]
-    for test in dset:
-        tests.append(test/(-50e-12))
-    temp.append(tests)
-data3=temp
-del(temp)
-
-#data[cell][testnum], low ca 20, low ca 100, high ca 20, high ca 100
-
-d3names=['low Ca 20 Hz', 'Low Ca 100 Hz',
-         'High Ca 20 Hz', 'High Ca 100 Hz']
-
-#%% 3 - calculate the analysis for the Lisa data
-
-import numpy as np
-
-n_boot = 10000
-rng = np.random.default_rng(0)
-
-n_cells = len(data3)
-n_tests = len(data3[0])
-
-total_jobs = n_cells * n_tests
-
-results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
-
-job = 0
-
-for cell in range(n_cells):
-    for test in range(n_tests):
-
-        job += 1
-
-        X = np.asarray(data3[cell][test], dtype=float)
-
-        n_time, n_repeats = X.shape
-
-        # -------------------------
-        # Mean + CI
-        # -------------------------
-
-        mean_trace = np.nanmean(X, axis=1)
-
-        boot_means = np.empty((n_boot, n_time))
-
-        for b in range(n_boot):
-            idx = rng.integers(0, n_repeats, n_repeats)
-            boot_means[b] = np.nanmean(X[:, idx], axis=1)
-
-        mean_lo = np.percentile(boot_means, 2.5, axis=0)
-        mean_hi = np.percentile(boot_means, 97.5, axis=0)
-
-        print(
-            f"Mean/CI: {100*job/total_jobs:.1f}% complete "
-            f"({job}/{total_jobs})"
-        )
-
-        # -------------------------
-        # Normalized repeats
-        # -------------------------
-
-        normX = X / X[0:1, :]
-        norm_mean = np.nanmean(normX, axis=1)
-
-        print(
-            f"Normalization: {100*job/total_jobs:.1f}% complete "
-            f"({job}/{total_jobs})"
-        )
-
-        # -------------------------
-        # Fano factor + CI
-        # -------------------------
-
-        fano = np.nanvar(X, axis=1, ddof=1) / np.nanmean(X, axis=1)
-
-        boot_fano = np.empty((n_boot, n_time))
-
-        for b in range(n_boot):
-            idx = rng.integers(0, n_repeats, n_repeats)
-
-            Xb = X[:, idx]
-
-            m = np.nanmean(Xb, axis=1)
-            v = np.nanvar(Xb, axis=1, ddof=1)
-
-            boot_fano[b] = v / m
-
-        fano_lo = np.percentile(boot_fano, 2.5, axis=0)
-        fano_hi = np.percentile(boot_fano, 97.5, axis=0)
-
-        print(
-            f"Fano/CI: {100*job/total_jobs:.1f}% complete "
-            f"({job}/{total_jobs})"
-        )
-
-        results[cell][test] = {
-            'raw': X,
-            'mean': mean_trace,
-            'mean_lo': mean_lo,
-            'mean_hi': mean_hi,
-            'norm': normX,
-            'norm_mean': norm_mean,
-            'fano': fano,
-            'fano_lo': fano_lo,
-            'fano_hi': fano_hi
-        }
-
-#%% 3 - plot the analysis for the Lisa data
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-fs = 20
-
-t = np.arange(1, results[0][0]['raw'].shape[0] + 1)
-
-for cell in range(n_cells):
-    for test in range(n_tests):
-
-        r = results[cell][test]
-
-        fig = plt.figure(figsize=(18, 10))
-
-        ax_raw  = plt.subplot2grid((2, 6), (0, 0), colspan=3)
-        ax_mean = plt.subplot2grid((2, 6), (0, 3), colspan=3)
-
-        ax_norm = plt.subplot2grid((2, 6), (1, 0), colspan=3)
-        ax_ff   = plt.subplot2grid((2, 6), (1, 3), colspan=3)
-
-        # =========================
-        # RAW TRACES
-        # =========================
-
-        X = r['raw']
-
-        for rep in range(X.shape[1]):
-            ax_raw.plot(
-                t,
-                X[:, rep],
-                alpha=0.4,
-                linewidth=1
-            )
-
-        ax_raw.set_title('All repeats', fontsize=fs)
-        ax_raw.set_xlabel('Pulse #', fontsize=fs)
-        ax_raw.set_ylabel('QC', fontsize=fs)
-        ax_raw.tick_params(labelsize=fs)
-
-        # =========================
-        # MEAN + BOOTSTRAP BOUNDS
-        # =========================
-
-        y = np.asarray(r['mean'])
-
-        lower = np.asarray(r['mean_lo'])
-        upper = np.asarray(r['mean_hi'])
-
-        yerr = np.vstack((y - lower, upper - y))
-
-        eb = ax_mean.errorbar(
-            t,
-            y,
-            yerr=yerr,
-            fmt='-',
-            capsize=2
-        )
-
-        eb[0].set_alpha(0.9)
-
-        for bar in eb[2]:
-            bar.set_alpha(0.25)
-
-        eb[1][0].set_alpha(0.25)
-        eb[1][1].set_alpha(0.25)
-
-        ax_mean.set_title('Mean + bootstrap bounds', fontsize=fs)
-        ax_mean.set_xlabel('Pulse #', fontsize=fs)
-        ax_mean.set_ylabel('QC', fontsize=fs)
-        ax_mean.tick_params(labelsize=fs)
-
-        # =========================
-        # NORMALIZED TRACES
-        # =========================
-
-        norm = r['norm']
-        norm_mean = r['norm_mean']
-
-        for rep in range(norm.shape[1]):
-            ax_norm.plot(
-                t,
-                norm[:, rep],
-                alpha=0.2,
-                linewidth=1,
-                label='_nolegend_'
-            )
-
-        ax_norm.plot(
-            t,
-            norm_mean,
-            color='black',
-            linewidth=3,
-            label='Mean normalized QC'
-        )
-
-        ax_norm.set_title('Normalized repeats', fontsize=fs)
-        ax_norm.set_xlabel('Pulse #', fontsize=fs)
-        ax_norm.set_ylabel('Normalized QC', fontsize=fs)
-        ax_norm.tick_params(labelsize=fs)
-        ax_norm.legend(fontsize=fs-2, frameon=False)
-
-        # =========================
-        # FANO FACTOR
-        # =========================
-
-        y = np.asarray(r['fano'])
-
-        lower = np.asarray(r['fano_lo'])
-        upper = np.asarray(r['fano_hi'])
-
-        yerr = np.vstack((y - lower, upper - y))
-
-        eb = ax_ff.errorbar(
-            t,
-            y,
-            yerr=yerr,
-            fmt='-',
-            capsize=2
-        )
-
-        eb[0].set_alpha(0.9)
-
-        for bar in eb[2]:
-            bar.set_alpha(0.25)
-
-        eb[1][0].set_alpha(0.25)
-        eb[1][1].set_alpha(0.25)
-
-        ax_ff.set_title('Fano factor', fontsize=fs)
-        ax_ff.set_xlabel('Pulse #', fontsize=fs)
-        ax_ff.set_ylabel('Fano factor', fontsize=fs)
-        ax_ff.tick_params(labelsize=fs)
-
-        fig.suptitle(
-            f'{files3[cell]} : {d3names[test]}',
-            fontsize=fs
-        )
-
-        plt.tight_layout()
-        plt.show()
-        
-#%% 3 - lisa - ndev standard deviation bounds per cell/test (across repeats) - plot ALL repeats
-
-import numpy as np
-import matplotlib.pyplot as plt
-import math
-
-fs = 15
-ndev = 2
-
-# pulse number axis
-t = np.arange(1, data3[0][0].shape[0] + 1)
-
-for cell in range(len(data3)):
-
-    for test in range(len(data3[cell])):
-
-        ds = np.asarray(data3[cell][test], dtype=float)  # (pulse, repeats)
-
-        # =====================================================
-        # mean + std across repeats at each pulse
-        # =====================================================
-
-        mean = np.mean(ds, axis=1)
-        std = np.std(ds, axis=1)
-
-        upper = mean + ndev * std
-        lower = mean - ndev * std
-
-        all_runs = []
-
-        for run in range(ds.shape[1]):
-
-            trace = ds[:, run]
-
-            out_of_bounds = (
-                (trace > upper) |
-                (trace < lower)
-            )
-
-            # ignore first pulse only for detection
-            out_of_bounds[0] = False
-
-            all_runs.append(
-                (run, trace, out_of_bounds)
-            )
-
-        nplots = len(all_runs)
-
-        # =========================
-        # balanced grid (closest to square)
-        # =========================
-        ncols = math.ceil(np.sqrt(nplots))
-        nrows = math.ceil(nplots / ncols)
-
-        fig, axes = plt.subplots(
-            nrows,
-            ncols,
-            figsize=(4 * ncols, 3 * nrows),
-            squeeze=False
-        )
-
-        axes = axes.flatten()
-
-        for k, (run, trace, mask) in enumerate(all_runs):
-
-            ax = axes[k]
-
-            ax.plot(
-                t,
-                trace,
-                linewidth=1,
-                label='Repeat'
-            )
-
-            ax.plot(
-                t,
-                mean,
-                '--',
-                linewidth=1,
-                label='Mean'
-            )
-
-            ax.plot(
-                t,
-                upper,
-                ':',
-                linewidth=1,
-                label=f'+{ndev} SD'
-            )
-
-            ax.plot(
-                t,
-                lower,
-                ':',
-                linewidth=1,
-                label=f'-{ndev} SD'
-            )
-
-            ax.fill_between(
-                t,
-                lower,
-                upper,
-                alpha=0.15
-            )
-
-            ax.scatter(
-                t[mask],
-                trace[mask],
-                color='red',
-                s=20,
-                label='Out of bounds'
-            )
-
-            ax.set_title(
-                f'Repeat {run + 1}',
-                fontsize=fs
-            )
-
-            ax.set_xlabel(
-                'Pulse #',
-                fontsize=fs
-            )
-
-            ax.set_ylabel(
-                'QC',
-                fontsize=fs
-            )
-
-            ax.tick_params(
-                labelsize=fs
-            )
-
-            if k == 0:
-                ax.legend(
-                    fontsize=fs-2,
-                    frameon=False
-                )
-
-        for k in range(nplots, len(axes)):
-            fig.delaxes(axes[k])
-
-        fig.suptitle(
-            f'{files3[cell]} : {d3names[test]}',
-            fontsize=fs
-        )
-
-        plt.tight_layout()
-        plt.show()
         
 #%% 3 - permutations (analysis + plotting FIXED)
 import numpy as np
@@ -5417,460 +4912,8 @@ for fnum, fname in enumerate(fnames):
 # with open('mydata.pkl', 'rb') as f:
 #     perm_results = pickle.load(f)
 # =============================================================================
-#%% first and last 5 analysis for cells_lisa.xlsx
-
-alpha = 0.05
-
-perm_results = []
-
-n_cells = len(data3)
-
-for cell_idx in range(n_cells):
-
-    cell_results = []
-
-    for test_idx in range(4):
-
-        cell = data3[cell_idx][test_idx]
-
-        first5 = cell[:, :5]
-        last5  = cell[:, -5:]
-
-        n_time = cell.shape[0]
-
-        pvals = np.zeros(n_time)
-        sig = np.zeros(n_time, dtype=bool)
-
-        first_mean = np.mean(first5, axis=1)
-        last_mean  = np.mean(last5, axis=1)
-
-        for t in tqdm(range(n_time),
-                      desc=f'cell {cell_idx+1} test {test_idx+1}'):
-
-            p = perm_test(first5[t, :], last5[t, :])
-
-            pvals[t] = p
-            sig[t] = p < alpha
-
-        cell_results.append({
-            'pvals': pvals,
-            'sig': sig,
-            'first_mean': first_mean,
-            'last_mean': last_mean
-        })
-
-    perm_results.append(cell_results)
-
-
-# =========================
-# PLOTTING
-# one subplot per test of each cell
-# =========================
-
-nrows = len(data3)
-ncols = 4
-
-fig, axes = plt.subplots(
-    nrows,
-    ncols,
-    figsize=(4*ncols, 3*nrows),
-    sharex=False,
-    squeeze=False
-)
-
-for cell_idx in range(nrows):
-
-    for test_idx in range(ncols):
-
-        ax = axes[cell_idx, test_idx]
-
-        result = perm_results[cell_idx][test_idx]
-
-        cell = data3[cell_idx][test_idx]
-
-        n_time = cell.shape[0]
-        time = np.arange(n_time)
-
-        first_mean = result['first_mean']
-        last_mean = result['last_mean']
-        sig = result['sig']
-
-        ax.plot(
-            time,
-            first_mean,
-            lw=2,
-            label='First 5'
-        )
-
-        ax.plot(
-            time,
-            last_mean,
-            lw=2,
-            label='Last 5'
-        )
-
-        ax.scatter(
-            time[sig],
-            np.maximum(first_mean[sig], last_mean[sig]),
-            s=30,
-            marker='o',
-            facecolors='k',
-            edgecolors='k',
-            zorder=10
-        )
-
-        pct_sig = 100 * np.mean(sig)
-
-        ax.set_title(
-            f'Cell {cell_idx+1}\n{d3names[test_idx]}\n'
-            f'{pct_sig:.1f}% significant',
-            fontsize=10
-        )
-
-        if cell_idx == nrows - 1:
-            ax.set_xlabel('Time Point')
-
-        if test_idx == 0:
-            ax.set_ylabel('Quantal Content')
-
-        if cell_idx == 0 and test_idx == 0:
-            ax.legend()
-
-plt.tight_layout()
-plt.show()
         
-#%% 3 - plot permutation results
-# =========================
-# PLOTTING (SIGNIFICANCE STYLE MARKERS)
-# solid = significant, hollow = not significant
-# =========================
-
-n_cells = len(data3)
-n_tests = 4
-
-fig, axes = plt.subplots(
-    n_cells,
-    n_tests,
-    figsize=(5*n_tests, 4*n_cells)
-)
-
-axes = np.atleast_2d(axes)
-
-for cell_idx in range(n_cells):
-
-    for test_idx in range(n_tests):
-
-        ax = axes[cell_idx, test_idx]
-
-        r = perm_results[cell_idx][test_idx]
-
-        y1 = r["first_mean"]
-        y2 = r["last_mean"]
-
-        sig = r["sig"]
-        ns = ~sig
-
-        percent_ns = 100 * np.mean(ns)
-
-        # highlight highly stable datasets
-        if percent_ns >= 90:
-            for spine in ax.spines.values():
-                spine.set_color('red')
-                spine.set_linewidth(3)
-
-        t = np.arange(len(y1))
-
-        # =========================
-        # LINES
-        # =========================
-
-        ax.plot(
-            t,
-            y1,
-            color='C0',
-            lw=1
-        )
-
-        ax.plot(
-            t,
-            y2,
-            color='C1',
-            lw=1
-        )
-
-        # =========================
-        # FIRST 5 markers
-        # =========================
-
-        ax.plot(
-            t[sig],
-            y1[sig],
-            'o',
-            markerfacecolor='C0',
-            markeredgecolor='C0',
-            markersize=10,
-            linestyle='None',
-            label='First 5 (sig)'
-        )
-
-        ax.plot(
-            t[ns],
-            y1[ns],
-            'o',
-            markerfacecolor='white',
-            markeredgecolor='C0',
-            markersize=6,
-            linestyle='None',
-            label='First 5 (ns)'
-        )
-
-        # =========================
-        # LAST 5 markers
-        # =========================
-
-        ax.plot(
-            t[sig],
-            y2[sig],
-            'o',
-            markerfacecolor='C1',
-            markeredgecolor='C1',
-            markersize=10,
-            linestyle='None',
-            label='Last 5 (sig)'
-        )
-
-        ax.plot(
-            t[ns],
-            y2[ns],
-            'o',
-            markerfacecolor='white',
-            markeredgecolor='C1',
-            markersize=6,
-            linestyle='None',
-            label='Last 5 (ns)'
-        )
-
-        ax.set_title(
-            f'Cell {cell_idx+1}\n{d3names[test_idx]}'
-        )
-
-        ax.set_xlabel('Time Point')
-        ax.set_ylabel('Mean QC')
-
-        ax.legend(
-            title=f'NS = {percent_ns:.1f}%',
-            fontsize=8
-        )
-
-plt.tight_layout()
-plt.show()
-
-#%% CALCULATION
-
-import numpy as np
-from tqdm import tqdm
-
-def perm_test(x, y, n_perm=5000):
-
-    x = np.asarray(x)
-    y = np.asarray(y)
-
-    obs = np.mean(x) - np.mean(y)
-
-    pooled = np.concatenate([x, y])
-    n = len(x)
-
-    count = 0
-
-    for _ in range(n_perm):
-
-        perm = np.random.permutation(pooled)
-
-        x_p = perm[:n]
-        y_p = perm[n:]
-
-        stat = np.mean(x_p) - np.mean(y_p)
-
-        if abs(stat) >= abs(obs):
-            count += 1
-
-    return count / n_perm
-
-
-n_boot = 10000
-rng = np.random.default_rng(0)
-
-alpha = 0.05
-
-n_cells = len(data3)
-n_tests = len(data3[0])
-
-total_jobs = n_cells * n_tests
-job = 0
-
-results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
-
-for cell in range(n_cells):
-
-    for test in range(n_tests):
-
-        job += 1
-
-        X = np.asarray(data3[cell][test], dtype=float)
-
-        n_time, n_repeats = X.shape
-
-        # ==================================================
-        # MEAN + BOOTSTRAP CI
-        # ==================================================
-
-        mean_trace = np.nanmean(X, axis=1)
-
-        boot_means = np.empty((n_boot, n_time))
-
-        for b in range(n_boot):
-
-            idx = rng.integers(0, n_repeats, n_repeats)
-
-            boot_means[b] = np.nanmean(
-                X[:, idx],
-                axis=1
-            )
-
-        mean_lo = np.percentile(
-            boot_means,
-            2.5,
-            axis=0
-        )
-
-        mean_hi = np.percentile(
-            boot_means,
-            97.5,
-            axis=0
-        )
-
-        # ==================================================
-        # NORMALIZED
-        # ==================================================
-
-        normX = X / X[0:1, :]
-
-        norm_mean = np.nanmean(
-            normX,
-            axis=1
-        )
-
-        # ==================================================
-        # FANO
-        # ==================================================
-
-        fano = (
-            np.nanvar(X, axis=1, ddof=1)
-            /
-            np.nanmean(X, axis=1)
-        )
-
-        boot_fano = np.empty(
-            (n_boot, n_time)
-        )
-
-        for b in range(n_boot):
-
-            idx = rng.integers(
-                0,
-                n_repeats,
-                n_repeats
-            )
-
-            Xb = X[:, idx]
-
-            m = np.nanmean(
-                Xb,
-                axis=1
-            )
-
-            v = np.nanvar(
-                Xb,
-                axis=1,
-                ddof=1
-            )
-
-            boot_fano[b] = v / m
-
-        fano_lo = np.percentile(
-            boot_fano,
-            2.5,
-            axis=0
-        )
-
-        fano_hi = np.percentile(
-            boot_fano,
-            97.5,
-            axis=0
-        )
-
-        # ==================================================
-        # FIRST 5 vs LAST 5
-        # ==================================================
-
-        first5 = X[:, :5]
-        last5  = X[:, -5:]
-
-        pvals = np.zeros(n_time)
-
-        sig = np.zeros(
-            n_time,
-            dtype=bool
-        )
-
-        first_mean = np.mean(
-            first5,
-            axis=1
-        )
-
-        last_mean = np.mean(
-            last5,
-            axis=1
-        )
-
-        for tt in range(n_time):
-
-            p = perm_test(
-                first5[tt, :],
-                last5[tt, :]
-            )
-
-            pvals[tt] = p
-            sig[tt] = p < alpha
-
-        print(
-            f'{100*job/total_jobs:.1f}% '
-            f'({job}/{total_jobs})'
-        )
-
-        results[cell][test] = {
-
-            'raw': X,
-
-            'mean': mean_trace,
-            'mean_lo': mean_lo,
-            'mean_hi': mean_hi,
-
-            'norm': normX,
-            'norm_mean': norm_mean,
-
-            'fano': fano,
-            'fano_lo': fano_lo,
-            'fano_hi': fano_hi,
-
-            'perm_pvals': pvals,
-            'perm_sig': sig,
-
-            'perm_first_mean': first_mean,
-            'perm_last_mean': last_mean
-        }
-        
-#%% plotting all 5 (spaced out + centered outside legend)
+#%% plotting all 5 (spaced out + centered outside legend) - eck data
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6075,7 +5118,7 @@ for cell in range(n_cells):
 
         plt.show()
 
-#%% CALCULATION t-test
+#%% CALCULATION t-test - lisa cells
 
 import numpy as np
 from tqdm import tqdm
@@ -6206,6 +5249,7 @@ for cell in range(n_cells):
         }
         
 #%% plotting all 5 (spaced out + centered outside legend) — UPDATED FOR T-TEST
+# lisa cells
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6430,3 +5474,1900 @@ for cell in range(n_cells):
         )
 
         plt.show()
+        
+#%% CALCULATION - eck data (T-TEST VERSION)
+
+import numpy as np
+from tqdm import tqdm
+from scipy.stats import ttest_ind
+
+n_boot = 10000
+rng = np.random.default_rng(0)
+
+n_cells = len(data3)
+n_tests = len(data3[0])
+
+total_jobs = n_cells * n_tests
+job = 0
+
+results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
+
+for cell in range(n_cells):
+
+    for test in range(n_tests):
+
+        job += 1
+
+        X = np.asarray(data3[cell][test], dtype=float)
+
+        n_time, n_repeats = X.shape
+
+        # ==================================================
+        # MEAN + BOOTSTRAP CI
+        # ==================================================
+
+        mean_trace = np.nanmean(X, axis=1)
+
+        boot_means = np.empty((n_boot, n_time))
+
+        for b in range(n_boot):
+
+            idx = rng.integers(0, n_repeats, n_repeats)
+
+            boot_means[b] = np.nanmean(X[:, idx], axis=1)
+
+        mean_lo = np.percentile(boot_means, 2.5, axis=0)
+        mean_hi = np.percentile(boot_means, 97.5, axis=0)
+
+        # ==================================================
+        # NORMALIZED
+        # ==================================================
+
+        normX = X / X[0:1, :]
+        norm_mean = np.nanmean(normX, axis=1)
+
+        # ==================================================
+        # FANO
+        # ==================================================
+
+        fano = (
+            np.nanvar(X, axis=1, ddof=1)
+            / np.nanmean(X, axis=1)
+        )
+
+        boot_fano = np.empty((n_boot, n_time))
+
+        for b in range(n_boot):
+
+            idx = rng.integers(0, n_repeats, n_repeats)
+
+            Xb = X[:, idx]
+
+            m = np.nanmean(Xb, axis=1)
+            v = np.nanvar(Xb, axis=1, ddof=1)
+
+            boot_fano[b] = v / m
+
+        fano_lo = np.percentile(boot_fano, 2.5, axis=0)
+        fano_hi = np.percentile(boot_fano, 97.5, axis=0)
+
+        # ==================================================
+        # FIRST 5 vs LAST 5 (T-TEST)
+        # ==================================================
+
+        first5 = X[:, :5]
+        last5  = X[:, -5:]
+
+        pvals = np.zeros(n_time)
+        sig_05 = np.zeros(n_time, dtype=bool)
+        sig_01 = np.zeros(n_time, dtype=bool)
+
+        first_mean = np.mean(first5, axis=1)
+        last_mean = np.mean(last5, axis=1)
+
+        for tt in range(n_time):
+
+            x = first5[tt, :]
+            y = last5[tt, :]
+
+            _, p = ttest_ind(x, y, equal_var=False, nan_policy='omit')
+
+            pvals[tt] = p
+            sig_05[tt] = p < 0.05
+            sig_01[tt] = p < 0.01
+
+        print(f'{100*job/total_jobs:.1f}% ({job}/{total_jobs})')
+
+        results[cell][test] = {
+
+            'raw': X,
+
+            'mean': mean_trace,
+            'mean_lo': mean_lo,
+            'mean_hi': mean_hi,
+
+            'norm': normX,
+            'norm_mean': norm_mean,
+
+            'fano': fano,
+            'fano_lo': fano_lo,
+            'fano_hi': fano_hi,
+
+            'ttest_pvals': pvals,
+            'ttest_sig_05': sig_05,
+            'ttest_sig_01': sig_01,
+
+            'ttest_first_mean': first_mean,
+            'ttest_last_mean': last_mean
+        }
+
+
+#%% plotting all 5 (spaced out + centered outside legend) - eck data (T-TEST)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+fs = 20
+
+for cell in range(n_cells):
+
+    for test in range(n_tests):
+
+        r = results[cell][test]
+
+        t = np.arange(1, r['raw'].shape[0] + 1)
+
+        fig = plt.figure(figsize=(20, 11))
+
+        ax_raw  = plt.subplot2grid((2, 6), (0, 0), colspan=2)
+        ax_mean = plt.subplot2grid((2, 6), (0, 2), colspan=2)
+        ax_norm = plt.subplot2grid((2, 6), (0, 4), colspan=2)
+
+        ax_ff   = plt.subplot2grid((2, 6), (1, 1), colspan=2)
+        ax_tt   = plt.subplot2grid((2, 6), (1, 3), colspan=2)
+
+        # =====================================
+        # RAW
+        # =====================================
+
+        X = r['raw']
+
+        for rep in range(X.shape[1]):
+            ax_raw.plot(t, X[:, rep], alpha=0.5, linewidth=1)
+
+        ax_raw.set_title('All repeats', fontsize=fs)
+        ax_raw.set_xlabel('Pulse #', fontsize=fs)
+        ax_raw.set_ylabel('QC', fontsize=fs)
+        ax_raw.tick_params(labelsize=fs)
+
+        # =====================================
+        # MEAN
+        # =====================================
+
+        y = r['mean']
+        lower = r['mean_lo']
+        upper = r['mean_hi']
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_mean.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_mean.set_title('Mean + bootstrap bounds', fontsize=fs)
+        ax_mean.set_xlabel('Pulse #', fontsize=fs)
+        ax_mean.set_ylabel('QC', fontsize=fs)
+        ax_mean.tick_params(labelsize=fs)
+
+        # =====================================
+        # NORMALIZED
+        # =====================================
+
+        norm = r['norm']
+
+        for rep in range(norm.shape[1]):
+            ax_norm.plot(t, norm[:, rep], alpha=0.2, linewidth=1)
+
+        ax_norm.plot(t, r['norm_mean'], color='black', linewidth=3)
+
+        ax_norm.set_title('Normalized repeats', fontsize=fs)
+        ax_norm.set_xlabel('Pulse #', fontsize=fs)
+        ax_norm.set_ylabel('Normalized QC', fontsize=fs)
+        ax_norm.tick_params(labelsize=fs)
+
+        # =====================================
+        # FANO
+        # =====================================
+
+        y = r['fano']
+        lower = r['fano_lo']
+        upper = r['fano_hi']
+
+        yerr = np.vstack((y - lower, upper - y))
+
+        eb = ax_ff.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
+
+        eb[0].set_alpha(0.9)
+        for bar in eb[2]:
+            bar.set_alpha(0.25)
+        eb[1][0].set_alpha(0.25)
+        eb[1][1].set_alpha(0.25)
+
+        ax_ff.set_title('Fano factor', fontsize=fs)
+        ax_ff.set_xlabel('Pulse #', fontsize=fs)
+        ax_ff.set_ylabel('Fano factor', fontsize=fs)
+        ax_ff.tick_params(labelsize=fs)
+
+        # =====================================
+        # T-TEST PANEL
+        # =====================================
+
+        y1 = r['ttest_first_mean']
+        y2 = r['ttest_last_mean']
+
+        sig_05 = r['ttest_sig_05']
+        sig_01 = r['ttest_sig_01']
+
+        ns = ~sig_05
+        mid = sig_05 & ~sig_01
+
+        percent_05 = 100 * np.mean(sig_05)
+        percent_01 = 100 * np.mean(sig_01)
+
+        ax_tt.plot(t, y1, color='C0', lw=1)
+        ax_tt.plot(t, y2, color='C1', lw=1)
+
+        ax_tt.plot(t[sig_01], y1[sig_01], 's',
+                   markerfacecolor='C0',
+                   markeredgecolor='C0',
+                   markersize=15,
+                   linestyle='None')
+
+        ax_tt.plot(t[sig_01], y2[sig_01], 's',
+                   markerfacecolor='C1',
+                   markeredgecolor='C1',
+                   markersize=15,
+                   linestyle='None')
+
+        ax_tt.plot(t[mid], y1[mid], 'o',
+                   markerfacecolor='C0',
+                   markeredgecolor='white',
+                   markersize=12,
+                   linestyle='None')
+
+        ax_tt.plot(t[mid], y2[mid], 'o',
+                   markerfacecolor='C1',
+                   markeredgecolor='white',
+                   markersize=12,
+                   linestyle='None')
+
+        ax_tt.plot(t[ns], y1[ns], 'o',
+                   markerfacecolor='white',
+                   markeredgecolor='C0',
+                   markersize=6,
+                   linestyle='None')
+
+        ax_tt.plot(t[ns], y2[ns], 'o',
+                   markerfacecolor='white',
+                   markeredgecolor='C1',
+                   markersize=6,
+                   linestyle='None')
+
+        # =========================
+        # LEGEND
+        # =========================
+
+        legend_handles = [
+
+            Line2D([0],[0], marker='s', linestyle='None',
+                   markerfacecolor='C0', markeredgecolor='C0',
+                   markersize=15, label='First 5 (p < 0.01)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='C0', markeredgecolor='white',
+                   markersize=12, label='First 5 (0.01–0.05)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C0',
+                   markersize=8, label='First 5 (ns)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='white', markeredgecolor='C1',
+                   markersize=8, label='Last 5 (ns)'),
+
+            Line2D([0],[0], marker='s', linestyle='None',
+                   markerfacecolor='C1', markeredgecolor='C1',
+                   markersize=15, label='Last 5 (p < 0.01)'),
+
+            Line2D([0],[0], marker='o', linestyle='None',
+                   markerfacecolor='C1', markeredgecolor='white',
+                   markersize=12, label='Last 5 (0.01–0.05)'),
+        ]
+
+        ax_tt.legend(
+            handles=legend_handles,
+            loc='center left',
+            bbox_to_anchor=(1.02, 0.5),
+            borderaxespad=0,
+            fontsize=fs,
+            title=f'p<0.05: {percent_05:.1f}%\np<0.01: {percent_01:.1f}%',
+            title_fontsize=fs
+        )
+
+        ax_tt.set_title('First 5 vs Last 5 (t-test)', fontsize=fs)
+        ax_tt.set_xlabel('Pulse #', fontsize=fs)
+        ax_tt.set_ylabel('Mean QC', fontsize=fs)
+        ax_tt.tick_params(labelsize=fs)
+
+        # =========================
+        # spacing fix
+        # =========================
+
+        plt.subplots_adjust(
+            left=0.03,
+            right=0.96,
+            top=0.90,
+            bottom=0.08,
+            wspace=0.55,
+            hspace=0.35
+        )
+
+        fig.suptitle(
+            f'{files3[cell]} : {d3names[test]}',
+            fontsize=fs
+        )
+
+        plt.show()
+        
+#%% 2x3 PLOT: LOW vs HIGH Ca (20 Hz / 100 Hz) pooled FIRST QC across repeats
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# =====================================
+# LOAD DATA
+# =====================================
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file3 = 'cells_lisa.xlsx'
+excel3 = pd.read_excel(file3, sheet_name=None, header=None)
+
+files3 = ['260302_2', '260227_2', '260227_3']
+ds = [excel3[d] for d in files3]
+
+data3 = [
+    [
+        np.array(ds[0].iloc[2:21+1, 7:46+1]),
+        np.array(ds[0].iloc[26:45+1, 7:46+1]),
+        np.array(ds[0].iloc[2:21+1, 55:90+1]),
+        np.array(ds[0].iloc[26:45+1, 55:91+1]),
+    ],
+    [
+        np.array(ds[1].iloc[2:21+1, 7:46+1]),
+        np.array(ds[1].iloc[26:45+1, 7:46+1]),
+        np.array(ds[1].iloc[2:21+1, 55:69+1]),
+        np.array(ds[1].iloc[26:45+1, 55:69+1]),
+    ],
+    [
+        np.array(ds[2].iloc[2:21+1, 7:49+1]),
+        np.array(ds[2].iloc[26:45+1, 7:49+1]),
+        np.array(ds[2].iloc[2:21+1, 58:77+1]),
+        np.array(ds[2].iloc[26:45+1, 58:77+1]),
+    ],
+]
+
+# convert
+data3 = [
+    [x / (-50e-12) for x in cell]
+    for cell in data3
+]
+
+# =====================================
+# CELL NAMES = FILE NAMES (FIXED)
+# =====================================
+cell_names = files3
+
+# =====================================
+# FANO FUNCTION
+# =====================================
+def fano(x):
+    x = np.asarray(x, dtype=float)
+    if len(x) == 0:
+        return np.nan
+    m = np.mean(x)
+    if m == 0:
+        return np.nan
+    return np.var(x, ddof=1) / m
+
+# =====================================
+# PLOT SETUP
+# =====================================
+fs = 15
+fig, ax = plt.subplots(2, 3, figsize=(15, 8), sharex=False, sharey=False)
+
+LOW_20 = 0
+LOW_100 = 1
+HIGH_20 = 2
+HIGH_100 = 3
+
+# =====================================
+# MAIN LOOP
+# =====================================
+for cell in range(len(data3)):
+
+    low_20, low_100 = [], []
+    high_20, high_100 = [], []
+
+    for test in range(4):
+
+        X = np.asarray(data3[cell][test], dtype=float)
+        qc0 = X[0, :]  # first QC across repeats
+
+        if test == LOW_20:
+            low_20.append(qc0)
+        elif test == LOW_100:
+            low_100.append(qc0)
+        elif test == HIGH_20:
+            high_20.append(qc0)
+        elif test == HIGH_100:
+            high_100.append(qc0)
+
+    low_20 = np.concatenate(low_20) if len(low_20) else np.array([])
+    low_100 = np.concatenate(low_100) if len(low_100) else np.array([])
+    high_20 = np.concatenate(high_20) if len(high_20) else np.array([])
+    high_100 = np.concatenate(high_100) if len(high_100) else np.array([])
+
+    # =========================
+    # TOP ROW (20 Hz)
+    # =========================
+    ax[0, cell].scatter(np.arange(len(low_20)), low_20,
+                        s=30, color="blue", marker='o',
+                        label=f"Low Ca F={fano(low_20):.3f}")
+
+    ax[0, cell].scatter(np.arange(len(high_20)), high_20,
+                        s=30, color="red", marker='x',
+                        label=f"High Ca F={fano(high_20):.3f}")
+
+    ax[0, cell].set_title(f"{cell_names[cell]} — 20 Hz", fontsize=fs)
+    ax[0, cell].tick_params(labelsize=fs)
+    ax[0, cell].legend(fontsize=fs * 0.8)
+
+    # =========================
+    # BOTTOM ROW (100 Hz)
+    # =========================
+    ax[1, cell].scatter(np.arange(len(low_100)), low_100,
+                        s=30, color="blue", marker='o',
+                        label=f"Low Ca F={fano(low_100):.3f}")
+
+    ax[1, cell].scatter(np.arange(len(high_100)), high_100,
+                        s=30, color="red", marker='x',
+                        label=f"High Ca F={fano(high_100):.3f}")
+
+    ax[1, cell].set_title(f"{cell_names[cell]} — 100 Hz", fontsize=fs)
+    ax[1, cell].tick_params(labelsize=fs)
+    ax[1, cell].legend(fontsize=fs * 0.8)
+
+# =====================================
+# AXES LABELS
+# =====================================
+ax[0, 0].set_ylabel("20 Hz First QC", fontsize=fs)
+ax[1, 0].set_ylabel("100 Hz First QC", fontsize=fs)
+
+for j in range(3):
+    ax[1, j].set_xlabel("Repeats", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+
+#%% plot 20 and 100 Hz merged
+# =====================================
+# PLOT (20 Hz immediately followed by 100 Hz)
+# =====================================
+from matplotlib.lines import Line2D
+
+fs = 20
+fig, ax = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+
+for cell in range(len(data3)):
+
+    low_20 = np.asarray(data3[cell][0], dtype=float)[0, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[0, :]
+
+    high_20 = np.asarray(data3[cell][2], dtype=float)[0, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[0, :]
+
+    # Fano factors pooled across 20 + 100 Hz
+    low_pool = np.concatenate([low_20, low_100])
+    high_pool = np.concatenate([high_20, high_100])
+
+    # x positions
+    x_l20 = np.arange(len(low_20))
+    x_l100 = np.arange(len(low_100)) + len(low_20)
+
+    x_h20 = np.arange(len(high_20))
+    x_h100 = np.arange(len(high_100)) + len(high_20)
+
+    # Low Ca
+    ax[cell].scatter(
+        x_l20,
+        low_20,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_l100,
+        low_100,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    # High Ca
+    ax[cell].scatter(
+        x_h20,
+        high_20,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_h100,
+        high_100,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    # Custom legend showing all symbols
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca (FF={fano(low_pool):.3f})'
+        ),
+# =============================================================================
+#         Line2D(
+#             [0], [0],
+#             marker='s',
+#             linestyle='None',
+#             markerfacecolor='none',
+#             markeredgecolor='blue',
+#             markersize=8,
+#             label='Low Ca 100 Hz'
+#         ),
+# =============================================================================
+        Line2D(
+            [0], [0],
+            marker='X',
+            linestyle='None',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca (FF={fano(high_pool):.3f})'
+        ),
+# =============================================================================
+#         Line2D(
+#             [0], [0],
+#             marker='s',
+#             linestyle='None',
+#             markerfacecolor='none',
+#             markeredgecolor='red',
+#             markersize=8,
+#             label='High Ca 100 Hz'
+#         )
+# =============================================================================
+    ]
+
+    ax[cell].set_title(cell_names[cell], fontsize=fs)
+    ax[cell].set_xlabel("Repeat #", fontsize=fs)
+    ax[cell].tick_params(axis='both', labelsize=fs)
+    ax[cell].legend(handles=legend_elements, fontsize=fs)
+
+ax[0].set_ylabel("First QC", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Plot 20 and 100 Hz separated visually
+# =====================================
+# PLOT (20 Hz immediately followed by 100 Hz)
+# =====================================
+from matplotlib.lines import Line2D
+
+fs = 20
+fig, ax = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+
+for cell in range(len(data3)):
+
+    low_20 = np.asarray(data3[cell][0], dtype=float)[0, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[0, :]
+
+    high_20 = np.asarray(data3[cell][2], dtype=float)[0, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[0, :]
+
+    # Fano factors pooled across 20 + 100 Hz
+    low_pool = np.concatenate([low_20, low_100])
+    high_pool = np.concatenate([high_20, high_100])
+
+    # x positions
+    x_l20 = np.arange(len(low_20))
+    x_l100 = np.arange(len(low_100)) + len(low_20)
+
+    x_h20 = np.arange(len(high_20))
+    x_h100 = np.arange(len(high_100)) + len(high_20)
+
+    # Low Ca
+    ax[cell].scatter(
+        x_l20,
+        low_20,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_l100,
+        low_100,
+        marker='^',
+        facecolors='blue',
+        edgecolors='blue',
+        s=70,
+    )
+
+    # High Ca
+    ax[cell].scatter(
+        x_h20,
+        high_20,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_h100,
+        high_100,
+        marker='X',
+        facecolors='none',
+        edgecolors='red',
+        s=70
+    )
+
+    # Custom legend showing all symbols (ONLY CHANGE: Fano factors separated)
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 20 Hz (FF={fano(low_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='^',
+            linestyle='None',
+            markerfacecolor='blue',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 100 Hz (FF={fano(low_100):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='X',
+            linestyle='None',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca 20 Hz (FF={fano(high_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='x',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca 100 Hz (FF={fano(high_100):.3f})'
+        )
+    ]
+
+    ax[cell].set_title(cell_names[cell], fontsize=fs)
+    ax[cell].set_xlabel("Repeat #", fontsize=fs)
+    ax[cell].tick_params(axis='both', labelsize=fs)
+    ax[cell].legend(handles=legend_elements, fontsize=fs-5)
+
+ax[0].set_ylabel("First QC", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% 3x3 HISTOGRAM PLOT: FULL SEPARATION (20/100 × Low/High + pooled)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+fs = 15
+fig, ax = plt.subplots(3, 3, figsize=(18, 12), sharex=False, sharey=False)
+
+for cell in range(len(data3)):
+
+    # =========================
+    # FIRST QC ONLY
+    # =========================
+    low_20 = np.asarray(data3[cell][0], dtype=float)[0, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[0, :]
+    high_20 = np.asarray(data3[cell][2], dtype=float)[0, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[0, :]
+
+    # =========================
+    # POOLS
+    # =========================
+    low_pool = np.concatenate([low_20, low_100])
+    high_pool = np.concatenate([high_20, high_100])
+
+    # =========================
+    # ROW 1: 20 Hz ONLY
+    # =========================
+    nbins20=20
+    ax[0, cell].hist(low_20, bins=nbins20, alpha=0.6, color='blue', label='Low Ca')
+    ax[0, cell].hist(high_20, bins=nbins20, alpha=0.6, color='red', label='High Ca')
+    ax[0, cell].set_title(f"{cell_names[cell]} — 20 Hz")
+    ax[0, cell].legend(fontsize=fs * 0.7)
+    ax[0, cell].tick_params(labelsize=fs)
+
+    # =========================
+    # ROW 2: 100 Hz ONLY
+    # =========================
+    nbins100=20
+    ax[1, cell].hist(low_100, bins=nbins100, alpha=0.6, color='blue', label='Low Ca')
+    ax[1, cell].hist(high_100, bins=nbins100, alpha=0.6, color='red', label='High Ca')
+    ax[1, cell].set_title(f"{cell_names[cell]} — 100 Hz")
+    ax[1, cell].legend(fontsize=fs * 0.7)
+    ax[1, cell].tick_params(labelsize=fs)
+
+    # =========================
+    # ROW 3: POOLED (20+100 Hz)
+    # =========================
+    ax[2, cell].hist(low_pool, bins=20, alpha=0.6, color='blue', label='Low Ca pooled')
+    ax[2, cell].hist(high_pool, bins=20, alpha=0.6, color='red', label='High Ca pooled')
+    ax[2, cell].set_title(f"{cell_names[cell]} — Pooled (20+100 Hz)")
+    ax[2, cell].legend(fontsize=fs * 0.7)
+    ax[2, cell].tick_params(labelsize=fs)
+
+# =========================
+# LABELS
+# =========================
+ax[0, 0].set_ylabel("20 Hz", fontsize=fs)
+ax[1, 0].set_ylabel("100 Hz", fontsize=fs)
+ax[2, 0].set_ylabel("Pooled", fontsize=fs)
+
+for j in range(3):
+    ax[2, j].set_xlabel("First QC Value", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+#%%
+from scipy.stats import ttest_ind
+
+# =====================================
+# T-TEST: 20 Hz vs 100 Hz
+# for each cell and Ca condition
+# =====================================
+
+alpha = 0.01
+
+results = []
+
+for cell in range(len(data3)):
+
+    # FIRST QC ONLY (same as your plots)
+    low_20 = np.asarray(data3[cell][0], dtype=float)[0, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[0, :]
+
+    high_20 = np.asarray(data3[cell][2], dtype=float)[0, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[0, :]
+
+    # -----------------------------
+    # LOW Ca: 20 vs 100 Hz
+    # -----------------------------
+    t_low, p_low = ttest_ind(low_20, low_100, equal_var=False, nan_policy='omit')
+
+    # -----------------------------
+    # HIGH Ca: 20 vs 100 Hz
+    # -----------------------------
+    t_high, p_high = ttest_ind(high_20, high_100, equal_var=False, nan_policy='omit')
+
+    results.append({
+        "cell": cell_names[cell],
+
+        "low_t": t_low,
+        "low_p": p_low,
+        "low_sig": p_low < alpha,
+
+        "high_t": t_high,
+        "high_p": p_high,
+        "high_sig": p_high < alpha
+    })
+
+# =====================================
+# PRINT RESULTS
+# =====================================
+print("\nT-TEST RESULTS (20 Hz vs 100 Hz)\n")
+for r in results:
+    print(f"{r['cell']}:")
+    print(f"  Low Ca  -> t={r['low_t']:.3f}, p={r['low_p']:.3e}, significant={r['low_sig']}")
+    print(f"  High Ca -> t={r['high_t']:.3f}, p={r['high_p']:.3e}, significant={r['high_sig']}")
+    print("")
+    
+#%% Plot 20 and 100 Hz separated visually + t-test + means
+
+cell_names = files3
+
+
+from matplotlib.lines import Line2D
+from scipy.stats import ttest_ind
+import numpy as np
+import matplotlib.pyplot as plt
+
+fs = 20
+fig, ax = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+
+alpha = 0.01
+
+for cell in range(len(data3)):
+
+    low_20 = np.asarray(data3[cell][0], dtype=float)[0, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[0, :]
+
+    high_20 = np.asarray(data3[cell][2], dtype=float)[0, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[0, :]
+
+    # =========================
+    # T-TESTS (20 vs 100 Hz)
+    # =========================
+    t_low, p_low = ttest_ind(low_20, low_100, equal_var=False, nan_policy='omit')
+    t_high, p_high = ttest_ind(high_20, high_100, equal_var=False, nan_policy='omit')
+
+    sig_low = "sig" if p_low < alpha else "ns"
+    sig_high = "sig" if p_high < alpha else "ns"
+
+    # =========================
+    # MEANS
+    # =========================
+    m_low_20 = np.mean(low_20)
+    m_low_100 = np.mean(low_100)
+
+    m_high_20 = np.mean(high_20)
+    m_high_100 = np.mean(high_100)
+
+    # =========================
+    # x positions
+    # =========================
+    x_l20 = np.arange(len(low_20))
+    x_l100 = np.arange(len(low_100)) + len(low_20)
+
+    x_h20 = np.arange(len(high_20))
+    x_h100 = np.arange(len(high_100)) + len(high_20)
+
+    # =========================
+    # PLOTTING (UNCHANGED)
+    # =========================
+    ax[cell].scatter(
+        x_l20, low_20,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_l100, low_100,
+        marker='^',
+        facecolors='blue',
+        edgecolors='blue',
+        s=70,
+    )
+
+    ax[cell].scatter(
+        x_h20, high_20,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_h100, high_100,
+        marker='X',
+        facecolors='none',
+        edgecolors='red',
+        s=70
+    )
+
+    # =========================
+    # MEAN LINES (ONLY ADDITION)
+    # =========================
+    ax[cell].hlines(m_low_20, x_l20[0], x_l20[-1], colors='blue', linestyles='--')
+    ax[cell].hlines(m_low_100, x_l100[0], x_l100[-1], colors='blue', linestyles='-')
+
+    ax[cell].hlines(m_high_20, x_h20[0], x_h20[-1], colors='red', linestyles='--')
+    ax[cell].hlines(m_high_100, x_h100[0], x_h100[-1], colors='red', linestyles='-')
+
+    # =========================
+    # LEGEND (UNCHANGED except Fano already correct)
+    # =========================
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 20 Hz (FF={fano(low_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='^',
+            linestyle='None',
+            markerfacecolor='blue',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 100 Hz (FF={fano(low_100):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='X',
+            linestyle='None',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca 20 Hz (FF={fano(high_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='x',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca 100 Hz (FF={fano(high_100):.3f})'
+        )
+    ]
+
+    # =========================
+    # TITLE WITH STATS
+    # =========================
+    ax[cell].set_title(
+        f"{cell_names[cell]} | Low:{sig_low} High:{sig_high}",
+        fontsize=fs
+    )
+
+    ax[cell].set_xlabel("Repeat #", fontsize=fs)
+    ax[cell].tick_params(axis='both', labelsize=fs)
+    ax[cell].legend(handles=legend_elements, fontsize=fs-5)
+
+ax[0].set_ylabel("First QC", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% FULL SELF-CONTAINED FANO FACTOR VS TIME PLOT
+# ==============================================
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# 1. LOAD DATA (your setup)
+# -----------------------------
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file3 = 'cells_lisa.xlsx'
+excel3 = pd.read_excel(file3, sheet_name=None, header=None)
+files3 = ['260302_2', '260227_2', '260227_3']
+
+ds = [excel3[d] for d in files3]
+
+data3 = [
+    [
+        np.array(ds[0].iloc[2:21+1, 7:46+1]),
+        np.array(ds[0].iloc[26:45+1, 7:46+1]),
+        np.array(ds[0].iloc[2:21+1, 55:90+1]),
+        np.array(ds[0].iloc[26:45+1, 55:91+1])
+    ],
+    [
+        np.array(ds[1].iloc[2:21+1, 7:46+1]),
+        np.array(ds[1].iloc[26:45+1, 7:46+1]),
+        np.array(ds[1].iloc[2:21+1, 55:69+1]),
+        np.array(ds[1].iloc[26:45+1, 55:69+1])
+    ],
+    [
+        np.array(ds[2].iloc[2:21+1, 7:49+1]),
+        np.array(ds[2].iloc[26:45+1, 7:49+1]),
+        np.array(ds[2].iloc[2:21+1, 58:77+1]),
+        np.array(ds[2].iloc[26:45+1, 58:77+1])
+    ],
+]
+
+# normalize
+temp = []
+for dset in data3:
+    tests = []
+    for test in dset:
+        tests.append(test / (-50e-12))
+    temp.append(tests)
+
+data3 = temp
+del(temp)
+
+d3names = [
+    'low Ca 20 Hz', 'Low Ca 100 Hz',
+    'High Ca 20 Hz', 'High Ca 100 Hz'
+]
+
+# -----------------------------
+# 2. FANO FUNCTION
+# -----------------------------
+def fano(x):
+    m = np.mean(x)
+    if m == 0:
+        return np.nan
+    return np.var(x, ddof=1) / m
+
+# -----------------------------
+# 3. PLOT FF vs TIME
+# -----------------------------
+fs = 15
+fig, ax = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+
+for cell in range(len(data3)):
+
+    low_20  = np.asarray(data3[cell][0], dtype=float)
+    low_100 = np.asarray(data3[cell][1], dtype=float)
+    high_20 = np.asarray(data3[cell][2], dtype=float)
+    high_100 = np.asarray(data3[cell][3], dtype=float)
+
+    # align time dimensions within condition
+    T_low  = min(low_20.shape[1], low_100.shape[1])
+    T_high = min(high_20.shape[1], high_100.shape[1])
+
+    low_20, low_100 = low_20[:, :T_low], low_100[:, :T_low]
+    high_20, high_100 = high_20[:, :T_high], high_100[:, :T_high]
+
+    # pool repeats
+    low_all  = np.vstack([low_20, low_100])
+    high_all = np.vstack([high_20, high_100])
+
+    # align between conditions
+    T = min(low_all.shape[1], high_all.shape[1])
+    low_all  = low_all[:, :T]
+    high_all = high_all[:, :T]
+
+    x = np.arange(T)
+
+    # compute FF over repeats at each time index
+    ff_low = np.array([fano(low_all[:, t]) for t in range(T)])
+    ff_high = np.array([fano(high_all[:, t]) for t in range(T)])
+
+    ax[cell].plot(x, ff_low, color='blue', linewidth=2, label='Low Ca')
+    ax[cell].plot(x, ff_high, color='red', linewidth=2, label='High Ca')
+
+    ax[cell].set_title(f"Cell {cell}", fontsize=fs)
+    ax[cell].set_xlabel("Time index", fontsize=fs)
+    ax[cell].tick_params(axis='both', labelsize=fs)
+    ax[cell].legend(fontsize=fs)
+
+ax[0].set_ylabel("Fano factor (across repeats)", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% 2x3 PLOT: LOW vs HIGH Ca (20 Hz / 100 Hz) pooled FIRST QC across repeats
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# =====================================
+# LOAD DATA
+# =====================================
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file3 = 'cells_lisa.xlsx'
+excel3 = pd.read_excel(file3, sheet_name=None, header=None)
+
+files3 = ['260302_2', '260227_2', '260227_3']
+ds = [excel3[d] for d in files3]
+
+data3 = [
+    [
+        np.array(ds[0].iloc[2:21+1, 7:46+1]),
+        np.array(ds[0].iloc[26:45+1, 7:46+1]),
+        np.array(ds[0].iloc[2:21+1, 55:90+1]),
+        np.array(ds[0].iloc[26:45+1, 55:91+1]),
+    ],
+    [
+        np.array(ds[1].iloc[2:21+1, 7:46+1]),
+        np.array(ds[1].iloc[26:45+1, 7:46+1]),
+        np.array(ds[1].iloc[2:21+1, 55:69+1]),
+        np.array(ds[1].iloc[26:45+1, 55:69+1]),
+    ],
+    [
+        np.array(ds[2].iloc[2:21+1, 7:49+1]),
+        np.array(ds[2].iloc[26:45+1, 7:49+1]),
+        np.array(ds[2].iloc[2:21+1, 58:77+1]),
+        np.array(ds[2].iloc[26:45+1, 58:77+1]),
+    ],
+]
+
+# convert
+data3 = [
+    [x / (-50e-12) for x in cell]
+    for cell in data3
+]
+
+# =====================================
+# CELL NAMES = FILE NAMES (FIXED)
+# =====================================
+cell_names = files3
+
+# =====================================
+# FANO FUNCTION
+# =====================================
+def fano(x):
+    x = np.asarray(x, dtype=float)
+    if len(x) == 0:
+        return np.nan
+    m = np.mean(x)
+    if m == 0:
+        return np.nan
+    return np.var(x, ddof=1) / m
+
+# =====================================
+# PLOT SETUP
+# =====================================
+fs = 15
+fig, ax = plt.subplots(2, 3, figsize=(15, 8), sharex=False, sharey=False)
+
+LOW_20 = 0
+LOW_100 = 1
+HIGH_20 = 2
+HIGH_100 = 3
+
+# =====================================
+# MAIN LOOP
+# =====================================
+for cell in range(len(data3)):
+
+    low_20, low_100 = [], []
+    high_20, high_100 = [], []
+
+    for test in range(4):
+
+        X = np.asarray(data3[cell][test], dtype=float)
+        qc0 = X[0, :]  # first QC across repeats
+
+        if test == LOW_20:
+            low_20.append(qc0)
+        elif test == LOW_100:
+            low_100.append(qc0)
+        elif test == HIGH_20:
+            high_20.append(qc0)
+        elif test == HIGH_100:
+            high_100.append(qc0)
+
+    low_20 = np.concatenate(low_20) if len(low_20) else np.array([])
+    low_100 = np.concatenate(low_100) if len(low_100) else np.array([])
+    high_20 = np.concatenate(high_20) if len(high_20) else np.array([])
+    high_100 = np.concatenate(high_100) if len(high_100) else np.array([])
+
+    # =========================
+    # TOP ROW (20 Hz)
+    # =========================
+    ax[0, cell].scatter(np.arange(len(low_20)), low_20,
+                        s=30, color="blue", marker='o',
+                        label=f"Low Ca F={fano(low_20):.3f}")
+
+    ax[0, cell].scatter(np.arange(len(high_20)), high_20,
+                        s=30, color="red", marker='x',
+                        label=f"High Ca F={fano(high_20):.3f}")
+
+    ax[0, cell].set_title(f"{cell_names[cell]} — 20 Hz", fontsize=fs)
+    ax[0, cell].tick_params(labelsize=fs)
+    ax[0, cell].legend(fontsize=fs * 0.8)
+
+    # =========================
+    # BOTTOM ROW (100 Hz)
+    # =========================
+    ax[1, cell].scatter(np.arange(len(low_100)), low_100,
+                        s=30, color="blue", marker='o',
+                        label=f"Low Ca F={fano(low_100):.3f}")
+
+    ax[1, cell].scatter(np.arange(len(high_100)), high_100,
+                        s=30, color="red", marker='x',
+                        label=f"High Ca F={fano(high_100):.3f}")
+
+    ax[1, cell].set_title(f"{cell_names[cell]} — 100 Hz", fontsize=fs)
+    ax[1, cell].tick_params(labelsize=fs)
+    ax[1, cell].legend(fontsize=fs * 0.8)
+
+# =====================================
+# AXES LABELS
+# =====================================
+ax[0, 0].set_ylabel("20 Hz First QC", fontsize=fs)
+ax[1, 0].set_ylabel("100 Hz First QC", fontsize=fs)
+
+for j in range(3):
+    ax[1, j].set_xlabel("Repeats", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+
+
+#%% plot 20 and 100 Hz merged
+# =====================================
+# PLOT (20 Hz immediately followed by 100 Hz)
+# =====================================
+from matplotlib.lines import Line2D
+
+fs = 20
+fig, ax = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+
+for cell in range(len(data3)):
+
+    low_20 = np.asarray(data3[cell][0], dtype=float)[0, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[0, :]
+
+    high_20 = np.asarray(data3[cell][2], dtype=float)[0, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[0, :]
+
+    # Fano factors pooled across 20 + 100 Hz
+    low_pool = np.concatenate([low_20, low_100])
+    high_pool = np.concatenate([high_20, high_100])
+
+    # x positions
+    x_l20 = np.arange(len(low_20))
+    x_l100 = np.arange(len(low_100)) + len(low_20)
+
+    x_h20 = np.arange(len(high_20))
+    x_h100 = np.arange(len(high_100)) + len(high_20)
+
+    # Low Ca
+    ax[cell].scatter(
+        x_l20,
+        low_20,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_l100,
+        low_100,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    # High Ca
+    ax[cell].scatter(
+        x_h20,
+        high_20,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_h100,
+        high_100,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    # Custom legend showing all symbols
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca (FF={fano(low_pool):.3f})'
+        ),
+# =============================================================================
+#         Line2D(
+#             [0], [0],
+#             marker='s',
+#             linestyle='None',
+#             markerfacecolor='none',
+#             markeredgecolor='blue',
+#             markersize=8,
+#             label='Low Ca 100 Hz'
+#         ),
+# =============================================================================
+        Line2D(
+            [0], [0],
+            marker='X',
+            linestyle='None',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca (FF={fano(high_pool):.3f})'
+        ),
+# =============================================================================
+#         Line2D(
+#             [0], [0],
+#             marker='s',
+#             linestyle='None',
+#             markerfacecolor='none',
+#             markeredgecolor='red',
+#             markersize=8,
+#             label='High Ca 100 Hz'
+#         )
+# =============================================================================
+    ]
+
+    ax[cell].set_title(cell_names[cell], fontsize=fs)
+    ax[cell].set_xlabel("Repeat #", fontsize=fs)
+    ax[cell].tick_params(axis='both', labelsize=fs)
+    ax[cell].legend(handles=legend_elements, fontsize=fs)
+
+ax[0].set_ylabel("First QC", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% Plot 20 and 100 Hz separated visually
+# =====================================
+# PLOT (20 Hz immediately followed by 100 Hz)
+# =====================================
+from matplotlib.lines import Line2D
+
+fs = 20
+fig, ax = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+
+for cell in range(len(data3)):
+
+    low_20 = np.asarray(data3[cell][0], dtype=float)[0, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[0, :]
+
+    high_20 = np.asarray(data3[cell][2], dtype=float)[0, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[0, :]
+
+    # Fano factors pooled across 20 + 100 Hz
+    low_pool = np.concatenate([low_20, low_100])
+    high_pool = np.concatenate([high_20, high_100])
+
+    # x positions
+    x_l20 = np.arange(len(low_20))
+    x_l100 = np.arange(len(low_100)) + len(low_20)
+
+    x_h20 = np.arange(len(high_20))
+    x_h100 = np.arange(len(high_100)) + len(high_20)
+
+    # Low Ca
+    ax[cell].scatter(
+        x_l20,
+        low_20,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_l100,
+        low_100,
+        marker='^',
+        facecolors='blue',
+        edgecolors='blue',
+        s=70,
+    )
+
+    # High Ca
+    ax[cell].scatter(
+        x_h20,
+        high_20,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    ax[cell].scatter(
+        x_h100,
+        high_100,
+        marker='X',
+        facecolors='none',
+        edgecolors='red',
+        s=70
+    )
+
+    # Custom legend showing all symbols (ONLY CHANGE: Fano factors separated)
+    legend_elements = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 20 Hz (FF={fano(low_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='^',
+            linestyle='None',
+            markerfacecolor='blue',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 100 Hz (FF={fano(low_100):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='X',
+            linestyle='None',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca 20 Hz (FF={fano(high_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='x',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca 100 Hz (FF={fano(high_100):.3f})'
+        )
+    ]
+
+    ax[cell].set_title(cell_names[cell], fontsize=fs)
+    ax[cell].set_xlabel("Repeat #", fontsize=fs)
+    ax[cell].tick_params(axis='both', labelsize=fs)
+    ax[cell].legend(handles=legend_elements, fontsize=fs-5)
+
+ax[0].set_ylabel("First QC", fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+
+#%% COMBINED 2x3 PLOT
+# TOP ROW    = MERGED
+# BOTTOM ROW = SEPARATED
+# User-selectable QC index
+
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+# =====================================
+# CHOOSE QC
+# =====================================
+QC_INDEX = 3      # 0=1st QC, 1=2nd QC, 2=3rd QC, ...
+
+# =====================================
+# LOAD DATA
+# =====================================
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file3 = 'cells_lisa.xlsx'
+excel3 = pd.read_excel(file3, sheet_name=None, header=None)
+
+files3 = ['260302_2', '260227_2', '260227_3']
+ds = [excel3[d] for d in files3]
+
+data3 = [
+    [
+        np.array(ds[0].iloc[2:21+1, 7:46+1]),
+        np.array(ds[0].iloc[26:45+1, 7:46+1]),
+        np.array(ds[0].iloc[2:21+1, 55:90+1]),
+        np.array(ds[0].iloc[26:45+1, 55:91+1]),
+    ],
+    [
+        np.array(ds[1].iloc[2:21+1, 7:46+1]),
+        np.array(ds[1].iloc[26:45+1, 7:46+1]),
+        np.array(ds[1].iloc[2:21+1, 55:69+1]),
+        np.array(ds[1].iloc[26:45+1, 55:69+1]),
+    ],
+    [
+        np.array(ds[2].iloc[2:21+1, 7:49+1]),
+        np.array(ds[2].iloc[26:45+1, 7:49+1]),
+        np.array(ds[2].iloc[2:21+1, 58:77+1]),
+        np.array(ds[2].iloc[26:45+1, 58:77+1]),
+    ],
+]
+
+# convert current -> QC
+data3 = [
+    [x / (-50e-12) for x in cell]
+    for cell in data3
+]
+
+cell_names = files3
+
+# =====================================
+# FANO FACTOR
+# =====================================
+def fano(x):
+    x = np.asarray(x, dtype=float)
+
+    if len(x) < 2:
+        return np.nan
+
+    m = np.mean(x)
+
+    if m == 0:
+        return np.nan
+
+    return np.var(x, ddof=1) / m
+
+# =====================================
+# FIGURE
+# =====================================
+fs = 16
+
+fig, ax = plt.subplots(
+    2,
+    3,
+    figsize=(20, 12),
+    sharey=False
+)
+
+# =====================================
+# LOOP OVER CELLS
+# =====================================
+for cell in range(len(data3)):
+
+    low_20  = np.asarray(data3[cell][0], dtype=float)[QC_INDEX, :]
+    low_100 = np.asarray(data3[cell][1], dtype=float)[QC_INDEX, :]
+
+    high_20  = np.asarray(data3[cell][2], dtype=float)[QC_INDEX, :]
+    high_100 = np.asarray(data3[cell][3], dtype=float)[QC_INDEX, :]
+
+    # =====================================
+    # TOP ROW = MERGED
+    # =====================================
+    ax_top = ax[0, cell]
+
+    low_pool  = np.concatenate([low_20, low_100])
+    high_pool = np.concatenate([high_20, high_100])
+
+    x_l20 = np.arange(len(low_20))
+    x_l100 = np.arange(len(low_100)) + len(low_20)
+
+    x_h20 = np.arange(len(high_20))
+    x_h100 = np.arange(len(high_100)) + len(high_20)
+
+    # Low Ca
+    ax_top.scatter(
+        x_l20,
+        low_20,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax_top.scatter(
+        x_l100,
+        low_100,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    # High Ca
+    ax_top.scatter(
+        x_h20,
+        high_20,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    ax_top.scatter(
+        x_h100,
+        high_100,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    merged_legend = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca (FF={fano(low_pool):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='X',
+            linestyle='None',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca (FF={fano(high_pool):.3f})'
+        )
+    ]
+
+    ax_top.legend(handles=merged_legend, fontsize=fs-3)
+
+    ax_top.set_title(
+        f'{cell_names[cell]}  (Merged)',
+        fontsize=fs
+    )
+
+    ax_top.tick_params(
+        axis='both',
+        labelsize=fs-2
+    )
+
+    ax_top.set_xlabel(
+        'Repeat #',
+        fontsize=fs
+    )
+
+    # =====================================
+    # BOTTOM ROW = SEPARATED
+    # =====================================
+    ax_bot = ax[1, cell]
+
+    ax_bot.scatter(
+        x_l20,
+        low_20,
+        marker='o',
+        facecolors='none',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax_bot.scatter(
+        x_l100,
+        low_100,
+        marker='^',
+        facecolors='blue',
+        edgecolors='blue',
+        s=70
+    )
+
+    ax_bot.scatter(
+        x_h20,
+        high_20,
+        marker='X',
+        facecolors='red',
+        edgecolors='red',
+        s=70
+    )
+
+    ax_bot.scatter(
+        x_h100,
+        high_100,
+        marker='x',
+        color='red',
+        s=70
+    )
+
+    separated_legend = [
+        Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='None',
+            markerfacecolor='none',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 20 Hz (FF={fano(low_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='^',
+            linestyle='None',
+            markerfacecolor='blue',
+            markeredgecolor='blue',
+            markersize=8,
+            label=f'Low Ca 100 Hz (FF={fano(low_100):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='X',
+            linestyle='None',
+            markerfacecolor='red',
+            markeredgecolor='red',
+            markersize=8,
+            label=f'High Ca 20 Hz (FF={fano(high_20):.3f})'
+        ),
+        Line2D(
+            [0], [0],
+            marker='x',
+            linestyle='None',
+            color='red',
+            markersize=8,
+            label=f'High Ca 100 Hz (FF={fano(high_100):.3f})'
+        )
+    ]
+
+    ax_bot.legend(
+        handles=separated_legend,
+        fontsize=fs-4
+    )
+
+    ax_bot.set_title(
+        f'{cell_names[cell]}  (Separated)',
+        fontsize=fs
+    )
+
+    ax_bot.tick_params(
+        axis='both',
+        labelsize=fs-2
+    )
+
+    ax_bot.set_xlabel(
+        'Repeat #',
+        fontsize=fs
+    )
+
+# =====================================
+# AXIS LABELS
+# =====================================
+ax[0, 0].set_ylabel(
+    f'QC #{QC_INDEX + 1}',
+    fontsize=fs
+)
+
+ax[1, 0].set_ylabel(
+    f'QC #{QC_INDEX + 1}',
+    fontsize=fs
+)
+
+plt.tight_layout()
+plt.show()
+
+#%% Calculate MLE analysis and plot the mean and FF
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+from scipy.stats import gamma
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+data = np.array([data1, data2],dtype=object)
+times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
+
+
+pr=0.85
+# pr2=0.845019495915803
+pr2=pr
+pr3=0
+
+M2=30.1224080550994
+M1=np.mean(data[1][2], axis=1)[0]/pr-M2
+M3=0
+
+nstim=100
+
+hill=1.02582448684247
+thr=1.530469326
+prefill=0.777994143267587
+prefillmin=0
+CVq=0.2
+
+p1d=np.array([prefillmin+(prefill-prefillmin)/(1+((i)/thr)**hill) 
+              for i in range(nstim)])
+p1i=np.zeros(nstim)
+p1i[0]=1#initially docked
+
+p2i=np.zeros(nstim)
+p2i[0]=1#initially docked
+p2d=0.777994143277144*np.ones(nstim)#fixed probability of empty being refilled between i and i+1 AP
+
+p3i=np.zeros(nstim)
+p3i[0]=1
+p3d=np.zeros(nstim)
+
+for i in range(1,nstim):
+    p1i[i]=p1i[i-1]*(1-pr)+(1-p1i[i-1]*(1-pr))*p1d[i-1]
+    p2i[i]=p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d[i-1]
+    p3i[i]=p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d[i-1] 
+
+mqc=M1*p1i*pr + M2*p2i*pr2 + M3*p3i*pr3
+vqc=M1*p1i*pr*(1-p1i*pr) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
+vei=mqc*CVq**2+vqc
+CV2ei=vei/mqc**2
+ffei=vei/mqc
+
+# Plotting
+fs=15
+plt.figure(figsize=(6,7))
+plt.subplot(2,1,1)
+plt.plot(times,mqc,label='model',color='tab:blue')
+plt.plot(times,np.mean(data[1][2],axis=1),label='data mean',marker='o',markersize=3,
+         markerfacecolor='none',markeredgecolor='k',
+         linewidth=0.5, color='k')
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Mean quantal content', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs)
+
+plt.subplot(2,1,2)
+plt.plot(times,ffei,label='model',color='tab:blue')
+plt.plot(times,np.var(data[1][2],axis=1)/np.mean(data[1][2],axis=1),label='data CV2',marker='o',markersize=3,
+         markerfacecolor='none',markeredgecolor='k',
+         linewidth=0.5, color='k')
+plt.xlabel('Time (sec)', fontsize=fs)
+plt.ylabel('Mean quantal content', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(fontsize=fs)
+plt.show()
+
+logliklist=np.zeros(data[1][2].shape)
+for i in range(data[1][2].shape[0]):
+    for j in range(data[1][2].shape[1]):
+        logliklist[i,j]=np.log(gamma.pdf(data[1][2][i,j],a=1/mqc[i], scale=1/(mqc[i]*CV2ei[i])))
+mle=-np.sum(logliklist)
+
+# =============================================================================
+# # Histogram
+# ti=0
+# tdata = data[1][2][:,ti]
+# # Mean and CV^2 of the data
+# mu = mqc[ti]
+# cv2 = CV2ei[ti]
+# # Gamma parameters
+# shape = 1 / cv2
+# scale = mu * cv2
+# x = np.linspace(0, np.max(tdata), 500)
+# plt.hist(tdata, bins=20, density=True, alpha=0.5)
+# plt.plot(x, gamma.pdf(x, a=shape, scale=scale), 'r', lw=2)
+# plt.show()
+# =============================================================================
