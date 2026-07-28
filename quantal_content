@@ -5118,490 +5118,6 @@ for cell in range(n_cells):
 
         plt.show()
 
-#%% CALCULATION t-test - lisa cells
-
-import numpy as np
-from tqdm import tqdm
-from scipy.stats import ttest_ind
-
-n_boot = 10000
-rng = np.random.default_rng(0)
-
-n_cells = len(data3)
-n_tests = len(data3[0])
-
-total_jobs = n_cells * n_tests
-job = 0
-
-results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
-
-for cell in range(n_cells):
-
-    for test in range(n_tests):
-
-        job += 1
-
-        X = np.asarray(data3[cell][test], dtype=float)
-
-        n_time, n_repeats = X.shape
-
-        # ==================================================
-        # MEAN + BOOTSTRAP CI
-        # ==================================================
-
-        mean_trace = np.nanmean(X, axis=1)
-
-        boot_means = np.empty((n_boot, n_time))
-
-        for b in range(n_boot):
-
-            idx = rng.integers(0, n_repeats, n_repeats)
-
-            boot_means[b] = np.nanmean(
-                X[:, idx],
-                axis=1
-            )
-
-        mean_lo = np.percentile(boot_means, 2.5, axis=0)
-        mean_hi = np.percentile(boot_means, 97.5, axis=0)
-
-        # ==================================================
-        # NORMALIZED
-        # ==================================================
-
-        normX = X / X[0:1, :]
-
-        norm_mean = np.nanmean(normX, axis=1)
-
-        # ==================================================
-        # FANO
-        # ==================================================
-
-        fano = (
-            np.nanvar(X, axis=1, ddof=1)
-            / np.nanmean(X, axis=1)
-        )
-
-        boot_fano = np.empty((n_boot, n_time))
-
-        for b in range(n_boot):
-
-            idx = rng.integers(0, n_repeats, n_repeats)
-
-            Xb = X[:, idx]
-
-            m = np.nanmean(Xb, axis=1)
-            v = np.nanvar(Xb, axis=1, ddof=1)
-
-            boot_fano[b] = v / m
-
-        fano_lo = np.percentile(boot_fano, 2.5, axis=0)
-        fano_hi = np.percentile(boot_fano, 97.5, axis=0)
-
-        # ==================================================
-        # FIRST 5 vs LAST 5 (t-test)
-        # ==================================================
-
-        first5 = X[:, :5]
-        last5  = X[:, -5:]
-
-        pvals = np.zeros(n_time)
-        sig = np.zeros(n_time, dtype=bool)
-        sig_hard = np.zeros(n_time, dtype=bool)
-
-        first_mean = np.mean(first5, axis=1)
-        last_mean = np.mean(last5, axis=1)
-
-        for tt in range(n_time):
-
-            x = first5[tt, :]
-            y = last5[tt, :]
-
-            _, p = ttest_ind(x, y, equal_var=False, nan_policy='omit')
-
-            pvals[tt] = p
-            sig[tt] = p < 0.05
-            sig_hard[tt] = p < 0.01
-
-        print(f'{100*job/total_jobs:.1f}% ({job}/{total_jobs})')
-
-        results[cell][test] = {
-
-            'raw': X,
-
-            'mean': mean_trace,
-            'mean_lo': mean_lo,
-            'mean_hi': mean_hi,
-
-            'norm': normX,
-            'norm_mean': norm_mean,
-
-            'fano': fano,
-            'fano_lo': fano_lo,
-            'fano_hi': fano_hi,
-
-            'ttest_pvals': pvals,
-            'ttest_sig': sig,
-            'ttest_sig_hard': sig_hard,
-
-            'ttest_first_mean': first_mean,
-            'ttest_last_mean': last_mean
-        }
-        
-#%% plotting all 5 (spaced out + centered outside legend) — UPDATED FOR T-TEST
-# lisa cells
-
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-
-fs = 20
-
-for cell in range(n_cells):
-
-    for test in range(n_tests):
-
-        r = results[cell][test]
-
-        t = np.arange(1, r['raw'].shape[0] + 1)
-
-        fig = plt.figure(figsize=(20, 11))
-
-        ax_raw  = plt.subplot2grid((2, 6), (0, 0), colspan=2)
-        ax_mean = plt.subplot2grid((2, 6), (0, 2), colspan=2)
-        ax_norm = plt.subplot2grid((2, 6), (0, 4), colspan=2)
-
-        ax_ff   = plt.subplot2grid((2, 6), (1, 1), colspan=2)
-        ax_tt   = plt.subplot2grid((2, 6), (1, 3), colspan=2)
-
-        # =====================================
-        # RAW
-        # =====================================
-
-        X = r['raw']
-
-        for rep in range(X.shape[1]):
-            ax_raw.plot(t, X[:, rep], alpha=0.5, linewidth=1)
-
-        ax_raw.set_title('All repeats', fontsize=fs)
-        ax_raw.set_xlabel('Pulse #', fontsize=fs)
-        ax_raw.set_ylabel('QC', fontsize=fs)
-        ax_raw.tick_params(labelsize=fs)
-
-        # =====================================
-        # MEAN
-        # =====================================
-
-        y = r['mean']
-        lower = r['mean_lo']
-        upper = r['mean_hi']
-
-        yerr = np.vstack((y - lower, upper - y))
-
-        eb = ax_mean.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
-
-        eb[0].set_alpha(0.9)
-        for bar in eb[2]:
-            bar.set_alpha(0.25)
-        eb[1][0].set_alpha(0.25)
-        eb[1][1].set_alpha(0.25)
-
-        ax_mean.set_title('Mean + bootstrap bounds', fontsize=fs)
-        ax_mean.set_xlabel('Pulse #', fontsize=fs)
-        ax_mean.set_ylabel('QC', fontsize=fs)
-        ax_mean.tick_params(labelsize=fs)
-
-        # =====================================
-        # NORMALIZED
-        # =====================================
-
-        norm = r['norm']
-
-        for rep in range(norm.shape[1]):
-            ax_norm.plot(t, norm[:, rep], alpha=0.2, linewidth=1)
-
-        ax_norm.plot(t, r['norm_mean'], color='black', linewidth=3)
-
-        ax_norm.set_title('Normalized repeats', fontsize=fs)
-        ax_norm.set_xlabel('Pulse #', fontsize=fs)
-        ax_norm.set_ylabel('Normalized QC', fontsize=fs)
-        ax_norm.tick_params(labelsize=fs)
-
-        # =====================================
-        # FANO
-        # =====================================
-
-        y = r['fano']
-        lower = r['fano_lo']
-        upper = r['fano_hi']
-
-        yerr = np.vstack((y - lower, upper - y))
-
-        eb = ax_ff.errorbar(t, y, yerr=yerr, fmt='-', capsize=2)
-
-        eb[0].set_alpha(0.9)
-        for bar in eb[2]:
-            bar.set_alpha(0.25)
-        eb[1][0].set_alpha(0.25)
-        eb[1][1].set_alpha(0.25)
-
-        ax_ff.set_title('Fano factor', fontsize=fs)
-        ax_ff.set_xlabel('Pulse #', fontsize=fs)
-        ax_ff.set_ylabel('Fano factor', fontsize=fs)
-        ax_ff.tick_params(labelsize=fs)
-
-        # =====================================
-        # T-TEST PANEL (UPDATED)
-        # =====================================
-
-        y1 = r['ttest_first_mean']
-        y2 = r['ttest_last_mean']
-
-        sig_05 = r['ttest_sig']
-        sig_01 = r['ttest_sig_hard']
-
-        ns = ~sig_05
-
-        percent_sig = 100 * np.mean(sig_05)
-        percent_sig01 = 100 * np.mean(sig_01)
-
-        ax_tt.plot(t, y1, color='C0', lw=1)
-        ax_tt.plot(t, y2, color='C1', lw=1)
-
-        # p < 0.01 (strong significance)
-        ax_tt.plot(t[sig_01], y1[sig_01], 's',
-                   markerfacecolor='C0',
-                   markeredgecolor='C0',
-                   markersize=15,
-                   linestyle='None')
-
-        ax_tt.plot(t[sig_01], y2[sig_01], 's',
-                   markerfacecolor='C1',
-                   markeredgecolor='C1',
-                   markersize=15,
-                   linestyle='None')
-
-        # 0.05 significant but not 0.01
-        mid = sig_05 & ~sig_01
-
-        ax_tt.plot(t[mid], y1[mid], 'o',
-                   markerfacecolor='C0',
-                   markeredgecolor='white',
-                   markersize=12,
-                   linestyle='None')
-
-        ax_tt.plot(t[mid], y2[mid], 'o',
-                   markerfacecolor='C1',
-                   markeredgecolor='white',
-                   markersize=12,
-                   linestyle='None')
-
-        # not significant
-        ax_tt.plot(t[ns], y1[ns], 'o',
-                   markerfacecolor='white',
-                   markeredgecolor='C0',
-                   markersize=6,
-                   linestyle='None')
-
-        ax_tt.plot(t[ns], y2[ns], 'o',
-                   markerfacecolor='white',
-                   markeredgecolor='C1',
-                   markersize=6,
-                   linestyle='None')
-
-        # =========================
-        # LEGEND
-        # =========================
-
-        legend_handles = [
-
-            Line2D([0],[0], marker='s', linestyle='None',
-                   markerfacecolor='C0', markeredgecolor='C0',
-                   markersize=15, label='First 5 (p < 0.01)'),
-
-            Line2D([0],[0], marker='o', linestyle='None',
-                   markerfacecolor='C0', markeredgecolor='white',
-                   markersize=12, label='First 5 (0.01 ≤ p < 0.05)'),
-
-            Line2D([0],[0], marker='o', linestyle='None',
-                   markerfacecolor='white', markeredgecolor='C0',
-                   markersize=8, label='First 5 (insignificant)'),
-
-            Line2D([0],[0], marker='o', linestyle='None',
-                   markerfacecolor='white', markeredgecolor='C1',
-                   markersize=8, label='Last 5 (insignificant)'),
-
-            Line2D([0],[0], marker='s', linestyle='None',
-                   markerfacecolor='C1', markeredgecolor='C1',
-                   markersize=15, label='Last 5 (p < 0.01)'),
-
-            Line2D([0],[0], marker='o', linestyle='None',
-                   markerfacecolor='C1', markeredgecolor='white',
-                   markersize=12, label='Last 5 (0.01 ≤ p < 0.05)'),
-        ]
-
-        ax_tt.legend(
-            handles=legend_handles,
-            loc='center left',
-            bbox_to_anchor=(1.02, 0.5),
-            borderaxespad=0,
-            fontsize=fs,
-            title=f'Significant time points\np<0.05: {percent_sig:.1f}%\np<0.01: {percent_sig01:.1f}%',
-            title_fontsize=fs
-        )
-
-        ax_tt.set_title('First 5 vs Last 5 (t-test)', fontsize=fs)
-        ax_tt.set_xlabel('Pulse #', fontsize=fs)
-        ax_tt.set_ylabel('Mean QC', fontsize=fs)
-        ax_tt.tick_params(labelsize=fs)
-
-        # =========================
-        # spacing fix
-        # =========================
-
-        plt.subplots_adjust(
-            left=0.03,
-            right=0.96,
-            top=0.90,
-            bottom=0.08,
-            wspace=0.55,
-            hspace=0.35
-        )
-
-        fig.suptitle(
-            f'{files3[cell]} : {d3names[test]}',
-            fontsize=fs
-        )
-
-        plt.show()
-        
-#%% CALCULATION - eck data (T-TEST VERSION)
-
-import numpy as np
-from tqdm import tqdm
-from scipy.stats import ttest_ind
-
-n_boot = 10000
-rng = np.random.default_rng(0)
-
-n_cells = len(data3)
-n_tests = len(data3[0])
-
-total_jobs = n_cells * n_tests
-job = 0
-
-results = [[None for _ in range(n_tests)] for _ in range(n_cells)]
-
-for cell in range(n_cells):
-
-    for test in range(n_tests):
-
-        job += 1
-
-        X = np.asarray(data3[cell][test], dtype=float)
-
-        n_time, n_repeats = X.shape
-
-        # ==================================================
-        # MEAN + BOOTSTRAP CI
-        # ==================================================
-
-        mean_trace = np.nanmean(X, axis=1)
-
-        boot_means = np.empty((n_boot, n_time))
-
-        for b in range(n_boot):
-
-            idx = rng.integers(0, n_repeats, n_repeats)
-
-            boot_means[b] = np.nanmean(X[:, idx], axis=1)
-
-        mean_lo = np.percentile(boot_means, 2.5, axis=0)
-        mean_hi = np.percentile(boot_means, 97.5, axis=0)
-
-        # ==================================================
-        # NORMALIZED
-        # ==================================================
-
-        normX = X / X[0:1, :]
-        norm_mean = np.nanmean(normX, axis=1)
-
-        # ==================================================
-        # FANO
-        # ==================================================
-
-        fano = (
-            np.nanvar(X, axis=1, ddof=1)
-            / np.nanmean(X, axis=1)
-        )
-
-        boot_fano = np.empty((n_boot, n_time))
-
-        for b in range(n_boot):
-
-            idx = rng.integers(0, n_repeats, n_repeats)
-
-            Xb = X[:, idx]
-
-            m = np.nanmean(Xb, axis=1)
-            v = np.nanvar(Xb, axis=1, ddof=1)
-
-            boot_fano[b] = v / m
-
-        fano_lo = np.percentile(boot_fano, 2.5, axis=0)
-        fano_hi = np.percentile(boot_fano, 97.5, axis=0)
-
-        # ==================================================
-        # FIRST 5 vs LAST 5 (T-TEST)
-        # ==================================================
-
-        first5 = X[:, :5]
-        last5  = X[:, -5:]
-
-        pvals = np.zeros(n_time)
-        sig_05 = np.zeros(n_time, dtype=bool)
-        sig_01 = np.zeros(n_time, dtype=bool)
-
-        first_mean = np.mean(first5, axis=1)
-        last_mean = np.mean(last5, axis=1)
-
-        for tt in range(n_time):
-
-            x = first5[tt, :]
-            y = last5[tt, :]
-
-            _, p = ttest_ind(x, y, equal_var=False, nan_policy='omit')
-
-            pvals[tt] = p
-            sig_05[tt] = p < 0.05
-            sig_01[tt] = p < 0.01
-
-        print(f'{100*job/total_jobs:.1f}% ({job}/{total_jobs})')
-
-        results[cell][test] = {
-
-            'raw': X,
-
-            'mean': mean_trace,
-            'mean_lo': mean_lo,
-            'mean_hi': mean_hi,
-
-            'norm': normX,
-            'norm_mean': norm_mean,
-
-            'fano': fano,
-            'fano_lo': fano_lo,
-            'fano_hi': fano_hi,
-
-            'ttest_pvals': pvals,
-            'ttest_sig_05': sig_05,
-            'ttest_sig_01': sig_01,
-
-            'ttest_first_mean': first_mean,
-            'ttest_last_mean': last_mean
-        }
-
-
 #%% plotting all 5 (spaced out + centered outside legend) - eck data (T-TEST)
 
 import numpy as np
@@ -7267,7 +6783,7 @@ ax[1, 0].set_ylabel(
 plt.tight_layout()
 plt.show()
 
-#%% Calculate MLE analysis and plot the mean and FF
+#%% 2- Calculate MLE analysis and plot the mean and FF
 import numpy as np
 import pandas as pd
 import os
@@ -7284,17 +6800,22 @@ data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
 data = np.array([data1, data2],dtype=object)
 times = np.array(list(excel1.values())[0].to_numpy()[1:, 0])
 
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
 
-pr=0.85
+fnum=1
+dnum=2
+
+pr1=0.85
 # pr2=0.845019495915803
-pr2=pr
-pr3=0
+pr2=pr1
+pr3=0.01
 
 M2=30.1224080550994
-M1=np.mean(data[1][2], axis=1)[0]/pr-M2
-M3=0
-
-nstim=100
+M1=np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2
+M3=10
 
 hill=1.02582448684247
 thr=1.530469326
@@ -7302,26 +6823,24 @@ prefill=0.777994143267587
 prefillmin=0
 CVq=0.2
 
+nstim=100
 p1d=np.array([prefillmin+(prefill-prefillmin)/(1+((i)/thr)**hill) 
               for i in range(nstim)])
-p1i=np.zeros(nstim)
-p1i[0]=1#initially docked
-
-p2i=np.zeros(nstim)
-p2i[0]=1#initially docked
 p2d=0.777994143277144*np.ones(nstim)#fixed probability of empty being refilled between i and i+1 AP
+p3d=1*np.ones(nstim)*np.array([1/(i+1) for i in range(nstim)])#fixed probability of empty being refilled between i and i+1 AP
 
+p1i=np.zeros(nstim)
+p2i=np.zeros(nstim)
 p3i=np.zeros(nstim)
-p3i[0]=1
-p3d=np.zeros(nstim)
+p1i[0]=p2i[0]=p3i[0]=1#initially docked
 
 for i in range(1,nstim):
-    p1i[i]=p1i[i-1]*(1-pr)+(1-p1i[i-1]*(1-pr))*p1d[i-1]
+    p1i[i]=p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d[i-1]
     p2i[i]=p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d[i-1]
     p3i[i]=p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d[i-1] 
 
-mqc=M1*p1i*pr + M2*p2i*pr2 + M3*p3i*pr3
-vqc=M1*p1i*pr*(1-p1i*pr) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
+mqc=M1*p1i*pr1 + M2*p2i*pr2 + M3*p3i*pr3
+vqc=M1*p1i*pr1*(1-p1i*pr1) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
 vei=mqc*CVq**2+vqc
 CV2ei=vei/mqc**2
 ffei=vei/mqc
@@ -7330,18 +6849,18 @@ ffei=vei/mqc
 fs=15
 plt.figure(figsize=(6,7))
 plt.subplot(2,1,1)
-plt.plot(times,np.mean(data[1][2],axis=1),label='data mean',marker='o',
+plt.plot(times,np.mean(data[fnum][dnum],axis=1),label='data mean',marker='o',
          markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
          linewidth=0.5, color='k')
 plt.plot(times,mqc,label='model',color='tab:orange',linewidth=3,alpha=1)
-plt.xlabel('Time (sec)', fontsize=fs)
+plt.xticks([])
 plt.ylabel('Mean quantal content', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(fontsize=fs)
 
 plt.subplot(2,1,2)
 plt.plot(times,ffei,label='model',color='tab:orange',linewidth=3)
-plt.plot(times,np.var(data[1][2],axis=1)/np.mean(data[1][2],axis=1),
+plt.plot(times,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
          label='data CV2',marker='o',markersize=3,
          markerfacecolor='tab:blue',markeredgecolor='tab:blue',
          linewidth=0.5, color='tab:blue')
@@ -7349,18 +6868,19 @@ plt.xlabel('Time (sec)', fontsize=fs)
 plt.ylabel('Mean quantal content', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(fontsize=fs)
+plt.tight_layout()
 plt.show()
 
-logliklist=np.zeros(data[1][2].shape)
-for i in range(data[1][2].shape[0]):
-    for j in range(data[1][2].shape[1]):
-        logliklist[i,j]=np.log(gamma.pdf(data[1][2][i,j],a=1/mqc[i], scale=1/(mqc[i]*CV2ei[i])))
+logliklist=np.zeros(data[fnum][dnum].shape)
+for i in range(data[fnum][dnum].shape[0]):
+    for j in range(data[fnum][dnum].shape[1]):
+        logliklist[i,j]=np.log(gamma.pdf(data[fnum][dnum][i,j],a=1/mqc[i], scale=1/(mqc[i]*CV2ei[i])))
 mle=-np.sum(logliklist)
 
 # =============================================================================
 # # Histogram
 # ti=0
-# tdata = data[1][2][:,ti]
+# tdata = data[fnum][dnum][:,ti]
 # # Mean and CV^2 of the data
 # mu = mqc[ti]
 # cv2 = CV2ei[ti]
@@ -7370,5 +6890,1917 @@ mle=-np.sum(logliklist)
 # x = np.linspace(0, np.max(tdata), 500)
 # plt.hist(tdata, bins=20, density=True, alpha=0.5)
 # plt.plot(x, gamma.pdf(x, a=shape, scale=scale), 'r', lw=2)
+# plt.show()
+# =============================================================================
+
+#%% 2- Minimize MLE - LFGS
+import numpy as np
+from scipy.optimize import minimize
+from scipy.stats import gamma
+import matplotlib.pyplot as plt
+
+obs = np.asarray(data[fnum][dnum], dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs, axis=1)
+
+# Calculate model statistics
+def get_model(params):
+    pr1, pr2, pr3, M2, M3, hill, thr, prefill1, prefill2, prefill3, prefillmin, CVq = params
+    M1 = mean_data[0]/pr1 - M2 - M3
+
+    # Depletion/refill probabilities
+    p1d = np.array([prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill) for i in range(nstim)])
+    p2d = prefill2*np.ones(nstim)
+    p3d = prefill3*np.array([1/(i+1) for i in range(nstim)])
+
+    # Initial available vesicle probabilities
+    p1i = np.ones(nstim)
+    p2i = np.ones(nstim)
+    p3i = np.ones(nstim)
+
+    # Recursive refill dynamics
+    for i in range(1,nstim):
+        p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d[i-1]
+        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d[i-1]
+        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d[i-1]
+
+    # Mean quantal content
+    mqc = M1*p1i*pr1 + M2*p2i*pr2 + M3*p3i*pr3
+
+    # Quantal variance
+    vqc = M1*p1i*pr1*(1-p1i*pr1) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
+
+    # Include quantal size variability
+    vei = mqc*CVq**2 + vqc
+    CV2 = vei/(mqc**2)
+    FF = vei/mqc
+
+    return mqc, CV2, FF
+
+# Negative log likelihood
+def mle(params):
+    mqc, CV2, FF = get_model(params)
+
+    if np.any(mqc <= 0) or np.any(CV2 <= 0):
+        return np.inf
+
+    shape = 1/CV2
+    scale = mqc*CV2
+
+    if np.any(shape <= 0) or np.any(scale <= 0):
+        return np.inf
+
+    loglik = gamma.logpdf(obs, a=shape[:,None], scale=scale[:,None])
+
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+
+    return -np.sum(loglik)
+
+# Initial conditions and parameter bounds
+params = [
+    [0.85, (0.01,1)],   # pr1
+    [0.85, (0.01,1)],   # pr2
+    [0.85, (0.01,1)],   # pr3
+    [30,   (0,200)],    # M2
+    [50,   (0,200)],    # M3
+    [1,    (0.01,10)],  # hill
+    [1.5,  (0.01,20)],  # thr
+    [0.78, (0,1)],      # prefill1
+    [0.78, (0,1)],      # prefill2
+    [0.78, (0,1)],      # prefill3
+    [0,    (0,1)],      # prefillmin
+    [0.2,  (0,2)]       # CVq
+]
+
+x0 = [p[0] for p in params]
+bounds = [p[1] for p in params]
+
+result = minimize(mle,x0,method='L-BFGS-B',bounds=bounds,options={'maxiter':5000,'ftol':1e-12})
+
+names = ['pr1','pr2','pr3','M2','M3','hill','thr',
+         'prefill1','prefill2','prefill3','prefillmin','CVq']
+
+print(result)
+print("\nBest parameters:")
+for name,value in zip(names,result.x):
+    print(f'{name} = {value}')
+
+print("\nMinimum negative log likelihood:")
+print(result.fun)
+# =============================================================================
+# #%% Minimize mle
+# import numpy as np
+# from scipy.optimize import minimize
+# from scipy.stats import gamma
+# 
+# obs=np.asarray(data[fnum][dnum],dtype=float)
+# nstim=obs.shape[0]
+# 
+# def model_mle(params):
+#     pr,pr2,M2,hill,thr,prefill,prefillmin,CVq=params
+#     pr3=0
+#     M1,M3=np.mean(obs,axis=1)[0]/pr-M2,0
+#     p1d=np.array([prefillmin+(prefill-prefillmin)/(1+(i/thr)**hill) for i in range(nstim)])
+#     p1i,p2i,p3i=np.zeros(nstim),np.zeros(nstim),np.zeros(nstim)
+#     p1i[0]=p2i[0]=p3i[0]=1
+#     p2d=prefill*np.ones(nstim)
+#     p3d=np.zeros(nstim)
+# 
+#     for i in range(1,nstim):
+#         p1i[i]=p1i[i-1]*(1-pr)+(1-p1i[i-1]*(1-pr))*p1d[i-1]
+#         p2i[i]=p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d[i-1]
+#         p3i[i]=p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d[i-1]
+# 
+#     mqc=M1*p1i*pr+M2*p2i*pr2+M3*p3i*pr3
+#     vqc=M1*p1i*pr*(1-p1i*pr)+M2*p2i*pr2*(1-p2i*pr2)+M3*p3i*pr3*(1-p3i*pr3)
+#     vei=mqc*CVq**2+vqc
+#     CV2ei=vei/mqc**2
+# 
+#     if np.any(mqc<=0) or np.any(CV2ei<=0):
+#         return np.inf
+# 
+#     shape,scale=1/CV2ei,mqc*CV2ei
+#     loglik=gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+# 
+#     if np.any(~np.isfinite(loglik)):
+#         return np.inf
+# 
+#     return -np.sum(loglik)
+# 
+# x0=[0.85,0.85,30,1,1.5,0.78,0,0.2]
+# bounds=[(0.01,1),(0.01,1),(0,200),(0.01,10),(0.01,20),(0,1),(0,1),(0,2)]
+# 
+# result=minimize(model_mle,x0,method='L-BFGS-B',bounds=bounds,
+#                 options={'maxiter':5000,'ftol':1e-12})
+# 
+# names=['pr','pr2','M2','hill','thr','prefill','prefillmin','CVq']
+# print(result)
+# print("\nBest parameters:")
+# for n,v in zip(names,result.x): print(f"{n} = {v}")
+# print("\nMinimum negative log likelihood:",result.fun)
+# =============================================================================
+
+
+#%% 2- Minimize MLE using Differential Evolution
+import numpy as np
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+import matplotlib.pyplot as plt
+import pandas as pd
+import os
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:,1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:,1:] for df in excel2.values()])
+data = np.array([data1,data2],dtype=object)
+times = np.array(list(excel1.values())[0].to_numpy()[1:,0])
+
+obs = np.asarray(data[fnum][dnum],dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs,axis=1)
+
+def p1d(i,prefill1,prefillmin,thr,hill):
+    return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
+
+def p2d(i,prefill2):
+    return prefill2
+
+def p3d(i,prefill3):
+    return prefill3/(i+1)
+
+def get_model(params):
+    pr1,pr2,pr3,M2,M3,hill,thr,prefill1,prefill2,prefill3,prefillmin,CVq = params
+
+    M2 = int(round(M2))
+    M3 = int(round(M3))
+
+    M1 = mean_data[0]/pr1 - M2 - M3
+
+    if M1 <= 0:
+        return None,None,None
+
+    p1i = np.ones(nstim)
+    p2i = np.ones(nstim)
+    p3i = np.ones(nstim)
+
+    for i in range(1,nstim):
+
+        p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
+        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
+        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3)
+
+    mqc = (M1*p1i*pr1+
+           M2*p2i*pr2+
+           M3*p3i*pr3)
+
+    vqc = (M1*p1i*pr1*(1-p1i*pr1)+
+           M2*p2i*pr2*(1-p2i*pr2)+
+           M3*p3i*pr3*(1-p3i*pr3))
+
+    vei = mqc*CVq**2+vqc
+
+    CV2 = vei/(mqc**2)
+
+    FF = vei/mqc
+
+    return mqc,CV2,FF
+
+def mle(params):
+    params = np.array(params)
+
+    params[3] = round(params[3])
+    params[4] = round(params[4])
+
+    mqc,CV2,FF = get_model(params)
+
+    if mqc is None:
+        return np.inf
+
+    if np.any(mqc<=0) or np.any(CV2<=0):
+        return np.inf
+
+    shape = 1/CV2
+    scale = mqc*CV2
+
+    if np.any(shape<=0) or np.any(scale<=0):
+        return np.inf
+
+    loglik = gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+
+    return -np.sum(loglik)
+
+bounds = [
+    (0.01,1),    # pr1
+    (0.01,1),    # pr2
+    (0.01,1),    # pr3
+    (0,200),     # M2
+    (0,200),     # M3
+    (0.01,10),   # hill
+    (0.01,20),   # thr
+    (0,1),       # prefill1
+    (0,1),       # prefill2
+    (0,1),       # prefill3
+    (0,1),       # prefillmin
+    (0,2)        # CVq
+]
+
+result = differential_evolution(
+    mle,
+    bounds,
+    maxiter=5000,
+    popsize=20,
+    tol=1e-9,
+    polish=True,
+    workers=1,
+    updating='immediate'
+)
+
+result.x[3] = round(result.x[3])
+result.x[4] = round(result.x[4])
+
+names = ['pr1','pr2','pr3','M2','M3','hill','thr',
+         'prefill1','prefill2','prefill3','prefillmin','CVq']
+
+print(result)
+
+print("\nBest parameters:")
+for name,value in zip(names,result.x):
+    print(f'{name} = {value}')
+
+print("\nMinimum negative log likelihood:")
+print(result.fun)
+
+#%% 2 - Simulate with optimization 3 pool - good
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+import os
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+def p1d(i,prefill1,prefillmin,thr,hill):
+    return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
+
+def p2d(i,prefill2):
+    return prefill2
+
+def p3d(i,prefill3,prefillmin3,thr3,hill3):
+    return prefillmin3+(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
+
+def simulate(n1init, n2init, n3init, pr1, pr2, pr3, p1d, p2d, p3d, M1, M2, M3, nstim, navgs):
+    bmeanlist=[]
+    for _ in range(navgs):
+        blist=[]
+        n1=n1init
+        n2=n2init
+        n3=n3init
+        for i in range(nstim):
+            if i!=0:
+                n1+=binomial(M1-n1, p1d(i,prefill1,prefillmin,thr,hill))
+                n2+=binomial(M2-n2, p2d(i,prefill2))
+                n3+=binomial(M3-n3, p3d(i,prefill3,prefillmin3,thr3,hill3))
+            b1=binomial(n1,pr1)
+            b2=binomial(n2,pr2)
+            b3=binomial(n3,pr3)
+            n1-=b1
+            n2-=b2
+            n3-=b3
+            b=b1+b2+b3
+            blist.append(b)
+        bmeanlist.append(blist)
+    minlen=np.min([len(b) for b in bmeanlist])
+    bmeanlist2=np.array([x[:minlen] for x in bmeanlist])
+    ff=np.var(bmeanlist2, axis=0)/np.mean(bmeanlist2, axis=0)
+    bmean=np.mean(bmeanlist2, axis=0)
+    return bmean,ff
+
+# load data
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+data = np.array([data1, data2],dtype=object)
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
+
+# parameters   
+fnum=1 #file number
+dnum=2 #dataset number
+# cell 34789
+# dnum 23678
+
+obs = np.asarray(data[fnum][dnum],dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs,axis=1)
+
+def get_model(params):
+    pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq = params
+
+    M2 = int(round(M2))
+    M3 = int(round(M3))
+
+    M1 = mean_data[0]/pr1 - M2 - M3
+
+    if M1 <= 0:
+        return None,None,None
+
+    p1i = np.ones(nstim)
+    p2i = np.ones(nstim)
+    p3i = np.ones(nstim)
+
+    for i in range(1,nstim):
+
+        p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
+        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
+        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3,prefillmin3,thr3,hill3)
+
+    mqc = (M1*p1i*pr1+
+           M2*p2i*pr2+
+           M3*p3i*pr3)
+
+    vqc = (M1*p1i*pr1*(1-p1i*pr1)+
+           M2*p2i*pr2*(1-p2i*pr2)+
+           M3*p3i*pr3*(1-p3i*pr3))
+
+    vei = mqc*CVq**2+vqc
+
+    CV2 = vei/(mqc**2)
+
+    FF = vei/mqc
+
+    return mqc,CV2,FF
+
+def mle(params):
+    params = np.array(params)
+
+    params[3] = round(params[3])
+    params[4] = round(params[4])
+
+    mqc,CV2,FF = get_model(params)
+
+    if mqc is None:
+        return np.inf
+
+    if np.any(mqc<=0) or np.any(CV2<=0):
+        return np.inf
+
+    shape = 1/CV2
+    scale = mqc*CV2
+
+    if np.any(shape<=0) or np.any(scale<=0):
+        return np.inf
+
+    loglik = gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+
+    return -np.sum(loglik)
+
+bounds = [
+    (0.01,1),    # pr1
+    (0.01,1),    # pr2
+    (0.01,1),    # pr3
+    (0,200),     # M2
+    (0,200),     # M3
+    (0.01,10),   # hill
+    (0.01,10),   # hill3
+    (0.01,20),   # thr
+    (0.01,20),   # thr3
+    (0,1),       # prefill1
+    (0,1),       # prefill2
+    (0,1),       # prefill3
+    (0,1),       # prefillmin
+    (0,1),       # prefillmin3
+    (0,2)        # CVq
+]
+
+result = differential_evolution(
+    mle,
+    bounds,
+    maxiter=5000,
+    popsize=20,
+    tol=1e-9,
+    polish=True,
+    workers=1,
+    updating='immediate'
+)
+
+result.x[3] = round(result.x[3])
+result.x[4] = round(result.x[4])
+
+names = ['pr1','pr2','pr3','M2','M3','hill','hill3','thr','thr3',
+         'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
+         'CVq']
+
+print(result)
+
+print("\nBest parameters:")
+for name,value in zip(names,result.x):
+    print(f'{name} = {value}')
+
+print("\nMinimum negative log likelihood:")
+print(result.fun)
+
+pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
+
+M2=int(np.round(M2))
+M3=int(np.round(M3))
+M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3)
+
+nstim=100
+navgs = 10000
+
+n1=M1
+n2=M2
+n3=M3
+
+bm,ff = simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+                 M1, M2, M3, nstim, navgs)
+
+p1i=np.zeros(nstim)
+p2i=np.zeros(nstim)
+p3i=np.zeros(nstim)
+p1i[0]=p2i[0]=p3i[0]=1#initially docked
+
+for i in range(1,nstim):
+    p1i[i]=p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1, prefill1, prefillmin, thr, hill)
+    p2i[i]=p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1, prefill2)
+    p3i[i]=p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1, prefill3, prefillmin3, thr3, hill3)
+
+mqc=M1*p1i*pr1 + M2*p2i*pr2 + M3*p3i*pr3
+vqc=M1*p1i*pr1*(1-p1i*pr1) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
+vei=mqc*CVq**2+vqc
+CV2ei=vei/mqc**2
+ffei=vei/mqc
+# =============================================================================
+# #%%
+# =============================================================================
+fs=15
+plt.figure(figsize=(6,7))
+# mean QC plot
+plt.subplot(2,1,1)
+plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
+tplot=np.linspace(0,nstim/100, len(bm))
+plt.plot(tplot,bm,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',
+         markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='k')
+# plt.scatter(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',color='tab:blue')
+plt.plot(tplot,mqc,label='model',color='k',marker='o',markersize=2)
+
+#errorbars
+y=np.asarray(means[fnum][dnum],dtype=float)
+lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='k',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.ylabel('Mean quantal content', fontsize=fs)
+plt.xticks([])
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+
+# fano factor QC plot
+plt.subplot(2,1,2)
+
+ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
+plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
+         label='data',marker='o',markersize=3,
+         markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='tab:blue')
+# plt.scatter(tplot,ffdata,label='data',marker='o',color='tab:blue')
+plt.plot(tplot,ffei,label='model',color='k',marker='o',markersize=3)
+plt.plot(tplot,ff,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+
+#errorbars
+y=ffdata
+lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='tab:blue',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.xlabel('Time (ms)', fontsize=fs)
+plt.ylabel('Fano factor', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+plt.tight_layout()
+plt.show()
+
+#%% 2 - Simulate with optimization - comparison of the three models
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+import os
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+def p1d(i,prefill1,prefillmin,thr,hill):
+    return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
+
+def p2d(i,prefill2):
+    return prefill2
+
+def p3d(i,prefill3,prefillmin3,thr3,hill3):
+    return prefillmin3+(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
+
+def simulate(n1init, n2init, n3init, pr1, pr2, pr3, p1d, p2d, p3d, M1, M2, M3, nstim, navgs):
+    bmeanlist=[]
+    for _ in range(navgs):
+        blist=[]
+        n1=n1init
+        n2=n2init
+        n3=n3init
+        for i in range(nstim):
+            if i!=0:
+                n1+=binomial(M1-n1, p1d(i,prefill1,prefillmin,thr,hill))
+                n2+=binomial(M2-n2, p2d(i,prefill2))
+                n3+=binomial(M3-n3, p3d(i,prefill3,prefillmin3,thr3,hill3))
+            b1=binomial(n1,pr1)
+            b2=binomial(n2,pr2)
+            b3=binomial(n3,pr3)
+            n1-=b1
+            n2-=b2
+            n3-=b3
+            b=b1+b2+b3
+            blist.append(b)
+        bmeanlist.append(blist)
+    minlen=np.min([len(b) for b in bmeanlist])
+    bmeanlist2=np.array([x[:minlen] for x in bmeanlist])
+    ff=np.var(bmeanlist2, axis=0)/np.mean(bmeanlist2, axis=0)
+    bmean=np.mean(bmeanlist2, axis=0)
+    return bmean,ff
+
+# load data
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+data = np.array([data1, data2],dtype=object)
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
+
+# parameters   
+fnum=1 #file number
+dnum=2 #dataset number
+# cell 34789
+# dnum 23678
+
+obs = np.asarray(data[fnum][dnum],dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs,axis=1)
+
+def model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CV1):
+    p1i = np.ones(nstim)
+    p2i = np.ones(nstim)
+    p3i = np.ones(nstim)
+    for i in range(1,nstim):
+        p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
+        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
+        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3,prefillmin3,thr3,hill3)
+    mqc = (M1*p1i*pr1+
+           M2*p2i*pr2+
+           M3*p3i*pr3)
+    vqc = (M1*p1i*pr1*(1-p1i*pr1)+
+           M2*p2i*pr2*(1-p2i*pr2)+
+           M3*p3i*pr3*(1-p3i*pr3))
+    vei = mqc*CVq**2+vqc
+    CV2 = vei/(mqc**2)
+    FF = vei/mqc
+    return mqc,CV2,FF
+
+def get_model(params):
+    pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq = params
+    M2 = int(round(M2))
+    M3 = int(round(M3))
+    M1 = mean_data[0]/pr1 - M2 - M3
+    if M1 <= 0:
+        return None,None,None
+    return model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
+
+
+def mle(params):
+    params = np.array(params)
+
+    params[3] = round(params[3])
+    params[4] = round(params[4])
+
+    mqc,CV2,FF = get_model(params)
+
+    if mqc is None:
+        return np.inf
+
+    if np.any(mqc<=0) or np.any(CV2<=0):
+        return np.inf
+
+    shape = 1/CV2
+    scale = mqc*CV2
+
+    if np.any(shape<=0) or np.any(scale<=0):
+        return np.inf
+
+    loglik = gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+
+    return -np.sum(loglik)
+
+bounds = [
+    (0.01,1),    # pr1
+    (0.01,1),    # pr2
+    (0.01,1),    # pr3
+    (0,200),     # M2
+    (0,200),     # M3
+    (0.01,10),   # hill
+    (0.01,10),   # hill3
+    (0.01,20),   # thr
+    (0.01,20),   # thr3
+    (0,1),       # prefill1
+    (0,1),       # prefill2
+    (0,1),       # prefill3
+    (0,1),       # prefillmin
+    (0,1),       # prefillmin3
+    (0,2)        # CVq
+]
+
+result = differential_evolution(
+    mle,
+    bounds,
+    maxiter=5000,
+    popsize=20,
+    tol=1e-9,
+    polish=True,
+    workers=1,
+    updating='immediate'
+)
+
+result.x[3] = round(result.x[3])
+result.x[4] = round(result.x[4])
+
+names = ['pr1','pr2','pr3','M2','M3','hill','hill3','thr','thr3',
+         'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
+         'CVq']
+
+print(result)
+
+print("\nBest parameters:")
+for name,value in zip(names,result.x):
+    print(f'{name} = {value}')
+
+print("\nMinimum negative log likelihood:")
+print(result.fun)
+
+pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
+
+M2=int(np.round(M2))
+M3=int(np.round(M3))
+M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3)
+
+nstim=100
+navgs = 10000
+
+n1=M1
+n2=M2
+n3=M3
+
+bm,ff = simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+                 M1, M2, M3, nstim, navgs)
+
+p1i=np.zeros(nstim)
+p2i=np.zeros(nstim)
+p3i=np.zeros(nstim)
+p1i[0]=p2i[0]=p3i[0]=1#initially docked
+
+for i in range(1,nstim):
+    p1i[i]=p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1, prefill1, prefillmin, thr, hill)
+    p2i[i]=p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1, prefill2)
+    p3i[i]=p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1, prefill3, prefillmin3, thr3, hill3)
+
+mqc=M1*p1i*pr1 + M2*p2i*pr2 + M3*p3i*pr3
+vqc=M1*p1i*pr1*(1-p1i*pr1) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
+vei=mqc*CVq**2+vqc
+CV2ei=vei/mqc**2
+ffei=vei/mqc
+# =============================================================================
+# #%%
+# =============================================================================
+fs=15
+plt.figure(figsize=(6,7))
+# mean QC plot
+plt.subplot(2,1,1)
+plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
+tplot=np.linspace(0,nstim/100, len(bm))
+plt.plot(tplot,bm,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',
+         markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='k')
+# plt.scatter(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',color='tab:blue')
+plt.plot(tplot,mqc,label='model',color='k',marker='o',markersize=2)
+
+#errorbars
+y=np.asarray(means[fnum][dnum],dtype=float)
+lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='k',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.ylabel('Mean quantal content', fontsize=fs)
+plt.xticks([])
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+
+# fano factor QC plot
+plt.subplot(2,1,2)
+
+ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
+plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
+         label='data',marker='o',markersize=3,
+         markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='tab:blue')
+# plt.scatter(tplot,ffdata,label='data',marker='o',color='tab:blue')
+plt.plot(tplot,ffei,label='model',color='k',marker='o',markersize=3)
+plt.plot(tplot,ff,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+
+#errorbars
+y=ffdata
+lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='tab:blue',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.xlabel('Time (ms)', fontsize=fs)
+plt.ylabel('Fano factor', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+plt.tight_layout()
+plt.show()
+
+#%% 2 - Simulate with optimization - test
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+import os
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+def p1d(i,prefill1,prefillmin,thr,hill):
+    return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
+
+def p2d(i,prefill2):
+    return prefill2
+
+def p3d(i,prefill3,prefillmin3,thr3,hill3):
+    return prefillmin3+0*(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
+
+def simulate(n1init, n2init, n3init, pr1, pr2, pr3, p1d, p2d, p3d, M1, M2, M3, nstim, navgs):
+    bmeanlist=[]
+    for _ in range(navgs):
+        blist=[]
+        n1=n1init
+        n2=n2init
+        n3=n3init
+        for i in range(nstim):
+            if i!=0:
+                n1+=binomial(M1-n1, p1d(i,prefill1,prefillmin,thr,hill))
+                n2+=binomial(M2-n2, p2d(i,prefill2))
+                n3+=binomial(M3-n3, p3d(i,prefill3,prefillmin3,thr3,hill3))
+            b1=binomial(n1,pr1)
+            b2=binomial(n2,pr2)
+            b3=binomial(n3,pr3)
+            n1-=b1
+            n2-=b2
+            n3-=b3
+            b=b1+b2+0*b3
+            blist.append(b)
+        bmeanlist.append(blist)
+    minlen=np.min([len(b) for b in bmeanlist])
+    bmeanlist2=np.array([x[:minlen] for x in bmeanlist])
+    ff=np.var(bmeanlist2, axis=0)/np.mean(bmeanlist2, axis=0)
+    bmean=np.mean(bmeanlist2, axis=0)
+    return bmean,ff
+
+# load data
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+data = np.array([data1, data2],dtype=object)
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
+
+# parameters   
+fnum=1 #file number
+dnum=8 #dataset number
+# cell 34789
+# dnum 23678
+
+obs = np.asarray(data[fnum][dnum],dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs,axis=1)
+
+def get_model(params):
+    pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq = params
+
+    M2 = int(round(M2))
+    M3 = int(round(M3))
+
+    M1 = mean_data[0]/pr1 - M2 - M3
+
+    if M1 <= 0:
+        return None,None,None
+
+    p1i = np.ones(nstim)
+    p2i = np.ones(nstim)
+    p3i = np.ones(nstim)
+
+    for i in range(1,nstim):
+
+        p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
+        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
+        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3,prefillmin3,thr3,hill3)
+
+    mqc = (M1*p1i*pr1+
+           M2*p2i*pr2+
+           M3*p3i*pr3)
+
+    vqc = (M1*p1i*pr1*(1-p1i*pr1)+
+           M2*p2i*pr2*(1-p2i*pr2)+
+           M3*p3i*pr3*(1-p3i*pr3))
+
+    vei = mqc*CVq**2+vqc
+
+    CV2 = vei/(mqc**2)
+
+    FF = vei/mqc
+
+    return mqc,CV2,FF
+
+def mle(params):
+    params = np.array(params)
+
+    params[3] = round(params[3])
+    params[4] = round(params[4])
+
+    mqc,CV2,FF = get_model(params)
+
+    if mqc is None:
+        return np.inf
+
+    if np.any(mqc<=0) or np.any(CV2<=0):
+        return np.inf
+
+    shape = 1/CV2
+    scale = mqc*CV2
+
+    if np.any(shape<=0) or np.any(scale<=0):
+        return np.inf
+
+    loglik = gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+
+    return -np.sum(loglik)
+
+bounds = [
+    (0.01,1),    # pr1
+    (0.01,1),    # pr2
+    (0.01,1),    # pr3
+    (0,200),     # M2
+    (0,200),     # M3
+    (0.01,10),   # hill
+    (0.01,10),   # hill3
+    (0.01,20),   # thr
+    (0.01,20),   # thr3
+    (0,1),       # prefill1
+    (0,1),       # prefill2
+    (0,1),       # prefill3
+    (0,1),       # prefillmin
+    (0,1),       # prefillmin3
+    (0,2)        # CVq
+]
+
+result = differential_evolution(
+    mle,
+    bounds,
+    maxiter=5000,
+    popsize=20,
+    tol=1e-9,
+    polish=True,
+    workers=1,
+    updating='immediate'
+)
+
+result.x[3] = round(result.x[3])
+result.x[4] = round(result.x[4])
+
+names = ['pr1','pr2','pr3','M2','M3','hill','hill3','thr','thr3',
+         'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
+         'CVq']
+
+print(result)
+
+print("\nBest parameters:")
+for name,value in zip(names,result.x):
+    print(f'{name} = {value}')
+
+print("\nMinimum negative log likelihood:")
+print(result.fun)
+
+pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
+
+M2=int(np.round(M2))
+M3=int(np.round(M3))
+M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3)
+
+nstim=100
+navgs = 10000
+
+n1=M1
+n2=M2
+n3=M3
+
+bm,ff = simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+                 M1, M2, M3, nstim, navgs)
+
+p1i=np.zeros(nstim)
+p2i=np.zeros(nstim)
+p3i=np.zeros(nstim)
+p1i[0]=p2i[0]=p3i[0]=1#initially docked
+
+for i in range(1,nstim):
+    p1i[i]=p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1, prefill1, prefillmin, thr, hill)
+    p2i[i]=p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1, prefill2)
+    p3i[i]=p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1, prefill3, prefillmin3, thr3, hill3)
+
+mqc=M1*p1i*pr1 + M2*p2i*pr2 + M3*p3i*pr3
+vqc=M1*p1i*pr1*(1-p1i*pr1) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
+vei=mqc*CVq**2+vqc
+CV2ei=vei/mqc**2
+ffei=vei/mqc
+# =============================================================================
+# #%%
+# =============================================================================
+fs=15
+plt.figure(figsize=(6,7))
+# mean QC plot
+plt.subplot(2,1,1)
+plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
+tplot=np.linspace(0,nstim/100, len(bm))
+plt.plot(tplot,bm,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',
+         markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='k')
+# plt.scatter(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',color='tab:blue')
+plt.plot(tplot,mqc,label='model',color='k',marker='o',markersize=2)
+
+#errorbars
+y=np.asarray(means[fnum][dnum],dtype=float)
+lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='k',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.ylabel('Mean quantal content', fontsize=fs)
+plt.xticks([])
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+
+# fano factor QC plot
+plt.subplot(2,1,2)
+
+ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
+plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
+         label='data',marker='o',markersize=3,
+         markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='tab:blue')
+# plt.scatter(tplot,ffdata,label='data',marker='o',color='tab:blue')
+plt.plot(tplot,ffei,label='model',color='k',marker='o',markersize=3)
+plt.plot(tplot,ff,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+
+#errorbars
+y=ffdata
+lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='tab:blue',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.xlabel('Time (ms)', fontsize=fs)
+plt.ylabel('Fano factor', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+plt.tight_layout()
+plt.show()
+#%% 2 - Simulate only
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+import os
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+def p1d(i,prefill1,prefillmin,thr,hill):
+    return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
+
+def p2d(i,prefill2):
+    return prefill2
+
+def p3d(i,prefill3,prefillmin3,thr3,hill3):
+    return prefillmin3+(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
+
+def simulate(n1init, n2init, n3init, pr1, pr2, pr3, p1d, p2d, p3d, M1, M2, M3, nstim, navgs):
+    bmeanlist=[]
+    for _ in range(navgs):
+        blist=[]
+        n1=n1init
+        n2=n2init
+        n3=n3init
+        for i in range(nstim):
+            if i!=0:
+                n1+=binomial(M1-n1, p1d(i,prefill1,prefillmin,thr,hill))
+                n2+=binomial(M2-n2, p2d(i,prefill2))
+                n3+=binomial(M3-n3, p3d(i,prefill3,prefillmin3,thr3,hill3))
+            b1=binomial(n1,pr1)
+            b2=binomial(n2,pr2)
+            b3=binomial(n3,pr3)
+            n1-=b1
+            n2-=b2
+            n3-=b3
+            b=b1+b2+b3
+            blist.append(b)
+        bmeanlist.append(blist)
+    minlen=np.min([len(b) for b in bmeanlist])
+    bmeanlist2=np.array([x[:minlen] for x in bmeanlist])
+    ff=np.var(bmeanlist2, axis=0)/np.mean(bmeanlist2, axis=0)
+    bmean=np.mean(bmeanlist2, axis=0)
+    return bmean,ff
+
+# load data
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+data = np.array([data1, data2],dtype=object)
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
+
+# parameters   
+fnum=1 #file number
+dnum=8 #dataset number
+# cell 34789
+# dnum 23678
+
+obs = np.asarray(data[fnum][dnum],dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs,axis=1)
+
+def get_model(params):
+    pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq = params
+
+    M2 = int(round(M2))
+    M3 = int(round(M3))
+
+    M1 = mean_data[0]/pr1 - M2 - M3
+
+    if M1 <= 0:
+        return None,None,None
+
+    p1i = np.ones(nstim)
+    p2i = np.ones(nstim)
+    p3i = np.ones(nstim)
+
+    for i in range(1,nstim):
+
+        p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
+        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
+        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3,prefillmin3,thr3,hill3)
+
+    mqc = (M1*p1i*pr1+
+           M2*p2i*pr2+
+           M3*p3i*pr3)
+
+    vqc = (M1*p1i*pr1*(1-p1i*pr1)+
+           M2*p2i*pr2*(1-p2i*pr2)+
+           M3*p3i*pr3*(1-p3i*pr3))
+
+    vei = mqc*CVq**2+vqc
+
+    CV2 = vei/(mqc**2)
+
+    FF = vei/mqc
+
+    return mqc,CV2,FF
+
+# pr1=0.7
+# pr2=pr1
+# pr3=0.01
+
+# M2=30
+# M3=10
+# M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3)
+
+# hill=1.02582448684247
+# hill3=1
+# thr=1.530469326
+# thr3=1
+# prefil1l=0.777994143267587
+# prefill2=0.6
+# prefill3=0.1
+
+# prefillmin=0
+# prefillmin3=0
+# CVq=0.2
+
+# s
+pr1 = 0.40494242594933205
+pr2 = 0.854280713888036
+pr3 = 0.0486220769656234
+M2 = 20.0
+M3 = 24.0
+M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3)
+hill = 3.1733478345088564
+hill3 = 2.9498467643890627
+thr = 0.8060195827319819
+thr3 = 19.999987800480387
+prefill1 = 0.9999999946188116
+prefill2 = 0.5630267532962288
+prefill3 = 0.9999982448064474
+prefillmin = 4.1150288235498877e-08
+prefillmin3 = 2.0339945918717988e-09
+CVq = 0.2
+# e
+
+nstim=100
+navgs = 10000
+
+n1=M1
+n2=M2
+n3=M3
+
+bm,ff = simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+                 M1, M2, M3, nstim, navgs)
+
+p1i=np.zeros(nstim)
+p2i=np.zeros(nstim)
+p3i=np.zeros(nstim)
+p1i[0]=p2i[0]=p3i[0]=1#initially docked
+
+for i in range(1,nstim):
+    p1i[i]=p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1, prefill1, prefillmin, thr, hill)
+    p2i[i]=p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1, prefill2)
+    p3i[i]=p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1, prefill3, prefillmin3, thr3, hill3)
+
+mqc=M1*p1i*pr1 + M2*p2i*pr2 + M3*p3i*pr3
+vqc=M1*p1i*pr1*(1-p1i*pr1) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
+vei=mqc*CVq**2+vqc
+CV2ei=vei/mqc**2
+ffei=vei/mqc
+# =============================================================================
+# #%%
+# =============================================================================
+fs=15
+plt.figure(figsize=(6,7))
+# mean QC plot
+plt.subplot(2,1,1)
+plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
+tplot=np.linspace(0,nstim/100, len(bm))
+plt.plot(tplot,bm,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',
+         markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='k')
+# plt.scatter(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',color='tab:blue')
+plt.plot(tplot,mqc,label='model',color='k',marker='o',markersize=2)
+
+#errorbars
+y=np.asarray(means[fnum][dnum],dtype=float)
+lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='k',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.ylabel('Mean quantal content', fontsize=fs)
+plt.xticks([])
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+
+# fano factor QC plot
+plt.subplot(2,1,2)
+
+ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
+plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
+         label='data',marker='o',markersize=3,
+         markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='tab:blue')
+# plt.scatter(tplot,ffdata,label='data',marker='o',color='tab:blue')
+plt.plot(tplot,ffei,label='model',color='k',marker='o',markersize=3)
+plt.plot(tplot,ff,marker='o',markersize=5, label='simulations',color='tab:orange',
+         markerfacecolor='none',markeredgecolor='tab:orange')
+
+#errorbars
+y=ffdata
+lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='tab:blue',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.xlabel('Time (ms)', fontsize=fs)
+plt.ylabel('Fano factor', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+plt.tight_layout()
+plt.show()
+
+#%% 2 - plot a 2x5 of simulated traces (run before next code)
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+import pandas as pd
+import os
+
+def simulate(n1init,n2init,pr1,pr2,k1,k2,M1,M2,nstim,navgs):
+    bmeanlist=[]
+    for _ in range(navgs):
+        blist=[]
+        n1=n1init
+        n2=n2init
+        for i in range(nstim):
+            if i!=0:
+                n1+=binomial(M1-n1,p1d(i))
+                n2+=binomial(M2-n2,p2d)
+            b1=binomial(n1,pr1)
+            b2=binomial(n2,pr2)
+            n1-=b1
+            n2-=b2
+            blist.append(b1+b2)
+        bmeanlist.append(blist)
+
+    bmeanlist=np.asarray(bmeanlist)
+    ff=np.var(bmeanlist,axis=0)/np.mean(bmeanlist,axis=0)
+    bmean=np.mean(bmeanlist,axis=0)
+
+    return bmean,ff,bmeanlist
+
+def p1d(i):
+    return prefillmin+(prefill-prefillmin)/(1+((i)/thr)**hill)
+
+# load data
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1='100Hz_1s_20_repeats_P11.xlsx'
+file2='100Hz_1s_20_repeats_P38.xlsx'
+
+excel1=pd.read_excel(file1,sheet_name=None,header=None)
+excel2=pd.read_excel(file2,sheet_name=None,header=None)
+
+data1=np.array([df.to_numpy()[1:,1:] for df in excel1.values()])
+data2=np.array([df.to_numpy()[1:,1:] for df in excel2.values()])
+data=np.array([data1,data2],dtype=object)
+
+# parameters
+fnum=1
+dnum=2
+pr1=0.85
+pr2=0.85
+
+M2=30.1224080550994
+M1=np.mean(data[fnum][dnum],axis=1)[0]/pr1-M2
+M2=int(np.round(M2))
+M1=int(np.round(M1))
+
+nstim=100
+navgs=10000
+
+hill=1.02582448684247
+thr=1.530469326
+prefill=0.777994143267587
+prefillmin=0
+CVq=0.2
+p2d=0.777994143277144
+
+n1=M1
+n2=M2
+
+bm,ff,brepeats=simulate(n1,n2,pr1,pr2,p1d,p2d,M1,M2,nstim,navgs)
+
+
+fs=15
+fig,axs=plt.subplots(2,5,figsize=(12,5),sharex=True,sharey=True)
+
+tplot=np.linspace(0,nstim/100,nstim)
+
+for i,ax in enumerate(axs.ravel()):
+    ax.plot(tplot,brepeats[i],
+            marker='o',
+            markersize=3,
+            linewidth=1)
+    ax.set_title(f'Sim {i+1}',fontsize=fs-2)
+    ax.tick_params(axis='both',labelsize=fs-3)
+
+for ax in axs[1,:]:
+    ax.set_xlabel('Time (sec)',fontsize=fs)
+
+for ax in axs[:,0]:
+    ax.set_ylabel('Quantal content',fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% 2 - Plot normalized data and simulation traces in 4x5 grid
+
+fs=15
+fig,ax=plt.subplots(4,5,figsize=(10,6),sharex=True,sharey=True)
+
+tplot=np.linspace(0,nstim/100,nstim)
+
+ds=np.asarray(data[fnum][dnum],dtype=float).T
+
+q=0
+for i in range(2):
+    for j in range(5):
+        y=ds[q]/ds[q][0]
+        ax[i,j].plot(tplot,y,
+                     marker='o',
+                     linewidth=0.2,
+                     markersize=2,
+                     color='tab:blue')
+        ax[i,j].set_xticks([])
+        ax[i,j].set_yticks([])
+        if i==0 and j==0:
+            ydif=0.05
+            ax[i,j].text(0.52,np.max(y)-ydif,'Repeat #{}'.format(q+1),fontsize=10)
+        else:
+            ax[i,j].text(0.83,np.max(y)-ydif,'#{}'.format(q+1),fontsize=10)
+        q+=1
+q=0
+for i in range(2,4):
+    for j in range(5):
+        y=brepeats[q]/brepeats[q][0]
+        ax[i,j].plot(tplot,y,
+                     marker='o',
+                     linewidth=0.2,
+                     markersize=2,
+                     color='tab:orange')
+        ax[i,j].set_xticks([])
+        ax[i,j].set_yticks([])
+        if i==2 and j==0:
+            ax[i,j].text(0.35,np.max(y)-0.05,'Simulation #{}'.format(q+1),fontsize=10)
+        else:
+            ax[i,j].text(0.83,np.max(y)-0.05,'#{}'.format(q+1),fontsize=10)
+        q+=1
+ax[3,0].set_ylabel('                             Simulated QC',fontsize=fs)
+ax[1,0].set_ylabel('                      Experimental QC',fontsize=fs)
+ax[3,2].set_xlabel('Time (sec)',fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% end
+# =============================================================================
+# #%% Continuous beta depletion/refill simulation
+# 
+# import numpy as np
+# import matplotlib.pyplot as plt
+# 
+# def beta_params(mean,CV2):
+#     var=CV2*mean**2
+#     temp=mean*(1-mean)/var-1
+#     return mean*temp,(1-mean)*temp
+# 
+# def simulate(n1,n2,pr1,pr2,CV1,CV2,prefill,prefillmin,thr,hill,M1,M2,nstim,navgs):
+# 
+#     ar1,br1=beta_params(pr1,CV1)
+#     ar2,br2=beta_params(pr2,CV2)
+# 
+#     bmeanlist=[]
+# 
+#     for _ in range(navgs):
+# 
+#         blist=[]
+#         n1i=n1
+#         n2i=n2
+# 
+#         for i in range(nstim):
+# 
+#             if i!=0:
+# 
+#                 refill_mean=prefillmin+(prefill-prefillmin)/(1+(i/thr)**hill)
+# 
+#                 af1,bf1=beta_params(refill_mean,CV1)
+#                 af2,bf2=beta_params(prefill,CV2)
+# 
+#                 n1i+=np.random.beta(af1,bf1)*(M1-n1i)
+#                 n2i+=np.random.beta(af2,bf2)*(M2-n2i)
+# 
+# 
+#             b1=n1i*np.random.beta(ar1,br1)
+#             b2=n2i*np.random.beta(ar2,br2)
+# 
+#             n1i-=b1
+#             n2i-=b2
+# 
+#             blist.append(b1+b2)
+# 
+#         bmeanlist.append(blist)
+# 
+#     bmeanlist=np.array(bmeanlist)
+# 
+#     bm=np.mean(bmeanlist,axis=0)
+#     ff=np.var(bmeanlist,axis=0)/bm
+# 
+#     return bm,ff
+# 
+# 
+# 
+# def p1d(i):
+#     return prefillmin+(prefill-prefillmin)/(1+(i/thr)**hill)
+# 
+# 
+# 
+# # parameters
+# 
+# pr1=0.85
+# pr2=0.85
+# 
+# M2=30.1224
+# M1=np.mean(data[fnum][dnum],axis=1)[0]/pr1-M2
+# 
+# nstim=100
+# navgs=100
+# 
+# hill=1.0258
+# thr=1.5305
+# prefill=0.778
+# prefillmin=0
+# 
+# CV1=(1-pr1)/(M1*pr1)
+# CV2=(1-pr2)/(M2*pr2)
+# 
+# 
+# bm,ff=simulate(
+#     M1,M2,
+#     pr1,pr2,
+#     CV1,CV2,
+#     prefill,prefillmin,
+#     thr,hill,
+#     M1,M2,
+#     nstim,navgs
+# )
+# 
+# 
+# # plot
+# 
+# fs=15
+# tplot=np.linspace(0,nstim/100,len(bm))
+# 
+# plt.figure(figsize=(6,7))
+# 
+# plt.subplot(2,1,1)
+# plt.plot(tplot,bm,'o-',color='tab:orange',label='continuous simulation')
+# plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),'o-',color='k',label='data')
+# plt.ylabel('Mean quantal content',fontsize=fs)
+# plt.tick_params(labelsize=fs)
+# plt.legend(fontsize=fs)
+# 
+# plt.subplot(2,1,2)
+# plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),label='data')
+# plt.plot(tplot,ff,label='continuous simulation')
+# plt.xlabel('Time (ms)',fontsize=fs)
+# plt.ylabel('Fano factor',fontsize=fs)
+# plt.tick_params(labelsize=fs)
+# plt.legend(fontsize=fs)
+# 
+# plt.tight_layout()
+# plt.show()
+# 
+# #%% Continuous beta depletion/refill MLE
+# 
+# import numpy as np
+# from scipy.optimize import minimize
+# from scipy.stats import gamma
+# import matplotlib.pyplot as plt
+# 
+# 
+# obs=np.asarray(data[fnum][dnum],dtype=float)
+# nstim=obs.shape[0]
+# 
+# 
+# def beta_params(mean,CV2):
+#     var=CV2*mean**2
+#     temp=mean*(1-mean)/var-1
+#     return mean*temp,(1-mean)*temp
+# 
+# 
+# 
+# def model_mle(params):
+# 
+#     pr1,pr2,M2,hill,thr,prefill,prefillmin,CVq=params
+# 
+#     mean_data=np.mean(obs,axis=1)
+# 
+#     M1=mean_data[0]/pr1-M2
+# 
+#     if M1<=0 or M2<=0:
+#         return np.inf
+# 
+# 
+#     # release CV^2 equivalent to binomial
+#     CV1=(1-pr1)/(M1*pr1)
+#     CV2=(1-pr2)/(M2*pr2)
+# 
+# 
+#     ar1,br1=beta_params(pr1,CV1)
+#     ar2,br2=beta_params(pr2,CV2)
+# 
+# 
+#     # mean pool sizes
+#     n1=np.zeros(nstim)
+#     n2=np.zeros(nstim)
+# 
+#     n1[0]=M1
+#     n2[0]=M2
+# 
+# 
+#     for i in range(1,nstim):
+# 
+#         refill1=prefillmin+(prefill-prefillmin)/(1+(i/thr)**hill)
+# 
+#         n1[i]=(
+#             n1[i-1]*(1-pr1)
+#             +refill1*(M1-n1[i-1]*(1-pr1))
+#         )
+# 
+#         n2[i]=(
+#             n2[i-1]*(1-pr2)
+#             +prefill*(M2-n2[i-1]*(1-pr2))
+#         )
+# 
+# 
+#     mqc=n1*pr1+n2*pr2
+# 
+# 
+#     # continuous variance
+#     # Var(nF)=n^2 Var(F)
+# 
+#     varF1=CV1*pr1**2
+#     varF2=CV2*pr2**2
+# 
+# 
+#     vqc=(
+#         n1**2*varF1
+#         +n2**2*varF2
+#     )
+# 
+# 
+#     vei=mqc*CVq**2+vqc
+# 
+#     CV2ei=vei/mqc**2
+# 
+# 
+#     if np.any(mqc<=0) or np.any(CV2ei<=0):
+#         return np.inf
+# 
+# 
+#     shape=1/CV2ei
+#     scale=mqc*CV2ei
+# 
+# 
+#     loglik=gamma.logpdf(
+#         obs,
+#         a=shape[:,None],
+#         scale=scale[:,None]
+#     )
+# 
+# 
+#     if np.any(~np.isfinite(loglik)):
+#         return np.inf
+# 
+# 
+#     return -np.sum(loglik)
+# 
+# 
+# 
+# # initial guess
+# 
+# x0=[
+#     0.85, # pr1
+#     0.85, # pr2
+#     30,   # M2
+#     1.0,  # hill
+#     1.5,  # thr
+#     0.78, # prefill
+#     0.0,  # prefillmin
+#     0.2   # CVq
+# ]
+# 
+# 
+# bounds=[
+#     (0.01,1),
+#     (0.01,1),
+#     (0,200),
+#     (0.01,10),
+#     (0.01,20),
+#     (0,1),
+#     (0,1),
+#     (0,2)
+# ]
+# 
+# 
+# result=minimize(
+#     model_mle,
+#     x0,
+#     method='L-BFGS-B',
+#     bounds=bounds,
+#     options={'maxiter':5000,'ftol':1e-12}
+# )
+# 
+# 
+# 
+# names=[
+#     'pr1',
+#     'pr2',
+#     'M2',
+#     'hill',
+#     'thr',
+#     'prefill',
+#     'prefillmin',
+#     'CVq'
+# ]
+# 
+# 
+# print(result)
+# 
+# print("\nBest parameters:")
+# for n,v in zip(names,result.x):
+#     print(f"{n} = {v}")
+# 
+# print("\nNegative log likelihood:")
+# print(result.fun)
+# 
+# 
+# 
+# # =====================================
+# # Plot MLE model
+# # =====================================
+# 
+# pr1,pr2,M2,hill,thr,prefill,prefillmin,CVq=result.x
+# 
+# 
+# M1=np.mean(obs,axis=1)[0]/pr1-M2
+# 
+# 
+# n1=np.zeros(nstim)
+# n2=np.zeros(nstim)
+# 
+# n1[0]=M1
+# n2[0]=M2
+# 
+# 
+# for i in range(1,nstim):
+# 
+#     refill1=prefillmin+(prefill-prefillmin)/(1+(i/thr)**hill)
+# 
+#     n1[i]=n1[i-1]*(1-pr1)+refill1*(M1-n1[i-1]*(1-pr1))
+# 
+#     n2[i]=n2[i-1]*(1-pr2)+prefill*(M2-n2[i-1]*(1-pr2))
+# 
+# 
+# mqc_mle=n1*pr1+n2*pr2
+# 
+# 
+# CV1=(1-pr1)/(M1*pr1)
+# CV2=(1-pr2)/(M2*pr2)
+# 
+# vqc_mle=(
+#     n1**2*(CV1*pr1**2)
+#     +n2**2*(CV2*pr2**2)
+# )
+# 
+# 
+# vei_mle=mqc_mle*CVq**2+vqc_mle
+# 
+# ffei_mle=vei_mle/mqc_mle
+# 
+# 
+# 
+# # Plot
+# 
+# fs=15
+# 
+# plt.figure(figsize=(6,7))
+# 
+# 
+# plt.subplot(2,1,1)
+# 
+# plt.plot(
+#     times,
+#     np.mean(obs,axis=1),
+#     'o',
+#     color='k',
+#     label='data'
+# )
+# 
+# plt.plot(
+#     times,
+#     mqc_mle,
+#     linewidth=3,
+#     color='tab:orange',
+#     label='continuous beta MLE'
+# )
+# 
+# plt.ylabel(
+#     'Mean quantal content',
+#     fontsize=fs
+# )
+# 
+# plt.tick_params(labelsize=fs)
+# plt.legend(fontsize=fs)
+# 
+# 
+# 
+# plt.subplot(2,1,2)
+# 
+# plt.plot(
+#     times,
+#     np.var(obs,axis=1)/np.mean(obs,axis=1),
+#     'o',
+#     color='tab:blue',
+#     label='data'
+# )
+# 
+# plt.plot(
+#     times,
+#     ffei_mle,
+#     linewidth=3,
+#     color='tab:orange',
+#     label='continuous beta MLE'
+# )
+# 
+# plt.xlabel('Time (sec)',fontsize=fs)
+# plt.ylabel('CV$^2$',fontsize=fs)
+# 
+# plt.tick_params(labelsize=fs)
+# plt.legend(fontsize=fs)
+# 
+# plt.tight_layout()
 # plt.show()
 # =============================================================================
