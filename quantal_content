@@ -7514,36 +7514,11 @@ def simulate(n1init, n2init, n3init, pr1, pr2, pr3, p1d, p2d, p3d, M1, M2, M3, n
     bmean=np.mean(bmeanlist2, axis=0)
     return bmean,ff
 
-# load data
-os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
-file1 = '100Hz_1s_20_repeats_P11.xlsx'
-file2 = '100Hz_1s_20_repeats_P38.xlsx'
-excel1 = pd.read_excel(file1, sheet_name=None, header=None)
-excel2 = pd.read_excel(file2, sheet_name=None, header=None)
-data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
-data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
-data = np.array([data1, data2],dtype=object)
-fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
-
-mbounds=np.load('mbounds.npy',allow_pickle=True)
-ffbounds=np.load('ffbounds.npy',allow_pickle=True)
-means=np.load('means.npy',allow_pickle=True)
-ffs=np.load('ffs.npy',allow_pickle=True)
-
-# parameters   
-fnum=1 #file number
-dnum=2 #dataset number
-# cell 34789
-# dnum 23678
-
-obs = np.asarray(data[fnum][dnum],dtype=float)
-nstim = obs.shape[0]
-mean_data = np.mean(obs,axis=1)
-
-def model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CV1):
+def model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq):
     p1i = np.ones(nstim)
     p2i = np.ones(nstim)
     p3i = np.ones(nstim)
+    M1 = mean_data[0]/pr1 - M2 - M3
     for i in range(1,nstim):
         p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
         p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
@@ -7555,9 +7530,9 @@ def model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefi
            M2*p2i*pr2*(1-p2i*pr2)+
            M3*p3i*pr3*(1-p3i*pr3))
     vei = mqc*CVq**2+vqc
-    CV2 = vei/(mqc**2)
+    CV2ei = vei/(mqc**2)
     FF = vei/mqc
-    return mqc,CV2,FF
+    return mqc,CV2ei,FF
 
 def get_model(params):
     pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq = params
@@ -7567,7 +7542,6 @@ def get_model(params):
     if M1 <= 0:
         return None,None,None
     return model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
-
 
 def mle(params):
     params = np.array(params)
@@ -7595,6 +7569,32 @@ def mle(params):
         return np.inf
 
     return -np.sum(loglik)
+
+# load data
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+data = np.array([data1, data2],dtype=object)
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
+
+# parameters   
+fnum=1 #file number
+dnum=2 #dataset number
+# cell 34789
+# dnum 23678
+
+obs = np.asarray(data[fnum][dnum],dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs,axis=1)
 
 bounds = [
     (0.01,1),    # pr1
@@ -7673,6 +7673,8 @@ vqc=M1*p1i*pr1*(1-p1i*pr1) + M2*p2i*pr2*(1-p2i*pr2) + M3*p3i*pr3*(1-p3i*pr3)
 vei=mqc*CVq**2+vqc
 CV2ei=vei/mqc**2
 ffei=vei/mqc
+
+mqc,CV2ei,ffei=model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
 # =============================================================================
 # #%%
 # =============================================================================
