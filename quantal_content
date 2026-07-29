@@ -7928,7 +7928,6 @@ def opt(ttype):
         names = ['pr1','hill','hill3','thr','thr3',
                  'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
                  'CVq']
-    
     print(result)
     
     print("\nBest parameters:")
@@ -7938,12 +7937,24 @@ def opt(ttype):
     print("\nMinimum negative log likelihood:")
     print(result.fun)
     
-    pr1,M2,M3,hill,hill3,thr,thr3,prefill1,\
-        prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
+    if ttype==3:
+        pr1,M2,M3,hill,hill3,thr,thr3,prefill1,\
+            prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
+    if ttype==2:
+        pr1,M2,hill,hill3,thr,thr3,prefill1,\
+            prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
+    if ttype==1:
+        pr1,hill,hill3,thr,thr3,prefill1,\
+            prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
+            
     pr2=pr1
     pr3=pr1
     
+    if ttype==1:
+        M2=0
     M2=int(np.round(M2))
+    if ttype==2 or ttype==1:
+        M3=0
     M3=int(np.round(M3))
     M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3)
 
@@ -7953,8 +7964,6 @@ def opt(ttype):
     
     return n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
         prefill2,prefill3,prefillmin,prefillmin3,CVq
-  
-        
         
 nstim=100
 navgs = 10000
@@ -7962,47 +7971,59 @@ navgs = 10000
 ttype=3
 n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
     prefill2,prefill3,prefillmin,prefillmin3,CVq = opt(ttype)
+params3=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,CVq]
 #simulation results
-#bb,ff
-ress3=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+#bm,ff
+bm3,ff3=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
                  M1, M2, M3, nstim, navgs)
 #model results
 #mqc,CV2ei,ffei
-resm3=model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
+mqc3,CV2ei3,ffei3=model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
 
- 
 ttype=2
 n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
     prefill2,prefill3,prefillmin,prefillmin3,CVq = opt(ttype)
-ress2=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+params2=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,CVq]
+bm2,ff2=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
                  M1, M2, 0, nstim, navgs)
-resm2=model(pr1,pr2,pr3,M2,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
+mqc2,CV2ei2,ffei2=model(pr1,pr2,pr3,M2,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
 
-    
-ttype=2    
+ttype=1
 n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
     prefill2,prefill3,prefillmin,prefillmin3,CVq = opt(ttype)
-ress1=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+params1=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,CVq]
+bm1,ff1=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
                  M1, 0, 0, nstim, navgs)
-resm1=model(pr1,pr2,pr3,0,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
+mqc1,CV2ei1,ffei1=model(pr1,pr2,pr3,0,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
 
-
-# =============================================================================
-# #%%
-# =============================================================================
+#%%
 fs=15
 plt.figure(figsize=(6,7))
 # mean QC plot
 plt.subplot(2,1,1)
 plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
 tplot=np.linspace(0,nstim/100, len(bm))
-plt.plot(tplot,bm,marker='o',markersize=5, label='simulations',color='tab:orange',
-         markerfacecolor='none',markeredgecolor='tab:orange')
+
+# =============================================================================
+# plt.plot(tplot,bm3,marker='o',markersize=5, label='sim3',color='tab:red',
+#          markerfacecolor='none',markeredgecolor='tab:orange')
+# plt.plot(tplot,bm2,marker='o',markersize=5, label='sim2',color='tab:green',
+#          markerfacecolor='none',markeredgecolor='tab:orange')
+# plt.plot(tplot,bm1,marker='o',markersize=5, label='sim1',color='tab:orange',
+#          markerfacecolor='none',markeredgecolor='tab:orange')
+# =============================================================================
+
 plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',
          markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
          linewidth=0.5, color='k')
+
 # plt.scatter(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',color='tab:blue')
-plt.plot(tplot,mqc,label='model',color='k',marker='o',markersize=2)
+plt.plot(tplot,mqc3,label='model3',color='tab:red',marker='o',markersize=2)
+plt.plot(tplot,mqc2,label='model2',color='tab:green',marker='o',markersize=2)
+plt.plot(tplot,mqc1,label='model1',color='tab:orange',marker='o',markersize=2)
 
 #errorbars
 y=np.asarray(means[fnum][dnum],dtype=float)
@@ -8029,11 +8050,20 @@ ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
 plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
          label='data',marker='o',markersize=3,
          markerfacecolor='tab:blue',markeredgecolor='tab:blue',
-         linewidth=0.5, color='tab:blue')
+         linewidth=0.2, color='tab:blue')
 # plt.scatter(tplot,ffdata,label='data',marker='o',color='tab:blue')
-plt.plot(tplot,ffei,label='model',color='k',marker='o',markersize=3)
-plt.plot(tplot,ff,marker='o',markersize=5, label='simulations',color='tab:orange',
-         markerfacecolor='none',markeredgecolor='tab:orange')
+plt.plot(tplot,ffei3,label='model3',color='tab:red',marker='o',markersize=3)
+plt.plot(tplot,ffei2,label='model2',color='tab:green',marker='o',markersize=3)
+plt.plot(tplot,ffei1,label='model1',color='tab:orange',marker='o',markersize=3)
+
+# =============================================================================
+# plt.plot(tplot,ff3,marker='o',markersize=5, label='sim3',
+#          markerfacecolor='none',color='tab:red')
+# plt.plot(tplot,ff2,marker='o',markersize=5, label='sim2',
+#          markerfacecolor='none',color='tab:green')
+# plt.plot(tplot,ff1,marker='o',markersize=5, label='sim1',
+#          markerfacecolor='none', color='tab:orange')
+# =============================================================================
 
 #errorbars
 y=ffdata
@@ -8048,7 +8078,7 @@ for bar in eb[2]:
 for cap in eb[1]:
     cap.set_alpha(0.25)
 
-plt.xlabel('Time (ms)', fontsize=fs)
+plt.xlabel('Time', fontsize=fs)
 plt.ylabel('Fano factor', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 plt.legend(loc='upper right', fontsize=fs)
