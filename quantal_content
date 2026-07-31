@@ -7522,16 +7522,18 @@ def model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefi
         p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
         p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
         p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3,prefillmin3,thr3,hill3)
-    mqc = (M1*p1i*pr1+
-           M2*p2i*pr2+
-           M3*p3i*pr3)
+    
+    mqc1=M1*p1i*pr1
+    mqc2=M2*p2i*pr2
+    mqc3=M3*p3i*pr3
+    mqc=mqc1+mqc2+mqc3
     vqc = (M1*p1i*pr1*(1-p1i*pr1)+
            M2*p2i*pr2*(1-p2i*pr2)+
            M3*p3i*pr3*(1-p3i*pr3))
     vei = mqc*CVq**2+vqc
     CV2ei = vei/(mqc**2)
     FF = vei/mqc
-    return mqc,CV2ei,FF
+    return mqc,CV2ei,FF,mqc1,mqc2,mqc3
 
 def get_model(params):
     if ttype==3:
@@ -7542,21 +7544,22 @@ def get_model(params):
     if ttype==1:
         pr1,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3= params
         M2=M3=0
-    
+
     M2 = int(round(M2))
     M3 = int(round(M3))
     pr2=pr1
     pr3=pr1
     M1 = int(round(mean_data[0]/pr1 - M2 - M3))
     if M1 <= 0:
-        return None,None,None
-    return model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
+        return None,None,None, None, None, None
+    mqc, CV2ei, FF, mqc1, mqc2, mqc3 = model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
+    return mqc, CV2ei, FF, mqc1, mqc2, mqc3
 
 def mle(params):
     params = np.array(params)
     params[1] = round(params[1])
     params[2] = round(params[2])
-    mqc,CV2,FF = get_model(params)
+    mqc,CV2,FF, mqc1, mqc2, mqc3 = get_model(params)
     if mqc is None:
         return np.inf
     if np.any(mqc<=0) or np.any(CV2<=0):
@@ -7588,7 +7591,7 @@ ffs=np.load('ffs.npy',allow_pickle=True)
 
 # parameters   
 fnum=1 #file number
-dnum=2 #dataset number
+dnum=3 #dataset number
 # cell 34789
 # dnum 23678
 
@@ -7705,27 +7708,31 @@ def opt(ttype):
     return n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
         prefill2,prefill3,prefillmin,prefillmin3,AIC
 
-ttype=3
-n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-    prefill2,prefill3,prefillmin,prefillmin3,AIC3 = opt(ttype)
-params3=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-    prefill2,prefill3,prefillmin,prefillmin3,AIC3]
-#simulation results
-#bm,ff
-bm3,ff3=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
-                 M1, M2, M3, nstim, navgs)
-#model results
-#mqc,CV2ei,ffei
-mqc3,CV2ei3,ffei3=model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
+# =============================================================================
+# ttype=3
+# n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+#     prefill2,prefill3,prefillmin,prefillmin3,AIC3 = opt(ttype)
+# params3=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+#     prefill2,prefill3,prefillmin,prefillmin3,AIC3]
+# #simulation results
+# #bm,ff
+# bm3,ff3=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+#                  M1, M2, M3, nstim, navgs)
+# #model results
+# #mqc,CV2ei,ffei, mean quantal content of the three pool model in pool 1 etc
+# mqc3,CV2ei3,ffei3,mqc31,mqc32,mqc33=model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
+# =============================================================================
 
-ttype=2
-n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-    prefill2,prefill3,prefillmin,prefillmin3,AIC2 = opt(ttype)
-params2=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-    prefill2,prefill3,prefillmin,prefillmin3,AIC2]
-bm2,ff2=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
-                 M1, M2, 0, nstim, navgs)
-mqc2,CV2ei2,ffei2=model(pr1,pr2,pr3,M2,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
+# =============================================================================
+# ttype=2
+# n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+#     prefill2,prefill3,prefillmin,prefillmin3,AIC2 = opt(ttype)
+# params2=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+#     prefill2,prefill3,prefillmin,prefillmin3,AIC2]
+# bm2,ff2=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+#                  M1, M2, 0, nstim, navgs)
+# mqc2,CV2ei2,ffei2,mqc21,mqc22,mqc23=model(pr1,pr2,pr3,M2,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
+# =============================================================================
 
 ttype=1
 n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
@@ -7734,8 +7741,7 @@ params1=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
     prefill2,prefill3,prefillmin,prefillmin3,AIC1]
 bm1,ff1=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
                  M1, 0, 0, nstim, navgs)
-mqc1,CV2ei1,ffei1=model(pr1,pr2,pr3,0,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
-
+mqc1,CV2ei1,ffei1,mqc11,mqc12,mqc13=model(pr1,pr2,pr3,0,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
 
 # =============================================================================
 # #%%
@@ -7760,7 +7766,9 @@ mqc1,CV2ei1,ffei1=model(pr1,pr2,pr3,0,0,hill,hill3,thr,thr3,prefill1,prefill2,pr
 # np.save('ffei3.npy',ffei3)
 # =============================================================================
 
-#%%
+# =============================================================================
+# #%% Plotting section
+# =============================================================================
 names = ['pr1','pr2', 'pr3', 'M1', 'M2','M3','hill','hill3','thr','thr3',
          'prefill1','prefill2','prefill3','prefillmin','prefillmin3']
 pnames=['3 pools','2 pools', '1 pool']
@@ -7857,7 +7865,120 @@ plt.legend(loc='upper right', fontsize=fs)
 plt.tight_layout()
 plt.show()
 
-#%% optimization + simulation - test
+#%% Plot the pd functions
+import numpy as np
+import matplotlib.pyplot as plt
+
+fs=15
+lw=5
+
+def p1d(i,prefill1,prefillmin,thr,hill):
+    return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
+
+i=np.linspace(0,100,500)
+
+fig,ax=plt.subplots(1,3,figsize=(15,5))
+
+colors=['tab:orange','tab:green','tab:red']
+
+
+# One pool model
+p1=p1d(i,
+       prefill1=0.822,
+       prefillmin=0.328,
+       thr=1.61,
+       hill=0.82)
+
+ax[0].plot(i,p1,color=colors[0],linewidth=lw,label='Pool 1')
+ax[0].set_title('One Pool Model',fontsize=fs)
+ax[0].set_xlabel('AP number',fontsize=fs)
+ax[0].set_ylabel('Refilling probability',fontsize=fs)
+ax[0].set_ylim(-0.05,1.05)
+ax[0].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
+ax[0].legend(fontsize=fs)
+
+
+# Two pool model
+p1=p1d(i,
+       prefill1=0.759,
+       prefillmin=0.00661,
+       thr=1.32,
+       hill=1.15)
+
+p2=np.ones_like(i)*0.837
+
+ax[1].plot(i,p1,color=colors[0],linewidth=lw,label='Pool 1')
+ax[1].plot(i,p2,color=colors[1],linewidth=lw,label='Pool 2')
+ax[1].set_title('Two Pool Model',fontsize=fs)
+ax[1].set_xlabel('AP number',fontsize=fs)
+ax[1].set_ylabel('Refilling probability',fontsize=fs)
+ax[1].set_ylim(-0.05,1.05)
+ax[1].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
+ax[1].legend(fontsize=fs)
+
+
+# Three pool model
+p1=p1d(i,
+       prefill1=1,
+       prefillmin=0.009,
+       thr=4.03,
+       hill=1.01)
+
+p2=np.ones_like(i)*1
+
+p3=p1d(i,
+       prefill1=1.86e-08,
+       prefillmin=0.766,
+       thr=14.8,
+       hill=4.13)
+
+ax[2].plot(i,p1,color=colors[0],linewidth=lw,label='Pool 1')
+ax[2].plot(i,p2,color=colors[1],linewidth=lw,label='Pool 2')
+ax[2].plot(i,p3,color=colors[2],linewidth=lw,label='Pool 3')
+ax[2].set_title('Three Pool Model',fontsize=fs)
+ax[2].set_xlabel('AP number',fontsize=fs)
+ax[2].set_ylabel('Refilling probability',fontsize=fs)
+ax[2].set_ylim(-0.05,1.05)
+ax[2].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
+ax[2].legend(fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+#%%
+# Plot the mean QCs
+fs=15
+lw=5
+
+fig,ax=plt.subplots(1,3,figsize=(15,5))
+
+ymax=1.1*max(
+    np.max(mqc11),
+    np.max(mqc21+mqc22),
+    np.max(mqc31+mqc32+mqc33)
+)
+
+ax[0].plot(mqc11,label='Pool 1',color='tab:orange',linewidth=lw)
+ax[0].plot(mqc11,label='Sum of pools',color='k',linewidth=lw)
+ax[0].set_ylabel('Mean quantal content',fontsize=fs)
+
+ax[1].plot(mqc21,label='Pool 1',color='tab:orange',linewidth=lw)
+ax[1].plot(mqc22,label='Pool 2',color='tab:green',linewidth=lw)
+ax[1].plot(mqc21+mqc22,label='Sum of pools',color='k',linewidth=lw)
+
+ax[2].plot(mqc31,label='Pool 1',color='tab:orange',linewidth=lw)
+ax[2].plot(mqc32,label='Pool 2',color='tab:green',linewidth=lw)
+ax[2].plot(mqc33,label='Pool 3',color='tab:red',linewidth=lw)
+ax[2].plot(mqc31+mqc32+mqc33,label='Sum of pools',color='k',linewidth=lw)
+
+for a in ax:
+    a.set_ylim(0,ymax)
+    a.tick_params(axis='both',labelsize=fs)
+    a.legend(fontsize=fs)
+    a.set_xlabel('Stimulus number',fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+#%% optimization + simulation - 1 pool, variable prob of release
 import numpy as np
 from matplotlib.pyplot import plot as pt
 import matplotlib.pyplot as plt
@@ -7873,81 +7994,30 @@ from scipy.stats import gamma
 def p1d(i,prefill1,prefillmin,thr,hill):
     return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
 
-def p2d(i,prefill2):
-    return prefill2
-
-def p3d(i,prefill3,prefillmin3,thr3,hill3):
-    return prefillmin3+(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
-
 def pr1(i,pr0,prss,taupr,Hpr):
     return prss+(pr0-prss)/(1+(i/taupr)**Hpr)
 
-def simulate(n1init, n2init, n3init, pr1, pr2, pr3, p1d, p2d, p3d, M1, M2, M3, nstim, navgs,pr0,prss,taupr,Hpr):
-    bmeanlist=[]
-    for _ in range(navgs):
-        blist=[]
-        n1=n1init
-        n2=n2init
-        n3=n3init
-        for i in range(nstim):
-            if i!=0:
-                n1+=binomial(M1-n1, p1d(i,prefill1,prefillmin,thr,hill))
-                n2+=binomial(M2-n2, p2d(i,prefill2))
-                n3+=binomial(M3-n3, p3d(i,prefill3,prefillmin3,thr3,hill3))
-            b1=binomial(n1,pr1(i,pr0,prss,taupr,Hpr))
-            b2=binomial(n2,pr2)
-            b3=binomial(n3,pr3)
-            n1-=b1
-            n2-=b2
-            n3-=b3
-            b=b1+b2+b3
-            blist.append(b)
-        bmeanlist.append(blist)
-    minlen=np.min([len(b) for b in bmeanlist])
-    bmeanlist2=np.array([x[:minlen] for x in bmeanlist])
-    ff=np.var(bmeanlist2, axis=0)/np.mean(bmeanlist2, axis=0)
-    bmean=np.mean(bmeanlist2, axis=0)
-    return bmean,ff
-
-def model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq,pr0,prss,taupr,Hpr):
+def model(pr0,prss,taupr,Hpr,hill,thr,prefill1,prefillmin):
     p1i = np.ones(nstim)
-    p2i = np.ones(nstim)
-    p3i = np.ones(nstim)
-    M1 = int(round(mean_data[0]/pr1 - M2 - M3))
+    M1 = int(round(mean_data[0]/pr1(0,pr0,prss,taupr,Hpr)))
     for i in range(1,nstim):
-        p1i[i] = p1i[i-1]*(1-pr1(i,pr0,prss,taupr,Hpr))+(1-p1i[i-1]*(1-pr1(i,pr0,prss,taupr,Hpr)))*p1d(i-1,prefill1,prefillmin,thr,hill)
-        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
-        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3,prefillmin3,thr3,hill3)
-    mqc = (M1*p1i*pr1(i,pr0,prss,taupr,Hpr)+
-           M2*p2i*pr2+
-           M3*p3i*pr3)
-    vqc = (M1*p1i*pr1(i,pr0,prss,taupr,Hpr)*(1-p1i*pr1(i,pr0,prss,taupr,Hpr))+
-           M2*p2i*pr2*(1-p2i*pr2)+
-           M3*p3i*pr3*(1-p3i*pr3))
+        p1i[i] = p1i[i-1]*(1-pr1(i-1,pr0,prss,taupr,Hpr))+(1-p1i[i-1]*(1-pr1(i-1,pr0,prss,taupr,Hpr)))*p1d(i-1,prefill1,prefillmin,thr,hill)
+    pr1a=np.array([pr1(i,pr0,prss,taupr,Hpr) for i in range(len(p1i))])
+    mqc=M1*p1i*pr1a
+    vqc = M1*p1i*pr1a*(1-p1i*pr1a)
     vei = mqc*CVq**2+vqc
     CV2ei = vei/(mqc**2)
     FF = vei/mqc
     return mqc,CV2ei,FF
 
 def get_model(params):
-    if ttype==1:
-        pr1,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq,pr0,prss,taupr,Hpr = params
-        M2=M3=0
-    
-    M2 = int(round(M2))
-    M3 = int(round(M3))
-    pr2=0
-    pr3=0
-    M1 = int(round(mean_data[0]/pr1(0,pr0,prss,taupr,Hpr) - M2 - M3))
-    if M1 <= 0:
-        return None,None,None
-    return model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq,pr0,prss,taupr,Hpr)
+    pr0,prss,taupr,Hpr,hill,thr,prefill1, prefillmin= params
+    mqc, CV2ei, FF = model(pr0,prss,taupr,Hpr,hill,thr,prefill1,prefillmin)
+    return mqc, CV2ei, FF
 
 def mle(params):
     params = np.array(params)
-    params[1] = round(params[1])
-    params[2] = round(params[2])
-    mqc,CV2,FF = get_model(params)
+    mqc,CV2,FF= get_model(params)
     if mqc is None:
         return np.inf
     if np.any(mqc<=0) or np.any(CV2<=0):
@@ -7985,132 +8055,54 @@ dnum=2 #dataset number
 
 nstim=100
 navgs = 10000
+CVq=0.2 # from PLOSCB
 
 obs = np.asarray(data[fnum][dnum],dtype=float)
 nstim = obs.shape[0]
 mean_data = np.mean(obs,axis=1)
 
-def opt(ttype):
-    
-    if ttype==3:
-        bounds = [
-            [0.01,1],    # pr1
-            [0,100],     # M2
-            [0,100],     # M3
-            [0.01,10],   # hill
-            [0.01,10],   # hill3
-            [0.01,20],   # thr
-            [0.01,20],   # thr3
-            [0,1],       # prefill1
-            [0,1],       # prefill2
-            [0,1],       # prefill3
-            [0,1],       # prefillmin
-            [0,1],       # prefillmin3
-            [0,2]         # CVq
-        ]
-    if ttype==2:
-        bounds = [
-            [0.01,1],    # pr1
-            [0,100],     # M2
-            [0.01,10],   # hill
-            [0.01,10],   # hill3
-            [0.01,20],   # thr
-            [0.01,20],   # thr3
-            [0,1],       # prefill1
-            [0,1],       # prefill2
-            [0,1],       # prefill3
-            [0,1],       # prefillmin
-            [0,1],       # prefillmin3
-            [0,2]         # CVq
-        ]
-    if ttype==1:
-        bounds = [
-            [0.01,1],    # pr1
-            [0.01,10],   # hill
-            [0.01,10],   # hill3
-            [0.01,20],   # thr
-            [0.01,20],   # thr3
-            [0,1],       # prefill1
-            [0,1],       # prefill2
-            [0,1],       # prefill3
-            [0,1],       # prefillmin
-            [0,1],       # prefillmin3
-            [0,2]         # CVq
-        ]
+bounds = [
+    [0.01,1],#pr0
+    [0.01,1],#prss
+    [0.01,20],#taupr
+    [0.01,10],#Hpr
+    [0.01,10],   # hill
+    [0.01,20],   # thr
+    [0.01,1],       # prefill1
+    [0.01,1],       # prefillmin
+]
+result = differential_evolution(
+    mle,
+    bounds,
+    maxiter=5000,
+    popsize=20,
+    tol=1e-9,
+    polish=True,
+    workers=1,
+    updating='immediate'
+)
+names = ['pr0','prss','taupr','Hpr','hill','thr','prefill1','prefillmin']
+print(result)
 
-    result = differential_evolution(
-        mle,
-        bounds,
-        maxiter=5000,
-        popsize=20,
-        tol=1e-9,
-        polish=True,
-        workers=1,
-        updating='immediate'
-    )
-    
-    if ttype==3:
-        names = ['pr1','M2','M3','hill','hill3','thr','thr3',
-                 'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
-                 'CVq']
-    if ttype==2:
-        names = ['pr1','M2','hill','hill3','thr','thr3',
-                 'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
-                 'CVq']
-    if ttype==1:
-        names = ['pr1','hill','hill3','thr','thr3',
-                 'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
-                 'CVq']
-    print(result)
-    
-    print("\nBest parameters:")
-    for name,value in zip(names,result.x):
-        print(f'{name} = {value}')
-    
-    print("\nMinimum negative log likelihood:")
-    print(result.fun)
-    
-    if ttype==3:
-        pr1,M2,M3,hill,hill3,thr,thr3,prefill1,\
-            prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
-    if ttype==2:
-        pr1,M2,hill,hill3,thr,thr3,prefill1,\
-            prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
-    if ttype==1:
-        pr1,hill,hill3,thr,thr3,prefill1,\
-            prefill2,prefill3,prefillmin,prefillmin3,CVq = result.x
-            
-    pr2=pr1
-    pr3=pr1
-    
-    if ttype==1:
-        M2=0
-    M2=int(np.round(M2))
-    if ttype==2 or ttype==1:
-        M3=0
-    M3=int(np.round(M3))
-    M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3)
+print("\nBest parameters:")
+for name,value in zip(names,result.x):
+    print(f'{name} = {value}')
+print('M1={}'.format(M1))
 
-    n1=M1
-    n2=M2
-    n3=M3
+print("\nMinimum negative log likelihood:")
+print(result.fun)
 
-    k=len(bounds)
-    AIC=2*k+2*result.fun
+pr0,prss,taupr,Hpr,hill,thr,prefill1,prefillmin= result.x
+        
+M1=int(np.ceil(np.mean(data[fnum][dnum], axis=1)[0]/pr1(0,pr0,prss,taupr,Hpr)))
 
-    return n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-        prefill2,prefill3,prefillmin,prefillmin3,CVq, AIC
+n1=M1
 
+k=len(bounds)
+AIC=2*k+2*result.fun
 
-ttype=1
-n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-    prefill2,prefill3,prefillmin,prefillmin3,CVq,AIC1 = opt(ttype)
-params1=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-    prefill2,prefill3,prefillmin,prefillmin3,CVq,AIC1]
-bm1,ff1=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
-                 M1, 0, 0, nstim, navgs)
-mqc1,CV2ei1,ffei1=model(pr1,pr2,pr3,0,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3,CVq)
-
+params=[n1, M1, pr0, prss, taupr, Hpr,hill,thr,prefill1,prefillmin,AIC]
+mqc,CV2ei,ffei=model(pr0, prss, taupr, Hpr, hill, thr, prefill1, prefillmin)
 
 # =============================================================================
 # #%%
@@ -8135,39 +8127,23 @@ mqc1,CV2ei1,ffei1=model(pr1,pr2,pr3,0,0,hill,hill3,thr,thr3,prefill1,prefill2,pr
 # np.save('ffei3.npy',ffei3)
 # =============================================================================
 
-# =============================================================================
-# #%%
-# =============================================================================
-names = ['pr1','pr2', 'pr3', 'M1', 'M2','M3','hill','hill3','thr','thr3',
-         'prefill1','prefill2','prefill3','prefillmin','prefillmin3',
-         'CVq']
-for paramsi in [params3, params2, params1]:
-    for n,v in zip(names,paramsi[3:]):
-        print('{}={:.3g}'.format(n,v))
-    print('\n')
+#%% Plotting section
     
 fs=15
+# plt.figure(figsize=(12,7))
 plt.figure(figsize=(6,7))
 # mean QC plot
 plt.subplot(2,1,1)
 plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
-tplot=np.linspace(0,nstim/100, len(bm1))
-
-# =============================================================================
-# plt.plot(tplot,bm3,marker='o',markersize=5, label='sim3',color='tab:red',
-#          markerfacecolor='none',markeredgecolor='tab:orange')
-# plt.plot(tplot,bm2,marker='o',markersize=5, label='sim2',color='tab:green',
-#          markerfacecolor='none',markeredgecolor='tab:orange')
-# plt.plot(tplot,bm1,marker='o',markersize=5, label='sim1',color='tab:orange',
-#          markerfacecolor='none',markeredgecolor='tab:orange')
-# =============================================================================
+tplot=np.linspace(0,nstim/100, nstim)
 
 plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',
          markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
          linewidth=0.5, color='k')
 
 # plt.scatter(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',color='tab:blue')
-plt.plot(tplot,mqc1,label='1 pool model, AIC = {}'.format(np.around(AIC1,3)),color='tab:orange',marker='o',markersize=2)
+plt.plot(tplot,mqc,label='AIC={}'.format(np.around(AIC,3)),
+         color='black',marker='o',markersize=2)
 
 #errorbars
 y=np.asarray(means[fnum][dnum],dtype=float)
@@ -8196,7 +8172,7 @@ plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
          markerfacecolor='tab:blue',markeredgecolor='tab:blue',
          linewidth=0.2, color='tab:blue')
 # plt.scatter(tplot,ffdata,label='data',marker='o',color='tab:blue')
-plt.plot(tplot,ffei1,label='1 pool model',color='tab:orange',marker='o',markersize=3)
+plt.plot(tplot,ffei,color='black',marker='o',markersize=3)
 
 # =============================================================================
 # plt.plot(tplot,ff3,marker='o',markersize=5, label='sim3',
@@ -8227,6 +8203,7 @@ plt.legend(loc='upper right', fontsize=fs)
 plt.tight_layout()
 plt.show()
 
+
 #%% Plot the pd functions
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8249,7 +8226,7 @@ p1=p1d(i,0.822,0.328,1.61,1.07)
 ax[0].plot(i,p1,color=colors[0],linewidth=lw,label='Pool 1')
 ax[0].set_title('One Pool Model',fontsize=fs)
 ax[0].set_xlabel('AP number',fontsize=fs)
-ax[0].set_ylabel('Docking probability',fontsize=fs)
+ax[0].set_ylabel('Refilling probability',fontsize=fs)
 ax[0].set_ylim(-0.05,1.05)
 ax[0].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
 ax[0].legend(fontsize=fs)
@@ -8263,7 +8240,7 @@ ax[1].plot(i,p1,color=colors[0],linewidth=lw,label='Pool 1')
 ax[1].plot(i,p2,color=colors[1],linewidth=lw,label='Pool 2')
 ax[1].set_title('Two Pool Model',fontsize=fs)
 ax[1].set_xlabel('AP number',fontsize=fs)
-ax[1].set_ylabel('Docking probability',fontsize=fs)
+ax[1].set_ylabel('Refilling probability',fontsize=fs)
 ax[1].set_ylim(-0.05,1.05)
 ax[1].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
 ax[1].legend(fontsize=fs)
@@ -8279,7 +8256,7 @@ ax[2].plot(i,p2,color=colors[1],linewidth=lw,label='Pool 2')
 ax[2].plot(i,p3,color=colors[2],linewidth=lw,label='Pool 3')
 ax[2].set_title('Three Pool Model',fontsize=fs)
 ax[2].set_xlabel('AP number',fontsize=fs)
-ax[2].set_ylabel('Docking probability',fontsize=fs)
+ax[2].set_ylabel('Refilling probability',fontsize=fs)
 ax[2].set_ylim(-0.05,1.05)
 ax[2].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
 ax[2].legend(fontsize=fs)
