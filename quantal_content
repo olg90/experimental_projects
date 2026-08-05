@@ -7591,8 +7591,8 @@ ffs=np.load('ffs.npy',allow_pickle=True)
 
 # parameters   
 fnum=1 #file number
-dnum=3 #dataset number
-# cell 34789
+dnum=2 #dataset number
+# cell 34789 
 # dnum 23678
 
 nstim=100
@@ -7651,7 +7651,7 @@ def opt(ttype):
     result = differential_evolution(
         mle,
         bounds,
-        maxiter=5000,
+        maxiter=1000,
         popsize=20,
         tol=1e-9,
         polish=True,
@@ -7703,36 +7703,36 @@ def opt(ttype):
     n3=M3
 
     k=len(bounds)
+    # AIC = 2*k - 2*ln(L)
+    # L = Likelihood
+    # results.fun = -ln(L)
+    # AIC = 2*k + 2*results.fun
     AIC=2*k+2*result.fun
 
     return n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
         prefill2,prefill3,prefillmin,prefillmin3,AIC
 
-# =============================================================================
-# ttype=3
-# n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-#     prefill2,prefill3,prefillmin,prefillmin3,AIC3 = opt(ttype)
-# params3=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-#     prefill2,prefill3,prefillmin,prefillmin3,AIC3]
-# #simulation results
-# #bm,ff
-# bm3,ff3=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
-#                  M1, M2, M3, nstim, navgs)
-# #model results
-# #mqc,CV2ei,ffei, mean quantal content of the three pool model in pool 1 etc
-# mqc3,CV2ei3,ffei3,mqc31,mqc32,mqc33=model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
-# =============================================================================
+ttype=3
+n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,AIC3 = opt(ttype)
+params3=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,AIC3]
+#simulation results
+#bm,ff
+bm3,ff3=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+                 M1, M2, M3, nstim, navgs)
+#model results
+#mqc,CV2ei,ffei, mean quantal content of the three pool model in pool 1 etc
+mqc3,CV2ei3,ffei3,mqc31,mqc32,mqc33=model(pr1,pr2,pr3,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
 
-# =============================================================================
-# ttype=2
-# n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-#     prefill2,prefill3,prefillmin,prefillmin3,AIC2 = opt(ttype)
-# params2=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
-#     prefill2,prefill3,prefillmin,prefillmin3,AIC2]
-# bm2,ff2=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
-#                  M1, M2, 0, nstim, navgs)
-# mqc2,CV2ei2,ffei2,mqc21,mqc22,mqc23=model(pr1,pr2,pr3,M2,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
-# =============================================================================
+ttype=2
+n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,AIC2 = opt(ttype)
+params2=[n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
+    prefill2,prefill3,prefillmin,prefillmin3,AIC2]
+bm2,ff2=simulate(n1, n2, n3, pr1, pr2, pr3, p1d, p2d, p3d, 
+                 M1, M2, 0, nstim, navgs)
+mqc2,CV2ei2,ffei2,mqc21,mqc22,mqc23=model(pr1,pr2,pr3,M2,0,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3)
 
 ttype=1
 n1,n2,n3,pr1, pr2, pr3, M1, M2, M3, hill,hill3,thr,thr3,prefill1,\
@@ -8648,6 +8648,877 @@ for i in range(2,4):
 ax[3,0].set_ylabel('                             Simulated QC',fontsize=fs)
 ax[1,0].set_ylabel('                      Experimental QC',fontsize=fs)
 ax[3,2].set_xlabel('Time (sec)',fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+#%% optimization + simulation - compare the 1,2,3,4,5 pool models
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+import pandas as pd
+import os
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+def p1d(i,prefill1,prefillmin,thr,hill):
+    return prefillmin+(prefill1-prefillmin)/(1+(i/thr)**hill)
+
+def p2d(i,prefill2):
+    return prefill2
+
+def p3d(i,prefill3,prefillmin3,thr3,hill3):
+    return prefillmin3+(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
+
+def p4d(i,prefill3,prefillmin3,thr3,hill3):
+    return prefillmin3+(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
+
+def p5d(i,prefill3,prefillmin3,thr3,hill3):
+    return prefillmin3+(prefill3-prefillmin3)/(1+(i/thr3)**hill3)
+
+def model(pr1,pr2,pr3,pr4,pr5,
+          M2,M3,M4,M5,
+          hill,hill3,hill4,hill5,
+          thr,thr3,thr4,thr5,
+          prefill1,prefill2,prefill3,prefill4,prefill5,
+          prefillmin,prefillmin3,prefillmin4,prefillmin5):
+    p1i = np.ones(nstim)
+    p2i = np.ones(nstim)
+    p3i = np.ones(nstim)
+    p4i=np.ones(nstim)
+    p5i=np.ones(nstim)
+    M1 = int(round(mean_data[0]/pr1 - M2 - M3-M4-M5))
+    for i in range(1,nstim):
+        p1i[i] = p1i[i-1]*(1-pr1)+(1-p1i[i-1]*(1-pr1))*p1d(i-1,prefill1,prefillmin,thr,hill)
+        p2i[i] = p2i[i-1]*(1-pr2)+(1-p2i[i-1]*(1-pr2))*p2d(i-1,prefill2)
+        p3i[i] = p3i[i-1]*(1-pr3)+(1-p3i[i-1]*(1-pr3))*p3d(i-1,prefill3,prefillmin3,thr3,hill3)
+        p4i[i] = p4i[i-1]*(1-pr4)+(1-p4i[i-1]*(1-pr4))*p4d(i-1,prefill4,prefillmin4,thr4,hill4)
+        p5i[i] = p5i[i-1]*(1-pr5)+(1-p5i[i-1]*(1-pr5))*p5d(i-1,prefill5,prefillmin5,thr5,hill5)
+    
+    mqc1=M1*p1i*pr1
+    mqc2=M2*p2i*pr2
+    mqc3=M3*p3i*pr3
+    mqc4=M4*p4i*pr4
+    mqc5=M5*p5i*pr5
+    mqc=mqc1+mqc2+mqc3+mqc4+mqc5
+    vqc = (M1*p1i*pr1*(1-p1i*pr1)+
+           M2*p2i*pr2*(1-p2i*pr2)+
+           M3*p3i*pr3*(1-p3i*pr3)+
+           M4*p4i*pr4*(1-p4i*pr4)+
+           M4*p4i*pr4*(1-p4i*pr4))
+    vei = mqc*CVq**2+vqc
+    CV2ei = vei/(mqc**2)
+    FF = vei/mqc
+    return mqc,CV2ei,FF,mqc1,mqc2,mqc3,mqc4,mqc5
+
+def get_model(params):
+    if ttype==5:
+        pr1,M2,M3,M4,M5,hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,prefill2,prefill3,prefill4,prefill5,\
+            prefillmin,prefillmin3,prefillmin4,prefillmin5= params
+    if ttype==4:
+        pr1,M2,M3,M4,hill,hill3,hill4,thr,thr3,thr4,prefill1,prefill2,prefill3,prefill4,\
+            prefillmin,prefillmin3,prefillmin4= params
+    if ttype==3:
+        pr1,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3= params
+    if ttype==2:
+        pr1,M2,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3= params
+        M3=0
+    if ttype==1:
+        pr1,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3= params
+        M2=M3=0
+
+    M2 = int(round(M2))
+    M3 = int(round(M3))
+    M4 = int(round(M4))
+    M5 = int(round(M5))
+    pr2=pr1
+    pr3=pr1
+    pr4=pr1
+    pr5=pr1
+    M1 = int(round(mean_data[0]/pr1 - M2 - M3-M4-M5))
+    if M1 <= 0:
+        return None,None,None, None, None, None, None, None
+    mqc, CV2ei, FF, mqc1, mqc2, mqc3,mqc4,mqc5 = model(pr1,pr2,pr3,pr4,pr5,
+                                M2,M3,M4,M5,hill,hill3,hill4,hill5,
+                                thr,thr3,thr4,thr5,
+                                prefill1,prefill2,prefill3,prefill4,prefill5,
+                                prefillmin,prefillmin3,prefillmin4,prefillmin5)
+    return mqc, CV2ei, FF, mqc1, mqc2, mqc3,mqc4,mqc5
+
+def mle(params):
+    params = np.array(params)
+    params[1] = round(params[1])
+    params[2] = round(params[2])
+    if ttype==4:
+        params[3]=round(params[3])
+    if ttype==5:
+        params[3]=round(params[3])
+        params[4]=round(params[4])
+    mqc,CV2,FF, mqc1, mqc2, mqc3, mqc4,mqc5 = get_model(params)
+    if mqc is None:
+        return np.inf
+    if np.any(mqc<=0) or np.any(CV2<=0):
+        return np.inf
+    shape = 1/CV2
+    scale = mqc*CV2
+    if np.any(shape<=0) or np.any(scale<=0):
+        return np.inf
+    loglik = gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+    return -np.sum(loglik)
+
+# load data
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+file1 = '100Hz_1s_20_repeats_P11.xlsx'
+file2 = '100Hz_1s_20_repeats_P38.xlsx'
+excel1 = pd.read_excel(file1, sheet_name=None, header=None)
+excel2 = pd.read_excel(file2, sheet_name=None, header=None)
+data1 = np.array([df.to_numpy()[1:, 1:] for df in excel1.values()])
+data2 = np.array([df.to_numpy()[1:, 1:] for df in excel2.values()])
+data = np.array([data1, data2],dtype=object)
+fnames = ['100Hz_1s_20_repeats_P11', '100Hz_1s_20_repeats_P38']
+
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
+
+# parameters   
+fnum=1 #file number
+dnum=2 #dataset number
+# cell 34789 
+# dnum 23678
+
+nstim=100
+navgs = 10000
+CVq=0.2 # from PLOSCB
+
+obs = np.asarray(data[fnum][dnum],dtype=float)
+nstim = obs.shape[0]
+mean_data = np.mean(obs,axis=1)
+
+def opt(ttype):
+    
+    if ttype==5:
+        bounds = [
+            [0.01,1],    # pr1
+            [0,100],     # M2
+            [0,100],     # M3
+            [0,100],     # M4
+            [0,100],     # M5
+            [0.01,10],   # hill
+            [0.01,10],   # hill3
+            [0.01,10],   # hill4
+            [0.01,10],   # hill5
+            [0.01,20],   # thr
+            [0.01,20],   # thr3
+            [0.01,20],   # thr4
+            [0.01,20],   # thr5
+            [0,1],       # prefill1
+            [0,1],       # prefill2
+            [0,1],       # prefill3
+            [0,1],       # prefill4
+            [0,1],       # prefill5
+            [0,1],       # prefillmin
+            [0,1],       # prefillmin3
+            [0,1],       # prefillmin4
+            [0,1],       # prefillmin5
+        ]
+        
+    if ttype==4:
+        bounds = [
+            [0.01,1],    # pr1
+            [0,100],     # M2
+            [0,100],     # M3
+            [0,100],     # M4
+            [0.01,10],   # hill
+            [0.01,10],   # hill3
+            [0.01,10],   # hill4
+            [0.01,20],   # thr
+            [0.01,20],   # thr3
+            [0.01,20],   # thr4
+            [0,1],       # prefill1
+            [0,1],       # prefill2
+            [0,1],       # prefill3
+            [0,1],       # prefill4
+            [0,1],       # prefillmin
+            [0,1],       # prefillmin3
+            [0,1],       # prefillmin4
+        ] 
+    
+    if ttype==3:
+        bounds = [
+            [0.01,1],    # pr1
+            [0,100],     # M2
+            [0,100],     # M3
+            [0.01,10],   # hill
+            [0.01,10],   # hill3
+            [0.01,20],   # thr
+            [0.01,20],   # thr3
+            [0,1],       # prefill1
+            [0,1],       # prefill2
+            [0,1],       # prefill3
+            [0,1],       # prefillmin
+            [0,1],       # prefillmin3
+        ]
+    if ttype==2:
+        bounds = [
+            [0.01,1],    # pr1
+            [0,100],     # M2
+            [0.01,10],   # hill
+            [0.01,10],   # hill3
+            [0.01,20],   # thr
+            [0.01,20],   # thr3
+            [0,1],       # prefill1
+            [0,1],       # prefill2
+            [0,1],       # prefill3
+            [0,1],       # prefillmin
+            [0,1],       # prefillmin3
+        ]
+    if ttype==1:
+        bounds = [
+            [0.01,1],    # pr1
+            [0.01,10],   # hill
+            [0.01,10],   # hill3
+            [0.01,20],   # thr
+            [0.01,20],   # thr3
+            [0,1],       # prefill1
+            [0,1],       # prefill2
+            [0,1],       # prefill3
+            [0,1],       # prefillmin
+            [0,1],       # prefillmin3
+        ]
+
+    result = differential_evolution(
+        mle,
+        bounds,
+        maxiter=1000,
+        popsize=20,
+        tol=1e-9,
+        polish=True,
+        workers=1,
+        updating='immediate'
+    )
+
+
+    if ttype==5:
+        names = ['pr1','M2','M3','M4','M5','hill','hill3','hill4','hill5',
+                 'thr','thr3','thr4','thr5','prefill1','prefill2',
+                 'prefill3','prefill4','prefill5','prefillmin','prefillmin3',
+                 'prefillmin4','prefillmin5']
+    if ttype==4:
+        names = ['pr1','M2','M3','M4','hill','hill3','hill4',
+                 'thr','thr3','thr4','prefill1','prefill2',
+                 'prefill3','prefill4','prefillmin','prefillmin3',
+                 'prefillmin4']
+    if ttype==3:
+        names = ['pr1','M2','M3','hill','hill3','thr','thr3',
+                 'prefill1','prefill2','prefill3','prefillmin','prefillmin3']
+    if ttype==2:
+        names = ['pr1','M2','hill','hill3','thr','thr3',
+                 'prefill1','prefill2','prefill3','prefillmin','prefillmin3']
+    if ttype==1:
+        names = ['pr1','hill','hill3','thr','thr3',
+                 'prefill1','prefill2','prefill3','prefillmin','prefillmin3']
+    print(result)
+    
+    print("\nBest parameters:")
+    for name,value in zip(names,result.x):
+        print(f'{name} = {value}')
+    
+    print("\nMinimum negative log likelihood:")
+    print(result.fun)
+    
+    
+    if ttype==5:
+        pr1,M2,M3,M4,M5,hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,\
+            prefill2,prefill3,prefill4,prefill5,prefillmin,prefillmin3,\
+                prefillmin4,prefillmin5= result.x
+    if ttype==4:
+        pr1,M2,M3,M4,hill,hill3,hill4,thr3,thr4,prefill1,\
+            prefill2,prefill3,prefill4,prefillmin,prefillmin3,\
+                prefillmin4= result.x
+    if ttype==3:
+        pr1,M2,M3,hill,hill3,thr,thr3,prefill1,\
+            prefill2,prefill3,prefillmin,prefillmin3= result.x
+    if ttype==2:
+        pr1,M2,hill,hill3,thr,thr3,prefill1,\
+            prefill2,prefill3,prefillmin,prefillmin3= result.x
+    if ttype==1:
+        pr1,hill,hill3,thr,thr3,prefill1,\
+            prefill2,prefill3,prefillmin,prefillmin3= result.x
+            
+    pr2=pr1
+    pr3=pr1
+    pr4=pr1
+    pr5=pr1
+    
+    if ttype==1:
+        M2=0
+        M3=0
+        M4=0
+        M5=0
+    if ttype==2:
+        M3=0
+        M4=0
+        M5=0
+    if ttype==3:
+        M4=0
+        M5=0
+    if ttype==4:
+        M5=0
+    M2=int(np.round(M2))
+    M3=int(np.round(M3))
+    M4=int(np.round(M4))
+    M5=int(np.round(M5))
+    M1=int(np.mean(data[fnum][dnum], axis=1)[0]/pr1-M2-M3-M4-M5)
+
+    n1=M1
+    n2=M2
+    n3=M3
+    n4=M4
+    n5=M5
+
+    k=len(bounds)
+    # AIC = 2*k - 2*ln(L)
+    # L = Likelihood
+    # results.fun = -ln(L)
+    # AIC = 2*k + 2*results.fun
+    AIC=2*k+2*result.fun
+
+    return n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3, M4,M5,\
+        hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,\
+        prefill2,prefill3,prefill4,prefill5,prefillmin,prefillmin3,\
+            prefillmin4,prefillmin5,AIC
+            
+            
+            
+ttype=5
+n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5, hill,hill3,hill4,hill5,\
+    thr,thr3,thr4,thr5,prefill1,prefill2,prefill3,prefill4,prefill5,\
+        prefillmin,prefillmin3,prefillmin4,prefillmin5,AIC5 = opt(ttype)
+params5=[n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5,
+         hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,
+         prefill2,prefill3,prefill4,prefill5,prefillmin,prefillmin3,
+         prefillmin4,prefillmin5,AIC5]
+mqc5,CV2ei5,ffei5,mqc51,mqc52,mqc53,mqc54,mqc55=model(pr1,pr2,pr3,pr4,pr5,M2,M3,M4,M5,
+                                    hill,hill3,hill4,hill5,
+                                    thr,thr3,thr4,thr5,
+                                    prefill1,prefill2,prefill3,prefill4,prefill5,
+                                    prefillmin,prefillmin3,prefillmin4,prefillmin5)
+
+ttype=4
+n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5, hill,hill3,hill4,hill5,\
+    thr,thr3,thr4,thr5,prefill1,prefill2,prefill3,prefill4,prefill5,\
+        prefillmin,prefillmin3,prefillmin4,prefillmin5,AIC4 = opt(ttype)
+params4=[n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5,
+         hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,
+         prefill2,prefill3,prefill4,prefill5,prefillmin,prefillmin3,
+         prefillmin4,prefillmin5,AIC4]
+mqc4,CV2ei4,ffei4,mqc41,mqc42,mqc43,mqc44,mqc45=model(pr1,pr2,pr3,pr4,pr5,M2,M3,M4,0,
+                                    hill,hill3,hill4,hill5,
+                                    thr,thr3,thr4,thr5,
+                                    prefill1,prefill2,prefill3,prefill4,prefill5,
+                                    prefillmin,prefillmin3,prefillmin4,prefillmin5)
+
+ttype=3
+n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5, hill,hill3,hill4,hill5,\
+    thr,thr3,thr4,thr5,prefill1,prefill2,prefill3,prefill4,prefill5,\
+        prefillmin,prefillmin3,prefillmin4,prefillmin5,AIC3 = opt(ttype)
+params3=[n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5,
+         hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,
+         prefill2,prefill3,prefill4,prefill5,prefillmin,prefillmin3,
+         prefillmin4,prefillmin5,AIC3]
+mqc3,CV2ei3,ffei3,mqc31,mqc32,mqc33,mqc34,mqc35=model(pr1,pr2,pr3,pr4,pr5,M2,M3,0,0,
+                                    hill,hill3,hill4,hill5,
+                                    thr,thr3,thr4,thr5,
+                                    prefill1,prefill2,prefill3,prefill4,prefill5,
+                                    prefillmin,prefillmin3,prefillmin4,prefillmin5)
+ttype=2
+n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5, hill,hill3,hill4,hill5,\
+    thr,thr3,thr4,thr5,prefill1,prefill2,prefill3,prefill4,prefill5,\
+        prefillmin,prefillmin3,prefillmin4,prefillmin5,AIC2 = opt(ttype)
+params2=[n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5,
+         hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,
+         prefill2,prefill3,prefill4,prefill5,prefillmin,prefillmin3,
+         prefillmin4,prefillmin5,AIC2]
+mqc2,CV2ei2,ffei2,mqc21,mqc22,mqc23,mqc24,mqc25=model(pr1,pr2,pr3,pr4,pr5,M2,0,0,0,
+                                    hill,hill3,hill4,hill5,
+                                    thr,thr3,thr4,thr5,
+                                    prefill1,prefill2,prefill3,prefill4,prefill5,
+                                    prefillmin,prefillmin3,prefillmin4,prefillmin5)
+ttype=1
+n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5, hill,hill3,hill4,hill5,\
+    thr,thr3,thr4,thr5,prefill1,prefill2,prefill3,prefill4,prefill5,\
+        prefillmin,prefillmin3,prefillmin4,prefillmin5,AIC1 = opt(ttype)
+params1=[n1,n2,n3,n4,n5,pr1, pr2, pr3,pr4,pr5, M1, M2, M3,M4,M5,
+         hill,hill3,hill4,hill5,thr,thr3,thr4,thr5,prefill1,
+         prefill2,prefill3,prefill4,prefill5,prefillmin,prefillmin3,
+         prefillmin4,prefillmin5,AIC1]
+mqc1,CV2ei1,ffei1,mqc11,mqc12,mqc13,mqc14,mqc15=model(pr1,pr2,pr3,pr4,pr5,0,0,0,0,
+                                    hill,hill3,hill4,hill5,
+                                    thr,thr3,thr4,thr5,
+                                    prefill1,prefill2,prefill3,prefill4,prefill5,
+                                    prefillmin,prefillmin3,prefillmin4,prefillmin5)
+# =============================================================================
+# #%%
+# np.save('bm1.npy',bm1)
+# np.save('bm2.npy',bm2)
+# np.save('bm3.npy',bm3)
+# 
+# np.save('ff1.npy',ff1)
+# np.save('ff2.npy',ff2)
+# np.save('ff3.npy',ff3)
+# 
+# np.save('mcq1.npy',mqc1)
+# np.save('mcq2.npy',mqc2)
+# np.save('mcq3.npy',mqc3)
+# 
+# np.save('CV2ei1.npy',CV2ei1)
+# np.save('CV2ei2.npy',CV2ei2)
+# np.save('CV2ei3.npy',CV2ei3)
+# 
+# np.save('ffei1.npy',ffei1)
+# np.save('ffei2.npy',ffei2)
+# np.save('ffei3.npy',ffei3)
+# =============================================================================
+
+# =============================================================================
+# #%% Plotting section
+# =============================================================================
+names = ['pr1','pr2', 'pr3','pr4','pr5', 'M1', 'M2','M3','M4','M5', 
+         'hill','hill3','hill4','hill5','thr','thr3','tyr4','thr5',
+         'prefill1','prefill2','prefill3','prefill4','prefill5',
+         'prefillmin','prefillmin3','prefillmin4','prefillmin5']
+pnames=['5 pools', '4 pools','3 pools','2 pools', '1 pool']
+for i,paramsi in enumerate([params5, params4, params3, params2, params1]):
+    print(pnames[i])
+    for n,v in zip(names,paramsi[3:]):
+        print('{}={:.3g}'.format(n,v))
+    print('CVq={}'.format(CVq))
+    print('\n')
+    
+fs=15
+# plt.figure(figsize=(12,7))
+plt.figure(figsize=(6,7))
+# mean QC plot
+plt.subplot(2,1,1)
+plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
+tplot=np.linspace(0,nstim/100, len(bm1))
+
+# =============================================================================
+# plt.plot(tplot,bm3,marker='o',markersize=5, label='sim3',color='tab:red',
+#          markerfacecolor='none',markeredgecolor='tab:orange')
+# plt.plot(tplot,bm2,marker='o',markersize=5, label='sim2',color='tab:green',
+#          markerfacecolor='none',markeredgecolor='tab:orange')
+# plt.plot(tplot,bm1,marker='o',markersize=5, label='sim1',color='tab:orange',
+#          markerfacecolor='none',markeredgecolor='tab:orange')
+# =============================================================================
+
+plt.plot(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',
+         markersize=5,markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.5, color='k')
+
+# plt.scatter(tplot,np.mean(data[fnum][dnum],axis=1),label='data',marker='o',color='tab:blue')
+plt.plot(tplot,mqc5,label='5 pool model, AIC={}'.format(np.around(AIC5,3)),color='tab:purple',marker='o',markersize=2)
+plt.plot(tplot,mqc4,label='4 pool model, AIC={}'.format(np.around(AIC4,3)),color='tab:brown',marker='o',markersize=2)
+plt.plot(tplot,mqc3,label='3 pool model, AIC={}'.format(np.around(AIC3,3)),color='tab:red',marker='o',markersize=2)
+plt.plot(tplot,mqc2,label='2 pool model, AIC = {}'.format(np.around(AIC2,3)),color='tab:green',marker='o',markersize=2)
+plt.plot(tplot,mqc1,label='1 pool model, AIC = {}'.format(np.around(AIC1,3)),color='tab:orange',marker='o',markersize=2)
+
+#errorbars
+y=np.asarray(means[fnum][dnum],dtype=float)
+lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='k',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.ylabel('Mean quantal content', fontsize=fs)
+plt.xticks([])
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+
+# fano factor QC plot
+plt.subplot(2,1,2)
+
+ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
+plt.plot(tplot,np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1),
+         label='data',marker='o',markersize=3,
+         markerfacecolor='tab:blue',markeredgecolor='tab:blue',
+         linewidth=0.2, color='tab:blue')
+# plt.scatter(tplot,ffdata,label='data',marker='o',color='tab:blue')
+plt.plot(tplot,ffei3,label='3 pool model',color='tab:red',marker='o',markersize=3)
+plt.plot(tplot,ffei2,label='2 pool model',color='tab:green',marker='o',markersize=3)
+plt.plot(tplot,ffei1,label='1 pool model',color='tab:orange',marker='o',markersize=3)
+
+# =============================================================================
+# plt.plot(tplot,ff3,marker='o',markersize=5, label='sim3',
+#          markerfacecolor='none',color='tab:red')
+# plt.plot(tplot,ff2,marker='o',markersize=5, label='sim2',
+#          markerfacecolor='none',color='tab:green')
+# plt.plot(tplot,ff1,marker='o',markersize=5, label='sim1',
+#          markerfacecolor='none', color='tab:orange')
+# =============================================================================
+
+#errorbars
+y=ffdata
+lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+# yerr = np.maximum(0, np.vstack((y - lower, upper - y)))
+eb=plt.errorbar(tplot,y,yerr=yerr,fmt='none',ecolor='tab:blue',capsize=2)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.xlabel('Time', fontsize=fs)
+plt.ylabel('Fano factor', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+plt.legend(loc='upper right', fontsize=fs)
+plt.tight_layout()
+plt.show()
+
+#%% optimized code
+
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+file1='100Hz_1s_20_repeats_P11.xlsx'
+file2='100Hz_1s_20_repeats_P38.xlsx'
+
+excel1=pd.read_excel(file1,sheet_name=None,header=None)
+excel2=pd.read_excel(file2,sheet_name=None,header=None)
+
+data1=np.array([df.to_numpy()[1:,1:] for df in excel1.values()])
+data2=np.array([df.to_numpy()[1:,1:] for df in excel2.values()])
+
+data=np.array([data1,data2],dtype=object)
+
+fnames=['100Hz_1s_20_repeats_P11','100Hz_1s_20_repeats_P38']
+
+mbounds=np.load('mbounds.npy',allow_pickle=True)
+ffbounds=np.load('ffbounds.npy',allow_pickle=True)
+means=np.load('means.npy',allow_pickle=True)
+ffs=np.load('ffs.npy',allow_pickle=True)
+
+fnum=1
+dnum=2
+
+obs=np.asarray(data[fnum][dnum],dtype=float)
+
+nstim=obs.shape[0]
+
+mean_data=np.mean(obs,axis=1)
+
+navgs=10000
+CVq=0.2
+fs=15
+
+bounds_pool={
+    "pr":(0.01,1),
+    "M":(0,100),
+    "hill":(0.01,10),
+    "thr":(0.01,20),
+    "prefill":(0,1),
+    "prefill_min":(0,1)
+}
+
+model_config={
+    1:{"npools":1},
+    2:{"npools":2},
+    3:{"npools":3},
+    4:{"npools":4},
+    5:{"npools":5}
+}
+
+def p_dynamic(i,prefill,prefill_min,thr,hill):
+    return prefill_min+(prefill-prefill_min)/(1+(i/thr)**hill)
+
+def update_pool_probability(p_previous,pr,refill):
+    return p_previous*(1-pr)+(1-p_previous*(1-pr))*refill
+
+def model(params):
+    npools=len(params["M"])
+    pool_probability=[]
+    pool_mqc=[]
+    for j in range(npools):
+        p=np.ones(nstim)
+        for i in range(1,nstim):
+            refill=p_dynamic(i-1,params["prefill"][j],params["prefill_min"][j],params["thr"][j],params["hill"][j])
+            p[i]=update_pool_probability(p[i-1],params["pr"][j],refill)
+        pool_probability.append(p)
+        pool_mqc.append(params["M"][j]*p*params["pr"][j])
+    mqc=np.sum(pool_mqc,axis=0)
+    vqc=np.sum([M*p*pr*(1-p*pr) for M,p,pr in zip(params["M"],pool_probability,params["pr"])],axis=0)
+    vei=mqc*CVq**2+vqc
+    CV2=vei/(mqc**2)
+    FF=vei/mqc
+    return {"mqc":mqc,"CV2":CV2,"FF":FF,"pool_mqc":pool_mqc,"pool_probability":pool_probability}
+
+def create_param_names(npools):
+    names=['pr1']
+    for i in range(2,npools+1):
+        names.append(f'M{i}')
+    for i in range(npools):
+        names.append(f'hill{i+1}')
+    for i in range(npools):
+        names.append(f'thr{i+1}')
+    for i in range(npools):
+        names.append(f'prefill{i+1}')
+    for i in range(npools):
+        names.append(f'prefillmin{i+1}')
+    return names
+
+def create_bounds(npools):
+    bounds=[bounds_pool["pr"]]
+    for i in range(1,npools):
+        bounds.append(bounds_pool["M"])
+    for i in range(npools):
+        bounds.append(bounds_pool["hill"])
+    for i in range(npools):
+        bounds.append(bounds_pool["thr"])
+    for i in range(npools):
+        bounds.append(bounds_pool["prefill"])
+    for i in range(npools):
+        bounds.append(bounds_pool["prefill_min"])
+    return bounds
+
+def unpack_params(x,npools):
+    params={}
+    params["pr"]=[x[0]]*npools
+    index=1
+    M=[0]*npools
+    for i in range(1,npools):
+        M[i]=int(round(x[index]))
+        index+=1
+    M[0]=int(round(mean_data[0]/params["pr"][0]-np.sum(M[1:])))
+    params["M"]=M
+    params["hill"]=list(x[index:index+npools])
+    index+=npools
+    params["thr"]=list(x[index:index+npools])
+    index+=npools
+    params["prefill"]=list(x[index:index+npools])
+    index+=npools
+    params["prefill_min"]=list(x[index:index+npools])
+    return params
+
+def mle(x,npools):
+    params=unpack_params(x,npools)
+    if params["M"][0]<=0:
+        return np.inf
+    result=model(params)
+    mqc=result["mqc"]
+    CV2=result["CV2"]
+    if np.any(mqc<=0) or np.any(CV2<=0):
+        return np.inf
+    shape=1/CV2
+    scale=mqc*CV2
+    if np.any(~np.isfinite(shape)) or np.any(~np.isfinite(scale)):
+        return np.inf
+    loglik=gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+    return -np.sum(loglik)
+
+def opt(npools):
+    bounds=create_bounds(npools)
+    names=create_param_names(npools)
+    result=differential_evolution(
+        lambda x:mle(x,npools),
+        bounds,
+        maxiter=1000,
+        popsize=20,
+        tol=1e-9,
+        polish=True,
+        workers=1,
+        updating='immediate'
+    )
+    params=unpack_params(result.x,npools)
+    AIC=2*len(bounds)+2*result.fun
+    print(f'{npools} pool model')
+    for name,value in zip(names,result.x):
+        print(f'{name}={value}')
+    print(f'M1={params["M"][0]}')
+    print(f'M={params["M"]}')
+    print(f'AIC={AIC}')
+    return {
+        "params":params,
+        "result":result,
+        "AIC":AIC,
+        "model":model(params)
+    }
+
+results={}
+for npools in range(1,6):
+    results[npools]=opt(npools)
+
+mqc1=results[1]["model"]["mqc"]
+mqc2=results[2]["model"]["mqc"]
+mqc3=results[3]["model"]["mqc"]
+mqc4=results[4]["model"]["mqc"]
+mqc5=results[5]["model"]["mqc"]
+
+ffei1=results[1]["model"]["FF"]
+ffei2=results[2]["model"]["FF"]
+ffei3=results[3]["model"]["FF"]
+ffei4=results[4]["model"]["FF"]
+ffei5=results[5]["model"]["FF"]
+
+CV2ei1=results[1]["model"]["CV2"]
+CV2ei2=results[2]["model"]["CV2"]
+CV2ei3=results[3]["model"]["CV2"]
+CV2ei4=results[4]["model"]["CV2"]
+CV2ei5=results[5]["model"]["CV2"]
+
+params1=results[1]["params"]
+params2=results[2]["params"]
+params3=results[3]["params"]
+params4=results[4]["params"]
+params5=results[5]["params"]
+
+AIC1=results[1]["AIC"]
+AIC2=results[2]["AIC"]
+AIC3=results[3]["AIC"]
+AIC4=results[4]["AIC"]
+AIC5=results[5]["AIC"]
+
+names=['pr','M','hill','thr','prefill','prefill_min']
+for npools in range(1,6):
+    print(f'{npools} pool model')
+    params=results[npools]["params"]
+    for name,value in params.items():
+        print(f'{name}={value}')
+    print(f'CVq={CVq}')
+    print()
+
+plt.figure(figsize=(6,7))
+
+tplot=np.linspace(0,nstim/100,nstim)
+
+plt.subplot(2,1,1)
+
+plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
+
+data_mean=np.mean(data[fnum][dnum],axis=1)
+
+plt.plot(
+    tplot,
+    data_mean,
+    label='data',
+    marker='o',
+    markersize=5,
+    markerfacecolor='tab:blue',
+    markeredgecolor='tab:blue',
+    linewidth=0.5,
+    color='k'
+)
+
+colors=['tab:orange','tab:green','tab:red','tab:purple','tab:brown']
+
+for i in range(1,6):
+    plt.plot(
+        tplot,
+        results[i]["model"]["mqc"],
+        label=f'{i} pool model, AIC={results[i]["AIC"]:.3f}',
+        color=colors[i-1],
+        marker='o',
+        markersize=2
+    )
+
+y=np.asarray(means[fnum][dnum],dtype=float)
+lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+
+eb=plt.errorbar(
+    tplot,
+    y,
+    yerr=yerr,
+    fmt='none',
+    ecolor='k',
+    capsize=2
+)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.ylabel('Mean quantal content',fontsize=fs)
+plt.xticks([])
+plt.tick_params(axis='both',labelsize=fs)
+plt.legend(loc='upper right',fontsize=fs)
+
+plt.subplot(2,1,2)
+
+ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
+
+plt.plot(
+    tplot,
+    ffdata,
+    label='data',
+    marker='o',
+    markersize=3,
+    markerfacecolor='tab:blue',
+    markeredgecolor='tab:blue',
+    linewidth=0.2,
+    color='tab:blue'
+)
+
+for i in range(1,6):
+    plt.plot(
+        tplot,
+        results[i]["model"]["FF"],
+        label=f'{i} pool model',
+        color=colors[i-1],
+        marker='o',
+        markersize=3
+    )
+
+y=ffdata
+lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
+upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
+yerr=np.vstack((y-lower,upper-y))
+
+eb=plt.errorbar(
+    tplot,
+    y,
+    yerr=yerr,
+    fmt='none',
+    ecolor='tab:blue',
+    capsize=2
+)
+
+for bar in eb[2]:
+    bar.set_alpha(0.25)
+
+for cap in eb[1]:
+    cap.set_alpha(0.25)
+
+plt.xlabel('Time',fontsize=fs)
+plt.ylabel('Fano factor',fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
+plt.legend(loc='upper right',fontsize=fs)
 
 plt.tight_layout()
 plt.show()
