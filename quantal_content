@@ -7881,7 +7881,6 @@ fig,ax=plt.subplots(1,3,figsize=(15,5))
 
 colors=['tab:orange','tab:green','tab:red']
 
-
 # One pool model
 p1=p1d(i,
        prefill1=0.822,
@@ -7916,7 +7915,6 @@ ax[1].set_ylim(-0.05,1.05)
 ax[1].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
 ax[1].legend(fontsize=fs)
 
-
 # Three pool model
 p1=p1d(i,
        prefill1=1,
@@ -7941,6 +7939,94 @@ ax[2].set_ylabel('Refilling probability',fontsize=fs)
 ax[2].set_ylim(-0.05,1.05)
 ax[2].tick_params(axis='both',which='major',labelsize=fs,length=6,width=1)
 ax[2].legend(fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+# probability of refilling
+
+fs=15
+lw=5
+
+fig,ax=plt.subplots(1,4,figsize=(20,5))
+
+colors=['tab:orange','tab:green','tab:red','tab:purple']
+
+titles=['One Pool Model','Two Pool Model','Three Pool Model','Four Pool Model']
+
+for k,npools in enumerate(range(1,5)):
+    probabilities=results[npools]["model"]["pool_probability"]
+
+    for j,p in enumerate(probabilities):
+        ax[k].plot(
+            tplot,
+            p,
+            color=colors[j],
+            linewidth=lw,
+            label=f'Pool {j+1}'
+        )
+
+    ax[k].set_title(titles[k],fontsize=fs)
+    ax[k].set_xlabel('Time (s)',fontsize=fs)
+    ax[k].set_ylabel('Docking probability',fontsize=fs)
+    ax[k].set_ylim(-0.05,1.05)
+    ax[k].tick_params(
+        axis='both',
+        which='major',
+        labelsize=fs,
+        length=6,
+        width=1
+    )
+    ax[k].legend(fontsize=fs)
+
+plt.tight_layout()
+plt.show()
+
+
+# mean qc
+fs=15
+lw=5
+
+fig,ax=plt.subplots(1,4,figsize=(20,5))
+
+colors=['tab:orange','tab:green','tab:red','tab:purple']
+
+titles=['One Pool Model','Two Pool Model','Three Pool Model','Four Pool Model']
+
+for k,npools in enumerate(range(1,5)):
+    pool_mqc=results[npools]["model"]["pool_mqc"]
+
+    ymax=1.1*np.max(np.sum(pool_mqc,axis=0))
+
+    for j,mqc_pool in enumerate(pool_mqc):
+        ax[k].plot(
+            tplot,
+            mqc_pool,
+            color=colors[j],
+            linewidth=lw,
+            label=f'Pool {j+1}'
+        )
+
+    ax[k].plot(
+        tplot,
+        np.sum(pool_mqc,axis=0),
+        color='k',
+        linewidth=lw,
+        label='Sum of pools'
+    )
+
+    ax[k].set_title(titles[k],fontsize=fs)
+    ax[k].set_xlabel('Time (s)',fontsize=fs)
+    ax[k].set_ylabel('Mean quantal content',fontsize=fs)
+    ax[k].set_ylim(0,ymax)
+    ax[k].tick_params(
+        axis='both',
+        which='major',
+        labelsize=fs,
+        length=6,
+        width=1
+    )
+    ax[k].legend(fontsize=fs)
 
 plt.tight_layout()
 plt.show()
@@ -8722,15 +8808,17 @@ def get_model(params):
     if ttype==4:
         pr1,M2,M3,M4,hill,hill3,hill4,thr,thr3,thr4,prefill1,prefill2,prefill3,prefill4,\
             prefillmin,prefillmin3,prefillmin4= params
+        M5=0
     if ttype==3:
         pr1,M2,M3,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3= params
+        M4=M5=0
     if ttype==2:
         pr1,M2,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3= params
-        M3=0
+        M3=M4=M5=0
     if ttype==1:
         pr1,hill,hill3,thr,thr3,prefill1,prefill2,prefill3,prefillmin,prefillmin3= params
-        M2=M3=0
-
+        M2=M3=M4=M5=0
+    
     M2 = int(round(M2))
     M3 = int(round(M3))
     M4 = int(round(M4))
@@ -8768,7 +8856,7 @@ def mle(params):
     if np.any(shape<=0) or np.any(scale<=0):
         return np.inf
     loglik = gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
-    if np.any(~np.isfinite(loglik)):
+    if np.any(~np.isfinite(loglik)): 
         return np.inf
     return -np.sum(loglik)
 
@@ -9191,48 +9279,33 @@ plt.legend(loc='upper right', fontsize=fs)
 plt.tight_layout()
 plt.show()
 
-#%% optimized code
-
+#%% calculate optimized 1-4 pool models
 import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
 from scipy.optimize import differential_evolution
 from scipy.stats import gamma
-
 os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
-
 file1='100Hz_1s_20_repeats_P11.xlsx'
 file2='100Hz_1s_20_repeats_P38.xlsx'
-
 excel1=pd.read_excel(file1,sheet_name=None,header=None)
 excel2=pd.read_excel(file2,sheet_name=None,header=None)
-
 data1=np.array([df.to_numpy()[1:,1:] for df in excel1.values()])
 data2=np.array([df.to_numpy()[1:,1:] for df in excel2.values()])
-
 data=np.array([data1,data2],dtype=object)
-
 fnames=['100Hz_1s_20_repeats_P11','100Hz_1s_20_repeats_P38']
-
 mbounds=np.load('mbounds.npy',allow_pickle=True)
 ffbounds=np.load('ffbounds.npy',allow_pickle=True)
 means=np.load('means.npy',allow_pickle=True)
 ffs=np.load('ffs.npy',allow_pickle=True)
-
 fnum=1
 dnum=2
-
 obs=np.asarray(data[fnum][dnum],dtype=float)
-
 nstim=obs.shape[0]
-
 mean_data=np.mean(obs,axis=1)
-
-navgs=10000
 CVq=0.2
 fs=15
-
 bounds_pool={
     "pr":(0.01,1),
     "M":(0,100),
@@ -9241,21 +9314,18 @@ bounds_pool={
     "prefill":(0,1),
     "prefill_min":(0,1)
 }
-
+def p_dynamic(i,prefill,prefill_min,thr,hill):
+    return prefill_min+(prefill-prefill_min)/(1+(i/thr)**hill)
+def p_constant(i,prefill):
+    return prefill
+def update_pool_probability(p_previous,pr,refill):
+    return p_previous*(1-pr)+(1-p_previous*(1-pr))*refill
 model_config={
     1:{"npools":1},
     2:{"npools":2},
     3:{"npools":3},
     4:{"npools":4},
-    5:{"npools":5}
 }
-
-def p_dynamic(i,prefill,prefill_min,thr,hill):
-    return prefill_min+(prefill-prefill_min)/(1+(i/thr)**hill)
-
-def update_pool_probability(p_previous,pr,refill):
-    return p_previous*(1-pr)+(1-p_previous*(1-pr))*refill
-
 def model(params):
     npools=len(params["M"])
     pool_probability=[]
@@ -9263,17 +9333,50 @@ def model(params):
     for j in range(npools):
         p=np.ones(nstim)
         for i in range(1,nstim):
-            refill=p_dynamic(i-1,params["prefill"][j],params["prefill_min"][j],params["thr"][j],params["hill"][j])
-            p[i]=update_pool_probability(p[i-1],params["pr"][j],refill)
+            if j==1:
+                refill=p_constant(
+                    i-1,
+                    params["prefill"][j]
+                )
+            else:
+                refill=p_dynamic(
+                    i-1,
+                    params["prefill"][j],
+                    params["prefill_min"][j],
+                    params["thr"][j],
+                    params["hill"][j]
+                )
+            p[i]=update_pool_probability(
+                p[i-1],
+                params["pr"][j],
+                refill
+            )
         pool_probability.append(p)
-        pool_mqc.append(params["M"][j]*p*params["pr"][j])
+        pool_mqc.append(
+            params["M"][j]*p*params["pr"][j]
+        )
     mqc=np.sum(pool_mqc,axis=0)
-    vqc=np.sum([M*p*pr*(1-p*pr) for M,p,pr in zip(params["M"],pool_probability,params["pr"])],axis=0)
+    vqc=np.sum(
+        [
+            M*p*pr*(1-p*pr)
+            for M,p,pr in zip(
+                params["M"],
+                pool_probability,
+                params["pr"]
+            )
+        ],
+        axis=0
+    )
     vei=mqc*CVq**2+vqc
     CV2=vei/(mqc**2)
     FF=vei/mqc
-    return {"mqc":mqc,"CV2":CV2,"FF":FF,"pool_mqc":pool_mqc,"pool_probability":pool_probability}
-
+    return {
+        "mqc":mqc,
+        "CV2":CV2,
+        "FF":FF,
+        "pool_mqc":pool_mqc,
+        "pool_probability":pool_probability
+    }
 def create_param_names(npools):
     names=['pr1']
     for i in range(2,npools+1):
@@ -9287,7 +9390,6 @@ def create_param_names(npools):
     for i in range(npools):
         names.append(f'prefillmin{i+1}')
     return names
-
 def create_bounds(npools):
     bounds=[bounds_pool["pr"]]
     for i in range(1,npools):
@@ -9301,7 +9403,6 @@ def create_bounds(npools):
     for i in range(npools):
         bounds.append(bounds_pool["prefill_min"])
     return bounds
-
 def unpack_params(x,npools):
     params={}
     params["pr"]=[x[0]]*npools
@@ -9320,7 +9421,6 @@ def unpack_params(x,npools):
     index+=npools
     params["prefill_min"]=list(x[index:index+npools])
     return params
-
 def mle(x,npools):
     params=unpack_params(x,npools)
     if params["M"][0]<=0:
@@ -9334,11 +9434,14 @@ def mle(x,npools):
     scale=mqc*CV2
     if np.any(~np.isfinite(shape)) or np.any(~np.isfinite(scale)):
         return np.inf
-    loglik=gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+    loglik=gamma.logpdf(
+        obs,
+        a=shape[:,None],
+        scale=scale[:,None]
+    )
     if np.any(~np.isfinite(loglik)):
         return np.inf
     return -np.sum(loglik)
-
 def opt(npools):
     bounds=create_bounds(npools)
     names=create_param_names(npools)
@@ -9366,60 +9469,58 @@ def opt(npools):
         "AIC":AIC,
         "model":model(params)
     }
-
 results={}
-for npools in range(1,6):
+for npools in range(1,5):
     results[npools]=opt(npools)
-
 mqc1=results[1]["model"]["mqc"]
 mqc2=results[2]["model"]["mqc"]
 mqc3=results[3]["model"]["mqc"]
 mqc4=results[4]["model"]["mqc"]
-mqc5=results[5]["model"]["mqc"]
-
 ffei1=results[1]["model"]["FF"]
 ffei2=results[2]["model"]["FF"]
 ffei3=results[3]["model"]["FF"]
 ffei4=results[4]["model"]["FF"]
-ffei5=results[5]["model"]["FF"]
-
 CV2ei1=results[1]["model"]["CV2"]
 CV2ei2=results[2]["model"]["CV2"]
 CV2ei3=results[3]["model"]["CV2"]
 CV2ei4=results[4]["model"]["CV2"]
-CV2ei5=results[5]["model"]["CV2"]
-
 params1=results[1]["params"]
 params2=results[2]["params"]
 params3=results[3]["params"]
 params4=results[4]["params"]
-params5=results[5]["params"]
-
 AIC1=results[1]["AIC"]
 AIC2=results[2]["AIC"]
 AIC3=results[3]["AIC"]
 AIC4=results[4]["AIC"]
-AIC5=results[5]["AIC"]
-
-names=['pr','M','hill','thr','prefill','prefill_min']
-for npools in range(1,6):
+def fmt(x):
+    x=float(x)
+    if x!=0 and abs(x)<1e-3:
+        return f'{x:.3e}'
+    return f'{x:.3f}'
+for npools in range(1,5):
     print(f'{npools} pool model')
     params=results[npools]["params"]
     for name,value in params.items():
-        print(f'{name}={value}')
-    print(f'CVq={CVq}')
+        if np.isscalar(value):
+            if name=="M":
+                print(f'{name}={int(round(value))}')
+            else:
+                print(f'{name}={fmt(value)}')
+        else:
+            if name=="M":
+                s=', '.join(str(int(round(v))) for v in value)
+            else:
+                s=', '.join(fmt(v) for v in value)
+            print(f'{name}=[{s}]')
+    print(f'AIC={fmt(results[npools]["AIC"])}')
+    print(f'CVq={fmt(CVq)}')
     print()
-
+#%% plotting optimized 1-4 pool models
 plt.figure(figsize=(6,7))
-
 tplot=np.linspace(0,nstim/100,nstim)
-
 plt.subplot(2,1,1)
-
 plt.title('{} cell number {}'.format(fnames[fnum],dnum+1))
-
 data_mean=np.mean(data[fnum][dnum],axis=1)
-
 plt.plot(
     tplot,
     data_mean,
@@ -9431,24 +9532,20 @@ plt.plot(
     linewidth=0.5,
     color='k'
 )
-
-colors=['tab:orange','tab:green','tab:red','tab:purple','tab:brown']
-
-for i in range(1,6):
+colors=['tab:orange','tab:green','tab:red','tab:purple']
+for i in range(1,5):
     plt.plot(
         tplot,
         results[i]["model"]["mqc"],
-        label=f'{i} pool model, AIC={results[i]["AIC"]:.3f}',
+        label=f'{i} pool model, AIC={fmt(results[i]["AIC"])}',
         color=colors[i-1],
         marker='o',
         markersize=2
     )
-
 y=np.asarray(means[fnum][dnum],dtype=float)
 lower=np.asarray([mbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
 upper=np.asarray([mbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
-yerr=np.vstack((y-lower,upper-y))
-
+yerr=np.vstack([y-lower,upper-y])
 eb=plt.errorbar(
     tplot,
     y,
@@ -9457,22 +9554,16 @@ eb=plt.errorbar(
     ecolor='k',
     capsize=2
 )
-
 for bar in eb[2]:
     bar.set_alpha(0.25)
-
 for cap in eb[1]:
     cap.set_alpha(0.25)
-
 plt.ylabel('Mean quantal content',fontsize=fs)
 plt.xticks([])
 plt.tick_params(axis='both',labelsize=fs)
 plt.legend(loc='upper right',fontsize=fs)
-
 plt.subplot(2,1,2)
-
 ffdata=np.var(data[fnum][dnum],axis=1)/np.mean(data[fnum][dnum],axis=1)
-
 plt.plot(
     tplot,
     ffdata,
@@ -9484,8 +9575,7 @@ plt.plot(
     linewidth=0.2,
     color='tab:blue'
 )
-
-for i in range(1,6):
+for i in range(1,5):
     plt.plot(
         tplot,
         results[i]["model"]["FF"],
@@ -9494,12 +9584,10 @@ for i in range(1,6):
         marker='o',
         markersize=3
     )
-
 y=ffdata
 lower=np.asarray([ffbounds[fnum][dnum][i][0] for i in range(len(y))],dtype=float)
 upper=np.asarray([ffbounds[fnum][dnum][i][1] for i in range(len(y))],dtype=float)
-yerr=np.vstack((y-lower,upper-y))
-
+yerr=np.vstack([y-lower,upper-y])
 eb=plt.errorbar(
     tplot,
     y,
@@ -9508,19 +9596,233 @@ eb=plt.errorbar(
     ecolor='tab:blue',
     capsize=2
 )
-
 for bar in eb[2]:
     bar.set_alpha(0.25)
-
 for cap in eb[1]:
     cap.set_alpha(0.25)
-
 plt.xlabel('Time',fontsize=fs)
 plt.ylabel('Fano factor',fontsize=fs)
 plt.tick_params(axis='both',labelsize=fs)
 plt.legend(loc='upper right',fontsize=fs)
+plt.tight_layout()
+plt.show()
+
+# =============================================================================
+# #%% Plot fitted refill probabilities and mean QC (2x3)
+# =============================================================================
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+fs = 15
+lw = 5
+
+colors = ['tab:orange','tab:green','tab:red','tab:purple']
+
+titles = [
+    'One Pool Model',
+    'Two Pool Model',
+    'Three Pool Model'
+]
+
+tplot = np.arange(nstim)
+
+fig, ax = plt.subplots(2,3,figsize=(18,10))
+
+fig.suptitle(
+    f'{fnames[fnum]} cell number {dnum+1}',
+    fontsize=fs+2
+)
+
+for k,npools in enumerate(range(1,4)):
+
+    params = results[npools]["params"]
+
+    for j in range(npools):
+
+        if j == 1:
+            pd = np.ones(nstim) * params["prefill"][j]
+
+        else:
+            pd = (
+                params["prefill_min"][j]
+                +
+                (params["prefill"][j]-params["prefill_min"][j])
+                /
+                (1+(tplot/params["thr"][j])**params["hill"][j])
+            )
+
+        ax[0,k].plot(
+            tplot,
+            pd,
+            color=colors[j],
+            linewidth=lw,
+            label=f'Pool {j+1}'
+        )
+
+    ax[0,k].set_title(titles[k],fontsize=fs)
+    ax[0,k].set_ylabel('Refill probability',fontsize=fs)
+    ax[0,k].set_ylim(-0.05,1.05)
+    ax[0,k].set_xticks(np.arange(0,nstim,20))
+    ax[0,k].tick_params(axis='both',labelsize=fs,length=6,width=1)
+    ax[0,k].grid(alpha=0.4)
+
+    if k == 0:
+        ax[0,k].legend(fontsize=fs)
+
+
+for k,npools in enumerate(range(1,4)):
+
+    pool_mqc = results[npools]["model"]["pool_mqc"]
+
+    ymax = 1.1*np.max(np.sum(pool_mqc,axis=0))
+
+    for j,mqc_pool in enumerate(pool_mqc):
+
+        ax[1,k].plot(
+            tplot,
+            mqc_pool,
+            color=colors[j],
+            linewidth=lw,
+            label=f'Pool {j+1}'
+        )
+
+    ax[1,k].plot(
+        tplot,
+        np.sum(pool_mqc,axis=0),
+        color='k',
+        linewidth=lw,
+        label='Sum of pools'
+    )
+
+    ax[1,k].set_ylabel(
+        'Mean quantal content',
+        fontsize=fs
+    )
+
+    ax[1,k].set_xlabel(
+        'AP number',
+        fontsize=fs
+    )
+
+    ax[1,k].set_ylim(0,ymax)
+    ax[1,k].set_xticks(np.arange(0,nstim,20))
+    ax[1,k].tick_params(axis='both',labelsize=fs,length=6,width=1)
+    ax[1,k].grid(alpha=0.4)
+
+    if k == 0:
+        ax[1,k].legend(fontsize=fs)
 
 plt.tight_layout()
+plt.show()
+#%% Plot fitted pool probabilities and mean QC (3x2)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+fs = 15
+lw = 5
+
+colors = ['tab:orange','tab:green','tab:red']
+
+titles = [
+    'One Pool Model',
+    'Two Pool Model',
+    'Three Pool Model'
+]
+
+tplot = np.arange(nstim)
+
+fig,ax = plt.subplots(3,2,figsize=(12,15))
+
+fig.suptitle(
+    f'{fnames[fnum]} cell number {dnum+1}',
+    fontsize=fs+2
+)
+
+# ================= Probability of refilling =================
+
+for k,npools in enumerate(range(1,4)):
+
+    probabilities = results[npools]["model"]["pool_probability"]
+
+    for j,p in enumerate(probabilities):
+
+        if j == 1:
+            p_plot = np.ones_like(tplot)*p[0]
+        else:
+            p_plot = p
+
+        ax[k,0].plot(
+            tplot,
+            p_plot,
+            color=colors[j],
+            linewidth=lw,
+            label=f'Pool {j+1}'
+        )
+
+    ax[k,0].set_title(titles[k],fontsize=fs)
+    ax[k,0].set_ylabel('Docking probability',fontsize=fs)
+    ax[k,0].set_ylim(-0.05,1.05)
+    ax[k,0].grid(alpha=0.4)
+
+    ax[k,0].tick_params(
+        axis='both',
+        labelsize=fs,
+        length=6,
+        width=1
+    )
+
+    ax[k,0].legend(fontsize=fs)
+
+
+# ================= Mean quantal content =================
+
+for k,npools in enumerate(range(1,4)):
+
+    pool_mqc = results[npools]["model"]["pool_mqc"]
+
+    ymax = 1.1*np.max(np.sum(pool_mqc,axis=0))
+
+    for j,mqc_pool in enumerate(pool_mqc):
+
+        ax[k,1].plot(
+            tplot,
+            mqc_pool,
+            color=colors[j],
+            linewidth=lw,
+            label=f'Pool {j+1}'
+        )
+
+    ax[k,1].plot(
+        tplot,
+        np.sum(pool_mqc,axis=0),
+        color='k',
+        linewidth=lw,
+        label='Sum of pools'
+    )
+
+    ax[k,1].set_title(titles[k],fontsize=fs)
+    ax[k,1].set_ylabel('Mean quantal content',fontsize=fs)
+    ax[k,1].set_ylim(0,ymax)
+    ax[k,1].grid(alpha=0.4)
+
+    ax[k,1].tick_params(
+        axis='both',
+        labelsize=fs,
+        length=6,
+        width=1
+    )
+
+    ax[k,1].legend(fontsize=fs)
+
+
+for i in range(3):
+    ax[i,0].set_xlabel('AP number',fontsize=fs)
+    ax[i,1].set_xlabel('AP number',fontsize=fs)
+
+plt.tight_layout()
+plt.subplots_adjust(top=0.93)
 plt.show()
 
 #%% end
