@@ -12518,17 +12518,38 @@ bounds=[
     (0.01,1)  # pd
 ]
 
-def update_pool_probability(p_previous,pd):
-    return p_previous*(1-pd)+(1-p_previous*(1-pd))*pd
+def update_pool_probability(p_previous,pr,pd):
+    return p_previous*(1-pr)+(1-p_previous*(1-pr))*pd
+
+def calculate_fusion_probability(M,pd,mean_data):
+    pr=np.zeros(len(mean_data))
+    p=np.ones(len(mean_data))
+
+    pr[0]=mean_data[0]/M
+
+    for i in range(1,len(mean_data)):
+        p[i]=update_pool_probability(
+            p[i-1],
+            pr[i-1],
+            pd
+        )
+
+        if p[i]<=0:
+            return None,None
+
+        pr[i]=mean_data[i]/(M*p[i])
+
+    return p,pr
 
 def model(params):
-    p=np.ones(nstim)
+    p,pr=calculate_fusion_probability(
+        params["M"],
+        params["pd"],
+        mean_data
+    )
 
-    for i in range(1,nstim):
-        p[i]=update_pool_probability(p[i-1],params["pd"])
-
-    # Back-calculate fusion probability to fit every mean exactly
-    pr=mean_data/(params["M"]*p)
+    if p is None:
+        return None
 
     mqc=params["M"]*p*pr
     vqc=params["M"]*p*pr*(1-p*pr)
@@ -12559,6 +12580,10 @@ def mle(x):
         return np.inf
 
     result=model(params)
+
+    if result is None:
+        return np.inf
+
     pr=np.asarray(result["fusion_probability"][0])
     mqc=result["mqc"]
     CV2=result["CV2"]
@@ -12712,194 +12737,14 @@ for ax in axs:
 plt.tight_layout(rect=[0,0,1,0.96])
 plt.show()
 
-#%% manually set pr - simulate 1 pool model and compare with data
-import os
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 
-os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content lisa')
-
-file3='cells_lisa.xlsx'
-excel3=pd.read_excel(file3,sheet_name=None,header=None)
-
-files3=['260302_2','260227_2','260227_3']
-ds=[excel3[d] for d in files3]
-
-data3=[
-    [
-        np.array(ds[0].iloc[2:22,7:47]),
-        np.array(ds[0].iloc[26:46,7:47]),
-        np.array(ds[0].iloc[2:22,55:91]),
-        np.array(ds[0].iloc[26:46,55:91])
-    ],
-    [
-        np.array(ds[1].iloc[2:22,7:47]),
-        np.array(ds[1].iloc[26:46,7:47]),
-        np.array(ds[1].iloc[2:22,55:70]),
-        np.array(ds[1].iloc[26:46,55:70])
-    ],
-    [
-        np.array(ds[2].iloc[2:22,7:50]),
-        np.array(ds[2].iloc[26:46,7:50]),
-        np.array(ds[2].iloc[2:22,58:78]),
-        np.array(ds[2].iloc[26:46,58:78])
-    ]
-]
-
-data3=[[test/(-50e-12) for test in dset] for dset in data3]
-
-d3names=['low Ca 20 Hz','Low Ca 100 Hz','High Ca 20 Hz','High Ca 100 Hz']
-fnum=2
-dnum=1
-
-obs=np.asarray(data3[fnum][dnum],dtype=float)
-
-stim_keep={
-    # 0:20,
-    # 1:20,
-    # 2:20,
-    # 3:20,
-}
-
-if dnum in stim_keep:
-    obs=obs[:stim_keep[dnum],:]
-
-nstim=obs.shape[0]
-stim=np.arange(1,nstim+1)
-
-mean_data=np.mean(obs,axis=1)
-ffdata=np.var(obs,axis=1)/mean_data
-
-# Manually set model parameters
-M=30
-pd=0.2
-CVq=0.2
-
-# =============================================================================
-# # Set one fusion probability per stimulus
-# #fnum=2,dnum=0
-# M=30
-# pd=0.2
-# px=0.44
-# pr=np.array([
-#     0.265, 0.36, 0.40, 0.43, 0.44,
-#     px,px,px,px,px,
-#     px,px,px,px,px,
-#     px,px,px,px,px
-# ],dtype=float)
-# =============================================================================
-
-# =============================================================================
-# # #fnum=2,dnum=1
-# M=30
-# pd=0.2
-# px=0.4
-# pr=np.array([
-#     0.22, 0.34, 0.37, 0.39, 0.4,
-#     px,px,px,px,px,
-#     px,px,px,px,px,
-#     px,px,px,px,px
-# ],dtype=float)
-# =============================================================================
-
-# #fnum=2,dnum=1 - manual fit linear
-M=30
-pd=0.2
-px=0.21
-pr=np.array([
-    0.22, 0.37, 0.38, 0.33, 0.31,
-    0.28, 0.25, 0.24, 0.23, 0.22,
-    0.21, 0.21, px, px, px,
-    px,px,px,px,px
-],dtype=float)
-
-fs=15
-lw=3
-
-if len(pr)!=nstim:
-    raise ValueError(f'Provide {nstim} values for pr; currently {len(pr)}.')
-
-if np.any((pr<0)|(pr>1)):
-    raise ValueError('All pr values must be between 0 and 1.')
-
-def update_pool_probability(p_previous,pd):
-    return p_previous*(1-pd)+(1-p_previous*(1-pd))*pd
-
-# Pool availability
-pi=np.ones(nstim)
-
-for i in range(1,nstim):
-    pi[i]=update_pool_probability(pi[i-1],pd)
-
-# Model predictions
-mqc=M*pi*pr
-vqc=M*pi*pr*(1-pi*pr)
-vei=mqc*CVq**2+vqc
-CV2=vei/mqc**2
-FF=vei/mqc
-
-print('1 pool model - manually set fusion probabilities')
-print(f'M={M}')
-print(f'pd={pd}')
-print(f'CVq={CVq}')
-print(f'Mean fit RMSE={np.sqrt(np.mean((mqc-mean_data)**2)):.6f}')
-print(f'Fano factor RMSE={np.sqrt(np.mean((FF-ffdata)**2)):.6f}')
-
-def fmt(x):
-    x=float(x)
-    if x!=0 and abs(x)<1e-3:
-        return f'{x:.3e}'
-    return f'{x:.3f}'
-
-fig,axs=plt.subplots(3,1,figsize=(8,12))
-
-fig.suptitle(
-    '{} - {}'.format(files3[fnum],d3names[dnum]),
-    fontsize=fs+2
-)
-
-# Mean quantal content
-axs[0].plot(stim,mean_data,color='tab:blue',linewidth=lw,
-            label='Data',marker='o',markersize=7)
-axs[0].plot(stim,mqc,color='tab:orange',linewidth=lw,
-            linestyle='--',label='1 pool model',marker='o')
-axs[0].set_ylabel('Mean quantal content',fontsize=fs)
-axs[0].legend(fontsize=fs)
-axs[0].grid(True,alpha=0.3)
-
-# Fano factor
-axs[1].plot(stim,ffdata,color='tab:blue',linewidth=lw,
-            label='Data',marker='o',markersize=7)
-axs[1].plot(stim,FF,color='tab:orange',linewidth=lw,
-            label='1 pool model')
-axs[1].set_ylabel('Fano factor',fontsize=fs)
-axs[1].legend(fontsize=fs)
-axs[1].grid(True,alpha=0.3)
-
-# Fusion probability, pool availability, and their product
-axs[2].plot(stim,pr,color='tab:orange',linewidth=lw,
-            label=r'$pr_i$',marker='o')
-axs[2].plot(stim,pi,color='tab:green',linewidth=lw,
-            label=r'$p_i$',marker='s')
-axs[2].plot(stim,pi*pr,color='tab:red',linewidth=lw,
-            label=r'$p_i pr_i$',marker='^')
-axs[2].set_xlabel('Stimulus number',fontsize=fs)
-axs[2].set_ylabel('Probability',fontsize=fs)
-axs[2].legend(fontsize=fs)
-axs[2].grid(True,alpha=0.3)
-
-for ax in axs:
-    ax.tick_params(axis='both',labelsize=fs)
-
-plt.tight_layout(rect=[0,0,1,0.96])
-plt.show()
 
 #%% manually set pr - simulate 1 pool model and compare with data and bootstrapped CIs
 import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.stats import gamma
 
 os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content lisa')
 
@@ -12934,7 +12779,7 @@ data3 = [[test / (-50e-12) for test in dset] for dset in data3]
 
 d3names = ['low Ca 20 Hz', 'Low Ca 100 Hz', 'High Ca 20 Hz', 'High Ca 100 Hz']
 fnum = 2
-dnum = 0
+dnum = 2
 
 obs = np.asarray(data3[fnum][dnum], dtype=float)
 results = np.load('results.npy', allow_pickle=True)
@@ -12968,27 +12813,53 @@ M = 15
 pd = 0.2
 CVq = 0.2
 
-# Set one fusion probability per stimulus - good
-#fnum=2,dnum=0
+# =============================================================================
+# # Set one fusion probability per stimulus - good
+# #fnum=2,dnum=0
+# M=30
+# pd=0.3
+# px=0.57
+# pr=np.array([
+#     0.265, 0.375, 0.45, 0.52, 0.55,
+#     px,px,px,px,px,
+#     px,px,px,px,px,
+#     px,px,px,px,px
+# ],dtype=float)
+# =============================================================================
+
+# =============================================================================
+# # #fnum=2,dnum=1 - manual fit linear - better
+# M=30
+# pd=0.12
+# px=1
+# pr=np.array([
+#     0.22, 0.385, 0.52, 0.65, 0.77,
+#     0.89, 0.98, px, px, px,
+#     px, px, px, px, px,
+#     px,px,px,px,px
+# ],dtype=float)
+# =============================================================================
+
+# #fnum=2,dnum=2
 M=30
-pd=0.3
-px=0.57
+pd=0.254
+px=1
 pr=np.array([
-    0.265, 0.375, 0.45, 0.52, 0.55,
+    0.5, 0.7, 0.9, 1, 1,
     px,px,px,px,px,
     px,px,px,px,px,
     px,px,px,px,px
 ],dtype=float)
 
 # =============================================================================
-# # #fnum=2,dnum=1 - manual fit linear
+# # #fnum=2,dnum=3
 # M=30
-# pd=0.2
-# px=0.21
+# pd=0.115
+# px=1
 # pr=np.array([
-#     0.22, 0.37, 0.38, 0.33, 0.31,
-#     0.28, 0.25, 0.24, 0.23, 0.22,
-#     0.21, 0.21, px, px, px,
+#     0.45, 0.55, 0.65, 0.72, 0.79,
+#     0.85, 0.89, 0.92, 0.95, 0.97,
+#     0.99, px, px, px, px,
 #     px,px,px,px,px
 # ],dtype=float)
 # =============================================================================
@@ -13021,12 +12892,24 @@ vei = mqc * CVq**2 + vqc
 CV2 = vei / mqc**2
 FF = vei / mqc
 
+# Gamma likelihood and AIC
+shape = 1 / CV2
+scale = mqc * CV2
+loglik = gamma.logpdf(obs, a=shape[:, None], scale=scale[:, None])
+loglik_total = np.sum(loglik)
+
+k = 2 + len(np.unique(pr))
+AIC = 2 * k - 2 * loglik_total
+
 print('1 pool model - manually set fusion probabilities')
 print(f'M={M}')
 print(f'pd={pd}')
 print(f'CVq={CVq}')
 print(f'Mean fit RMSE={np.sqrt(np.nanmean((mqc - mean_data)**2)):.6f}')
 print(f'Fano factor RMSE={np.sqrt(np.nanmean((FF - ffdata)**2)):.6f}')
+print(f'Log likelihood={loglik_total:.6f}')
+print(f'Number of parameters={k}')
+print(f'AIC={AIC:.6f}')
 
 # Plot
 fig, axs = plt.subplots(3, 1, figsize=(8, 12))
@@ -13051,6 +12934,9 @@ axs[0].plot(
 axs[0].plot(
     stim, mqc, color='tab:orange', linewidth=lw,
     linestyle='-', label='1 pool model', marker='o'
+)
+axs[0].plot(
+    [], [], ' ', label=f'AIC={AIC:.2f}'
 )
 axs[0].set_ylabel('Mean quantal content', fontsize=fs)
 axs[0].legend(fontsize=fs)
@@ -13079,7 +12965,7 @@ axs[1].grid(True, alpha=0.3)
 # Fusion probability, pool availability, and their product
 axs[2].plot(
     stim, pi, color='tab:green', linewidth=lw,
-    label='Docking probability', marker='s'
+    label='Probability site is docked', marker='s'
 )
 axs[2].plot(
     stim, pr, color='tab:orange', linewidth=lw,
@@ -13102,13 +12988,12 @@ for ax in axs:
 
 plt.tight_layout(rect=[0, 0, 1, 0.96])
 plt.show()
-
-
 #%% manually set pr - simulate 2 pool model and compare with data and bootstrapped CIs
 import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.stats import gamma
 
 os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content lisa')
 
@@ -13217,20 +13102,20 @@ CVq = 0.2
 # =============================================================================
 
 # #fnum=2,dnum=1 - manual fit linear
-M = [15, 15]
-pd = [0.2, 0]
-px = 0.38
-px2 = 0.8
+M = [30, 15]
+pd = [0.15, 0.05]
+px = 0.22
+px2 = 0.7
 
-pr1 = np.array([
-    0.22, 0.37, 0.38, 0.38, 0.38,
-    px,px,px,px,px,
-    px,px,px,px,px,
+pr1=np.array([
+    0.11, 0.215, 0.22, 0.22, 0.22,
+    0.22, px, px, px, px,
+    px, px, px, px, px,
     px,px,px,px,px
-], dtype=float)
+],dtype=float)
 
 pr2 = np.array([
-    0.22, 0.3, 0.4, 0.6, 0.7,
+    0.215, 0.3, 0.4, 0.5, 0.6,
     px2,px2,px2,px2,px2,
     px2,px2,px2,px2,px2,
     px2,px2,px2,px2,px2
@@ -13280,12 +13165,24 @@ vei = mqc * CVq**2 + vqc
 CV2 = vei / mqc**2
 FF = vei / mqc
 
+# Gamma likelihood and AIC
+shape = 1 / CV2
+scale = mqc * CV2
+loglik = gamma.logpdf(obs, a=shape[:, None], scale=scale[:, None])
+loglik_total = np.sum(loglik)
+
+k = 4 + len(np.unique(pr1)) + len(np.unique(pr2))
+AIC = 2 * k - 2 * loglik_total
+
 print('2 pool model - manually set fusion probabilities')
 print(f'M={M}')
 print(f'pd={pd}')
 print(f'CVq={CVq}')
 print(f'Mean fit RMSE={np.sqrt(np.nanmean((mqc - mean_data)**2)):.6f}')
 print(f'Fano factor RMSE={np.sqrt(np.nanmean((FF - ffdata)**2)):.6f}')
+print(f'Log likelihood={loglik_total:.6f}')
+print(f'Number of parameters={k}')
+print(f'AIC={AIC:.6f}')
 
 # Plot
 fig, axs = plt.subplots(3, 1, figsize=(8, 12))
@@ -13310,6 +13207,9 @@ axs[0].plot(
 axs[0].plot(
     stim, mqc, color='tab:orange', linewidth=lw,
     linestyle='-', label='2 pool model', marker='o'
+)
+axs[0].plot(
+    [], [], ' ', label=f'AIC={AIC:.2f}'
 )
 axs[0].set_ylabel('Mean quantal content', fontsize=fs)
 axs[0].legend(fontsize=fs)
@@ -13368,4 +13268,689 @@ for ax in axs:
     ax.tick_params(axis='both', labelsize=fs)
 
 plt.tight_layout(rect=[0, 0, 1, 0.96])
+plt.show()
+
+#%% optimized 1 pool model - exact 1st mean - pi plot
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content lisa')
+
+file3 = 'cells_lisa.xlsx'
+excel3 = pd.read_excel(file3, sheet_name=None, header=None)
+
+files3 = ['260302_2', '260227_2', '260227_3']
+ds = [excel3[d] for d in files3]
+
+data3 = [
+    [
+        np.array(ds[0].iloc[2:22, 7:47]),
+        np.array(ds[0].iloc[26:46, 7:47]),
+        np.array(ds[0].iloc[2:22, 55:91]),
+        np.array(ds[0].iloc[26:46, 55:91])
+    ],
+    [
+        np.array(ds[1].iloc[2:22, 7:47]),
+        np.array(ds[1].iloc[26:46, 7:47]),
+        np.array(ds[1].iloc[2:22, 55:70]),
+        np.array(ds[1].iloc[26:46, 55:70])
+    ],
+    [
+        np.array(ds[2].iloc[2:22, 7:50]),
+        np.array(ds[2].iloc[26:46, 7:50]),
+        np.array(ds[2].iloc[2:22, 58:78]),
+        np.array(ds[2].iloc[26:46, 58:78])
+    ]
+]
+
+data3 = [[test / (-50e-12) for test in dset] for dset in data3]
+
+d3names = ['low Ca 20 Hz', 'Low Ca 100 Hz', 'High Ca 20 Hz', 'High Ca 100 Hz']
+fnum = 1 # 2 good cell
+dnum = 1
+
+obs = np.asarray(data3[fnum][dnum], dtype=float)
+nstim = obs.shape[0]
+stim = np.arange(1, nstim + 1)
+
+# Observed mean and Fano factor
+mean_data = np.nanmean(obs, axis=1)
+ffdata = np.nanvar(obs, axis=1, ddof=1) / mean_data
+
+# Model settings
+CVq = 0.2
+fs = 15
+lw = 3
+error_alpha = 0.3
+
+bmean1data = mean_data[0]
+
+def p_dynamic(i, pr_min, pr_max, thr, hill):
+    i = np.asarray(i, dtype=float)
+    return pr_min + (pr_max - pr_min) / (
+        1 + (thr / np.maximum(i, 1e-12))**hill
+    )
+
+def update_pool_probability(p_previous, pr, pd):
+    return p_previous * (1 - pr) + (
+        1 - p_previous * (1 - pr)
+    ) * pd
+
+def model(params):
+    M, pd, pr_max, thr, hill = params
+    M = int(M)
+
+    w = 1 / (1 + thr**hill)
+    pr_min = (bmean1data / M - pr_max * w) / (1 - w)
+
+    if not np.isfinite(pr_min) or pr_min < 0 or pr_min > pr_max:
+        return None
+
+    pr = p_dynamic(stim, pr_min, pr_max, thr, hill)
+
+    if np.any((pr < 0) | (pr > 1)):
+        return None
+
+    pi = np.ones(nstim)
+
+    for i in range(1, nstim):
+        pi[i] = update_pool_probability(pi[i - 1], pr[i - 1], pd)
+
+    mqc = M * pi * pr
+    vqc = M * pi * pr * (1 - pi * pr)
+    vei = mqc * CVq**2 + vqc
+    CV2 = vei / mqc**2
+    FF = vei / mqc
+
+    return pr_min, pr, pi, mqc, vqc, vei, CV2, FF
+
+def objective(params):
+    output = model(params)
+
+    if output is None:
+        return 1e20
+
+    pr_min, pr, pi, mqc, vqc, vei, CV2, FF = output
+
+    if np.any(mqc <= 0) or np.any(CV2 <= 0):
+        return 1e20
+
+    shape = 1 / CV2
+    scale = mqc * CV2
+
+    loglik = gamma.logpdf(
+        obs, a=shape[:, None], scale=scale[:, None]
+    )
+
+    if np.any(~np.isfinite(loglik)):
+        return 1e20
+
+    return -np.sum(loglik)
+
+# Optimize one-pool model
+bounds = [
+    (15, 30),       # M
+    (0.01, 1),      # pd
+    (0.01, 1),      # pr_max
+    (0.01, 20),     # thr
+    (0.01, 10)      # hill
+]
+
+result = differential_evolution(
+    objective,
+    bounds,
+    integrality=[True, False, False, False, False],
+    strategy='best1bin',
+    maxiter=1000,
+    popsize=15,
+    tol=1e-7,
+    mutation=(0.5, 1),
+    recombination=0.7,
+    polish=True,
+    seed=1
+)
+
+M, pd, pr_max, thr, hill = result.x
+M = int(M)
+
+pr_min, pr, pi, mqc, vqc, vei, CV2, FF = model(result.x)
+
+loglik_total = -result.fun
+k = len(result.x)
+AIC = 2 * k - 2 * loglik_total
+
+print('Optimized 1 pool model - exact first mean')
+print(f'M={M}')
+print(f'pd={pd:.6f}')
+print(f'pr_min={pr_min:.6f}')
+print(f'pr_max={pr_max:.6f}')
+print(f'thr={thr:.6f}')
+print(f'hill={hill:.6f}')
+print(f'CVq={CVq}')
+print(f'Mean fit RMSE={np.sqrt(np.nanmean((mqc - mean_data)**2)):.6f}')
+print(f'Fano factor RMSE={np.sqrt(np.nanmean((FF - ffdata)**2)):.6f}')
+print(f'Log likelihood={loglik_total:.6f}')
+print(f'Number of parameters={k}')
+print(f'AIC={AIC:.6f}')
+print('pr:', np.round(pr, 4))
+
+# Plot
+fig, axs = plt.subplots(3, 1, figsize=(8, 12))
+
+fig.suptitle(
+    '{} - {}'.format(files3[fnum], d3names[dnum]),
+    fontsize=fs + 2
+)
+
+# Mean quantal content
+axs[0].plot(
+    stim, mean_data, color='tab:blue', linewidth=lw,
+    label='Data', marker='o', markersize=7
+)
+axs[0].plot(
+    stim, mqc, color='tab:orange', linewidth=lw,
+    linestyle='-', label='1 pool model', marker='o'
+)
+axs[0].plot(
+    [], [], ' ', label=f'AIC={AIC:.2f}'
+)
+axs[0].set_ylabel('Mean quantal content', fontsize=fs)
+axs[0].legend(fontsize=fs)
+axs[0].grid(True, alpha=0.3)
+
+# Fano factor
+axs[1].plot(
+    stim, ffdata, color='tab:blue', linewidth=lw,
+    label='Data', marker='o', markersize=7
+)
+axs[1].plot(
+    stim, FF, color='tab:orange', linewidth=lw,
+    label='1 pool model', marker='o'
+)
+axs[1].set_ylabel('Fano factor', fontsize=fs)
+axs[1].legend(fontsize=fs)
+axs[1].grid(True, alpha=0.3)
+
+# Fusion probability and pool availability
+axs[2].plot(
+    stim, pi, color='tab:green', linewidth=lw,
+    label='Probability site is docked', marker='s'
+)
+axs[2].plot(
+    stim, pr, color='tab:orange', linewidth=lw,
+    label='Fusion probability', marker='o'
+)
+axs[2].set_xlabel('Stimulus number', fontsize=fs)
+axs[2].set_ylabel('Probability', fontsize=fs)
+axs[2].legend(fontsize=fs)
+axs[2].grid(True, alpha=0.3)
+
+for ax in axs:
+    ax.tick_params(axis='both', labelsize=fs)
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+plt.show()
+
+#%% 1-3 pool models - cells_lisa.xlsx full - exact 1st mean - pi plot
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import differential_evolution
+from scipy.stats import gamma
+
+def get_FF(x):
+    return np.var(x)/np.mean(x)
+
+def bootstrap(data,metric,n_bootstraps=1000,percentiles=(2.5,97.5)):
+    data=np.asarray(data)
+    n=len(data)
+    vals=[metric(np.random.choice(data,size=n,replace=True)) for _ in range(n_bootstraps)]
+    return metric(data),np.percentile(vals,percentiles)
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content lisa')
+
+file3='cells_lisa.xlsx'
+excel3=pd.read_excel(file3,sheet_name=None,header=None)
+
+files3=['260302_2','260227_2','260227_3']
+ds=[excel3[d] for d in files3]
+
+data3=[
+    [
+        np.array(ds[0].iloc[2:21+1,7:46+1]),
+        np.array(ds[0].iloc[26:45+1,7:46+1]),
+        np.array(ds[0].iloc[2:21+1,55:90+1]),
+        np.array(ds[0].iloc[26:45+1,55:91+1])
+    ],
+    [
+        np.array(ds[1].iloc[2:21+1,7:46+1]),
+        np.array(ds[1].iloc[26:45+1,7:46+1]),
+        np.array(ds[1].iloc[2:21+1,55:69+1]),
+        np.array(ds[1].iloc[26:45+1,55:69+1])
+    ],
+    [
+        np.array(ds[2].iloc[2:21+1,7:49+1]),
+        np.array(ds[2].iloc[26:45+1,7:49+1]),
+        np.array(ds[2].iloc[2:21+1,58:77+1]),
+        np.array(ds[2].iloc[26:45+1,58:77+1])
+    ]
+]
+
+data3=[[test/(-50e-12) for test in dset] for dset in data3]
+
+d3names=['low Ca 20 Hz','Low Ca 100 Hz','High Ca 20 Hz','High Ca 100 Hz']
+fnum=2
+dnum=2
+
+obs=np.asarray(data3[fnum][dnum],dtype=float)
+nstim=obs.shape[0]
+
+stim_keep={
+    # 0:20,
+    # 1:20,
+    # 2:20,
+    # 3:20,
+}
+
+if dnum in stim_keep:
+    obs=obs[:stim_keep[dnum],:]
+
+nstim=obs.shape[0]
+mean_data=np.mean(obs,axis=1)
+bmean1data=mean_data[0]
+
+CVq=0.2
+fs=15
+
+bounds_pool={
+    "M":(15,30),
+    "pd":(0.01,1),
+    "pr_max":(0.01,1),
+    "hill":(0.01,10),
+    "thr":(0.01,20)
+}
+
+def p_dynamic(i,pr_min,pr_max,thr,hill):
+    i=np.asarray(i,dtype=float)
+    return pr_min+(pr_max-pr_min)/(1+(thr/np.maximum(i,1e-12))**hill)
+
+def update_pool_probability(p_previous,pr,pd):
+    return p_previous*(1-pr)+(1-p_previous*(1-pr))*pd
+
+def model(params):
+    npools=len(params["M"])
+    pool_probability=[]
+    pool_mqc=[]
+    fusion_probability=[]
+
+    for j in range(npools):
+        pr=p_dynamic(
+            np.arange(1,nstim+1),
+            params["pr_min"][j],
+            params["pr_max"][j],
+            params["thr"][j],
+            params["hill"][j]
+        )
+
+        p=np.ones(nstim)
+
+        for i in range(1,nstim):
+            p[i]=update_pool_probability(
+                p[i-1],
+                pr[i-1],
+                params["pd"][j]
+            )
+
+        pool_probability.append(p)
+        fusion_probability.append(pr)
+        pool_mqc.append(params["M"][j]*p*pr)
+
+    mqc=np.sum(pool_mqc,axis=0)
+
+    vqc=np.sum(
+        [M*p*pr*(1-p*pr) for M,p,pr in zip(params["M"],pool_probability,fusion_probability)],
+        axis=0
+    )
+
+    vei=mqc*CVq**2+vqc
+    CV2=vei/(mqc**2)
+    FF=vei/mqc
+
+    return {
+        "mqc":mqc,
+        "CV2":CV2,
+        "FF":FF,
+        "pool_mqc":pool_mqc,
+        "pool_probability":pool_probability,
+        "fusion_probability":fusion_probability
+    }
+
+def create_param_names(npools):
+    names=[]
+    for i in range(npools):
+        names.append(f'M{i+1}')
+    for i in range(npools):
+        names.append(f'pd{i+1}')
+    for i in range(npools):
+        names.append(f'pr_max{i+1}')
+    for i in range(npools):
+        names.append(f'hill{i+1}')
+    for i in range(npools):
+        names.append(f'thr{i+1}')
+    return names
+
+def create_bounds(npools):
+    bounds=[]
+    for key in ["M","pd","pr_max","hill","thr"]:
+        bounds.extend([bounds_pool[key]]*npools)
+    return bounds
+
+def unpack_params(x,npools):
+    params={}
+    index=0
+
+    params["M"]=[int(round(v)) for v in x[index:index+npools]]
+    index+=npools
+
+    params["pd"]=list(x[index:index+npools])
+    index+=npools
+
+    params["pr_max"]=list(x[index:index+npools])
+    index+=npools
+
+    params["hill"]=list(x[index:index+npools])
+    index+=npools
+
+    params["thr"]=list(x[index:index+npools])
+
+    # The first stimulus has p=1 in every pool.
+    # Set the first-stimulus total mean exactly equal to the data.
+    #
+    # For each pool:
+    # pr(1) = pr_min + (pr_max-pr_min)/(1+thr**hill)
+    #
+    # Solve the total-mean constraint for the shared pr_min,
+    # then assign it to every pool. This preserves pr_min < pr_max
+    # only if the resulting pr_min is below the smallest pr_max.
+
+    M=np.asarray(params["M"],dtype=float)
+    pr_max=np.asarray(params["pr_max"],dtype=float)
+    hill=np.asarray(params["hill"],dtype=float)
+    thr=np.asarray(params["thr"],dtype=float)
+
+    w=1/(1+thr**hill)
+    denominator=np.sum(M*(1-w))
+    numerator=bmean1data-np.sum(M*pr_max*w)
+
+    if denominator<=0:
+        params["pr_min"]=[np.nan]*npools
+    else:
+        pr_min=numerator/denominator
+        params["pr_min"]=[pr_min]*npools
+
+    return params
+
+def mle(x,npools):
+    params=unpack_params(x,npools)
+
+    if np.any(np.asarray(params["M"])<15) or np.any(np.asarray(params["M"])>30):
+        return np.inf
+
+    pr_min=np.asarray(params["pr_min"])
+    pr_max=np.asarray(params["pr_max"])
+
+    if np.any(~np.isfinite(pr_min)) or np.any(pr_min<=0) or np.any(pr_min>=pr_max):
+        return np.inf
+
+    result=model(params)
+    mqc=result["mqc"]
+    CV2=result["CV2"]
+
+    if not np.isclose(mqc[0],bmean1data,rtol=1e-10,atol=1e-12):
+        return np.inf
+
+    if np.any(mqc<=0) or np.any(CV2<=0):
+        return np.inf
+
+    shape=1/CV2
+    scale=mqc*CV2
+
+    if np.any(~np.isfinite(shape)) or np.any(~np.isfinite(scale)):
+        return np.inf
+
+    loglik=gamma.logpdf(obs,a=shape[:,None],scale=scale[:,None])
+
+    if np.any(~np.isfinite(loglik)):
+        return np.inf
+
+    return -np.sum(loglik)
+
+def opt(npools):
+    bounds=create_bounds(npools)
+    names=create_param_names(npools)
+
+    result=differential_evolution(
+        lambda x:mle(x,npools),
+        bounds,
+        maxiter=1000,
+        popsize=20,
+        tol=1e-9,
+        polish=True,
+        workers=1,
+        updating='immediate'
+    )
+
+    params=unpack_params(result.x,npools)
+    model_result=model(params)
+    AIC=2*len(bounds)+2*result.fun
+
+    print(f'{npools} pool model')
+
+    for name,value in zip(names,result.x):
+        print(f'{name}={value}')
+
+    print(f'M={params["M"]}')
+    print(f'pd={params["pd"]}')
+    print(f'pr_min={params["pr_min"]}')
+    print(f'pr_max={params["pr_max"]}')
+    print(f'hill={params["hill"]}')
+    print(f'thr={params["thr"]}')
+    print(f'bmean1data={bmean1data:.12g}')
+    print(f'bmean1sim={model_result["mqc"][0]:.12g}')
+    print(f'First mean matched: {np.isclose(model_result["mqc"][0],bmean1data,rtol=1e-10,atol=1e-12)}')
+    print(f'AIC={AIC}')
+
+    return {
+        "params":params,
+        "result":result,
+        "AIC":AIC,
+        "model":model_result
+    }
+
+results={}
+
+for npools in range(1,4):
+    results[npools]=opt(npools)
+
+mqc1=results[1]["model"]["mqc"]
+mqc2=results[2]["model"]["mqc"]
+mqc3=results[3]["model"]["mqc"]
+
+ffei1=results[1]["model"]["FF"]
+ffei2=results[2]["model"]["FF"]
+ffei3=results[3]["model"]["FF"]
+
+CV2ei1=results[1]["model"]["CV2"]
+CV2ei2=results[2]["model"]["CV2"]
+CV2ei3=results[3]["model"]["CV2"]
+
+params1=results[1]["params"]
+params2=results[2]["params"]
+params3=results[3]["params"]
+
+AIC1=results[1]["AIC"]
+AIC2=results[2]["AIC"]
+AIC3=results[3]["AIC"]
+
+def fmt(x):
+    x=float(x)
+    if x!=0 and abs(x)<1e-3:
+        return f'{x:.3e}'
+    return f'{x:.3f}'
+
+for npools in range(1,4):
+    print(f'{npools} pool model')
+    params=results[npools]["params"]
+
+    for j in range(npools):
+        print(f'M{j+1}={params["M"][j]}')
+        print(f'pd{j+1}={fmt(params["pd"][j])}')
+        print(f'pr_min{j+1}={fmt(params["pr_min"][j])}')
+        print(f'pr_max{j+1}={fmt(params["pr_max"][j])}')
+        print(f'hill{j+1}={fmt(params["hill"][j])}')
+        print(f'thr{j+1}={fmt(params["thr"][j])}')
+
+        pr=results[npools]["model"]["fusion_probability"][j]
+        print(f'Pool {j+1} pr strictly increasing: {np.all(np.diff(pr)>0)}')
+
+    print(f'CVq={fmt(CVq)}')
+    print(f'AIC={fmt(results[npools]["AIC"])}')
+    print()
+
+colors=['tab:orange','tab:green','tab:red']
+stim=np.arange(1,nstim+1)
+lw=3
+
+plt.figure(figsize=(6,7))
+plt.subplot(2,1,1)
+plt.title('{} - {}'.format(files3[fnum],d3names[dnum]))
+
+plt.plot(
+    stim,mean_data,color='tab:blue',linewidth=lw,
+    label='Data',marker='o',markersize=7
+)
+
+for i in range(1,4):
+    plt.plot(
+        stim,results[i]["model"]["mqc"],color=colors[i-1],
+        linewidth=lw,label=f'{i} pool model, AIC={fmt(results[i]["AIC"])}'
+    )
+
+plt.ylabel('Mean quantal content',fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
+plt.legend(fontsize=fs)
+plt.grid(True,alpha=0.3)
+
+plt.subplot(2,1,2)
+ffdata=np.var(obs,axis=1)/np.mean(obs,axis=1)
+
+plt.plot(
+    stim,ffdata,color='tab:blue',linewidth=lw,
+    label='Data',marker='o',markersize=7
+)
+
+for i in range(1,4):
+    plt.plot(
+        stim,results[i]["model"]["FF"],color=colors[i-1],
+        linewidth=lw,label=f'{i} pool model, AIC={fmt(results[i]["AIC"])}'
+    )
+
+plt.xlabel('Stimulus number',fontsize=fs)
+plt.ylabel('Fano factor',fontsize=fs)
+plt.tick_params(axis='both',labelsize=fs)
+plt.tight_layout()
+plt.grid(True,alpha=0.3)
+plt.show()
+
+plt.figure(figsize=(15,9))
+plt.suptitle('{} - {}'.format(files3[fnum],d3names[dnum]),fontsize=fs+2)
+
+xmin=stim.min()
+xmax=stim.max()
+xpad=0.02*(xmax-xmin)
+
+fusion_values=[]
+probability_values=[]
+qc_values=list(np.ravel(mean_data))
+
+for i in range(1,4):
+    fusion=results[i]["model"]["fusion_probability"]
+    probability=results[i]["model"]["pool_probability"]
+
+    for j in range(i):
+        fusion_values.extend(fusion[j])
+        probability_values.extend(probability[j])
+
+    pool_mqc=results[i]["model"]["pool_mqc"]
+    qc_values.extend(np.ravel(pool_mqc))
+    qc_values.extend(np.ravel(np.sum(pool_mqc,axis=0)))
+
+probability_min=min(np.min(fusion_values),np.min(probability_values))
+probability_max=max(np.max(fusion_values),np.max(probability_values))
+probability_pad=max(0.05*(probability_max-probability_min),0.01)
+probability_ylim=(max(0,probability_min-probability_pad),min(1,probability_max+probability_pad))
+
+qc_min=np.min(qc_values)
+qc_max=np.max(qc_values)
+qc_pad=0.05*(qc_max-qc_min)
+qc_ylim=(qc_min-qc_pad,qc_max+qc_pad)
+
+for i in range(1,4):
+    plt.subplot(2,3,i)
+
+    for j in range(i):
+        fusion=results[i]["model"]["fusion_probability"][j]
+        probability=results[i]["model"]["pool_probability"][j]
+
+        plt.plot(
+            stim,fusion,color=colors[j],linewidth=lw,
+            label=f'pr{j+1}',marker='o'
+        )
+        plt.plot(
+            stim,probability,color=colors[j],linewidth=lw,
+            linestyle='--',label=f'p{j+1}',marker='s'
+        )
+
+    plt.title(f'{i} Pool Model\nAIC={fmt(results[i]["AIC"])}',fontsize=fs)
+    plt.ylabel('Probability',fontsize=fs)
+    plt.xlim(xmin-xpad,xmax+xpad)
+    plt.ylim(probability_ylim)
+    plt.tick_params(axis='both',labelsize=fs)
+    plt.grid(axis='y',alpha=0.3)
+    plt.legend(fontsize=fs)
+
+for i in range(1,4):
+    plt.subplot(2,3,3+i)
+    pool_mqc=results[i]["model"]["pool_mqc"]
+
+    plt.plot(
+        stim,mean_data,color='tab:blue',linewidth=lw,
+        label='Data',marker='o',markersize=7
+    )
+
+    for j,mqc_pool in enumerate(pool_mqc):
+        plt.plot(
+            stim,mqc_pool,color=colors[j],marker='o',
+            linewidth=lw,label=f'Pool {j+1}'
+        )
+
+    plt.plot(
+        stim,np.sum(pool_mqc,axis=0),color='k',marker='o',
+        linewidth=lw,label='Sum of pools'
+    )
+
+    plt.xlabel('Stimulus number',fontsize=fs)
+    plt.ylabel('Mean quantal content',fontsize=fs)
+    plt.xlim(xmin-xpad,xmax+xpad)
+    plt.ylim(qc_ylim)
+    plt.tick_params(axis='both',labelsize=fs)
+    plt.grid(axis='y',alpha=0.3)
+    plt.legend(fontsize=fs)
+
+plt.tight_layout(rect=[0,0,1,0.96])
 plt.show()
