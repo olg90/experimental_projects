@@ -18749,8 +18749,7 @@ for j, (test_type, test_name) in enumerate(
 
 plt.tight_layout(rect=[0, 0, 1, 0.94])
 plt.show()
-
-#%% Compare eight quantal content models - optimized 1-4 pools - 4x4 plot
+#%% Fit one quantal content model test - optimized 1-4 pools
 
 import numpy as np
 import pandas as pd
@@ -18758,7 +18757,6 @@ import os
 import matplotlib.pyplot as plt
 from scipy.optimize import differential_evolution
 from scipy.stats import gamma
-import pickle
 
 # =============================================================================
 # Settings
@@ -18771,6 +18769,8 @@ file2 = '100Hz_1s_20_repeats_P38.xlsx'
 
 fnum = 1
 dnum = 7
+tnum = 0
+
 CVq = 0.2
 fs = 15
 
@@ -18838,17 +18838,6 @@ test_configs = [
     {'family': 'fixed_pr_decreasing_pd', 'shared': True, 'special': True},
     {'family': 'increasing_pr_fixed_pd', 'shared': True, 'special': False},
     {'family': 'increasing_pr_fixed_pd', 'shared': True, 'special': True}
-]
-
-test_types = [
-    'fixed_pr_decreasing_pd',
-    'fixed_pr_decreasing_pd2_fixed',
-    'increasing_pr_fixed_pd',
-    'increasing_pr2_fixed_pd',
-    'shared_pr_decreasing_pd',
-    'shared_pr_decreasing_pd2_fixed',
-    'increasing_pr_shared_pd',
-    'increasing_pr2_shared_pd'
 ]
 
 bounds_pool = {
@@ -19285,7 +19274,7 @@ def mle(x, npools, tnum):
     return -np.sum(loglik)
 
 # =============================================================================
-# Optimize 1-4 pool models for one test
+# Optimize one pool configuration
 # =============================================================================
 
 def opt(npools, tnum):
@@ -19325,12 +19314,12 @@ def opt(npools, tnum):
     }
 
 # =============================================================================
-# Run one test across 1-4 pools
+# Run selected test across 1-4 pools
 # =============================================================================
 
 def run_test(tnum):
 
-    if tnum not in range(8):
+    if not isinstance(tnum, (int, np.integer)) or tnum not in range(8):
         raise ValueError('tnum must be an integer from 0 to 7.')
 
     print('\n' + '=' * 75)
@@ -19362,7 +19351,7 @@ def run_test(tnum):
     }
 
 # =============================================================================
-# Print parameters
+# Format parameter values
 # =============================================================================
 
 def fmt(x):
@@ -19374,45 +19363,47 @@ def fmt(x):
 
     return f'{x:.3f}'
 
-def print_best_parameters(all_results):
+# =============================================================================
+# Print best-fit parameters
+# =============================================================================
 
-    print('\n\n' + '=' * 75)
-    print('BEST-FIT PARAMETERS')
+def print_best_parameters(result, tnum):
+
+    best_model = result['best_model']
+    best_result = result['best_result']
+    params = best_result['params']
+
+    print('\n' + '=' * 75)
+    print(f'BEST-FIT PARAMETERS: TEST {tnum}')
     print('=' * 75)
 
-    for tnum, result in all_results.items():
+    print(f'Test: {test_names[tnum]}')
+    print(f'Best model: {best_model} pools')
+    print(f'AIC={fmt(best_result["AIC"])}')
 
-        best_model = result['best_model']
-        best_result = result['best_result']
-        params = best_result['params']
+    for name, value in params.items():
 
-        print(f'\nTest {tnum}: {test_names[tnum]}')
-        print(f'Best model: {best_model} pools')
-        print(f'AIC={fmt(best_result["AIC"])}')
+        if value is None:
+            continue
 
-        for name, value in params.items():
+        if np.isscalar(value):
+            print(f'{name}={fmt(value)}')
 
-            if value is None:
-                continue
+        elif name == 'M':
+            s = ', '.join(str(int(round(v))) for v in value)
+            print(f'{name}=[{s}]')
 
-            if np.isscalar(value):
-                print(f'{name}={fmt(value)}')
+        else:
+            s = ', '.join(
+                fmt(v) if v is not None else 'None'
+                for v in value
+            )
+            print(f'{name}=[{s}]')
 
-            elif name == 'M':
-                s = ', '.join(str(int(round(v))) for v in value)
-                print(f'{name}=[{s}]')
-
-            else:
-                s = ', '.join(
-                    fmt(v) if v is not None else 'None'
-                    for v in value
-                )
-                print(f'{name}=[{s}]')
-
-        print(f'CVq={fmt(CVq)}')
+    print(f'CVq={fmt(CVq)}')
 
 # =============================================================================
-# Plot individual test
+# Plot selected test
 # =============================================================================
 
 def plot_individual_test(tnum, result):
@@ -19437,17 +19428,27 @@ def plot_individual_test(tnum, result):
     model_color = colors[best_model - 1]
     model_marker = markers[best_model - 1]
 
+    # -------------------------------------------------------------------------
+    # Mean quantal content
+    # -------------------------------------------------------------------------
+
     axs[0].plot(
         stim, mean_data,
-        color='tab:blue', linewidth=lw,
-        marker='o', markersize=ms, label='Data'
+        color='tab:blue',
+        linewidth=lw,
+        marker='o',
+        markersize=ms,
+        label='Data'
     )
 
     axs[0].plot(
         stim, fitted_model['mqc'],
-        color=model_color, linewidth=lw,
-        marker=model_marker, markersize=ms,
-        markevery=markevery, label=f'{best_model} pool model'
+        color=model_color,
+        linewidth=lw,
+        marker=model_marker,
+        markersize=ms,
+        markevery=markevery,
+        label=f'{best_model} pool model'
     )
 
     axs[0].set_ylabel('Mean quantal content', fontsize=fs)
@@ -19455,17 +19456,27 @@ def plot_individual_test(tnum, result):
     axs[0].grid(True, alpha=0.3)
     axs[0].legend(fontsize=11)
 
+    # -------------------------------------------------------------------------
+    # Fano factor
+    # -------------------------------------------------------------------------
+
     axs[1].plot(
         stim, ffdata,
-        color='tab:blue', linewidth=lw,
-        marker='o', markersize=ms, label='Data'
+        color='tab:blue',
+        linewidth=lw,
+        marker='o',
+        markersize=ms,
+        label='Data'
     )
 
     axs[1].plot(
         stim, fitted_model['FF'],
-        color=model_color, linewidth=lw,
-        marker=model_marker, markersize=ms,
-        markevery=markevery, label=f'{best_model} pool model'
+        color=model_color,
+        linewidth=lw,
+        marker=model_marker,
+        markersize=ms,
+        markevery=markevery,
+        label=f'{best_model} pool model'
     )
 
     axs[1].set_xlabel('Stimulus number', fontsize=fs)
@@ -19478,169 +19489,14 @@ def plot_individual_test(tnum, result):
     plt.show()
 
 # =============================================================================
-# Run all eight tests and plot 4x4 comparison
+# Run selected test
 # =============================================================================
 
-if __name__ == '__main__':
+result = run_test(tnum)
 
-    all_results = {}
+print_best_parameters(result, tnum)
 
-    for tnum in range(8):
-        all_results[tnum] = run_test(tnum)
-
-    print_best_parameters(all_results)
-
-    # -------------------------------------------------------------------------
-    # 4x4 plot
-    # Top two rows: pool-specific fixed probabilities
-    # Bottom two rows: shared fixed probabilities
-    # -------------------------------------------------------------------------
-
-    fig, axs = plt.subplots(
-        4, 4,
-        figsize=(24, 18),
-        sharex=True,
-        sharey='row'
-    )
-
-    fig.suptitle(
-        '{} cell number {}'.format(fnames[fnum], dnum + 1),
-        fontsize=fs + 2
-    )
-
-    for j in range(4):
-
-        for row, tnum in [(0, j), (2, j + 4)]:
-
-            best_model = all_results[tnum]['best_model']
-            best_result = all_results[tnum]['best_result']
-            fitted_model = best_result['model']
-
-            model_color = colors[best_model - 1]
-            model_marker = markers[best_model - 1]
-
-            # -------------------------------------------------------------
-            # Mean quantal content
-            # -------------------------------------------------------------
-
-            axs[row, j].plot(
-                stim,
-                mean_data,
-                color='tab:blue',
-                linewidth=lw,
-                label='Data',
-                marker='o',
-                markersize=ms
-            )
-
-            axs[row, j].plot(
-                stim,
-                fitted_model['mqc'],
-                color=model_color,
-                linewidth=lw,
-                marker=model_marker,
-                markersize=ms,
-                markevery=markevery,
-                label=f'{best_model} pool model'
-            )
-
-            axs[row, j].set_title(
-                f'Test {tnum}: {test_names[tnum]}\n'
-                f'{best_model} pools, AIC={fmt(best_result["AIC"])}',
-                fontsize=fs
-            )
-
-            axs[row, j].set_ylabel(
-                'Mean quantal content',
-                fontsize=fs
-            )
-
-            axs[row, j].tick_params(
-                axis='both',
-                labelsize=fs,
-                labelleft=True
-            )
-
-            axs[row, j].set_yticks(axs[row, j].get_yticks())
-            axs[row, j].grid(True, alpha=0.3)
-            axs[row, j].legend(fontsize=10)
-
-            # -------------------------------------------------------------
-            # Fano factor
-            # -------------------------------------------------------------
-
-            axs[row + 1, j].plot(
-                stim,
-                ffdata,
-                color='tab:blue',
-                linewidth=lw,
-                label='Data',
-                marker='o',
-                markersize=ms
-            )
-
-            axs[row + 1, j].plot(
-                stim,
-                fitted_model['FF'],
-                color=model_color,
-                linewidth=lw,
-                marker=model_marker,
-                markersize=ms,
-                markevery=markevery,
-                label=f'{best_model} pool model'
-            )
-
-            axs[row + 1, j].set_xlabel(
-                'Stimulus number',
-                fontsize=fs
-            )
-
-            axs[row + 1, j].set_ylabel(
-                'Fano factor',
-                fontsize=fs
-            )
-
-            axs[row + 1, j].tick_params(
-                axis='both',
-                labelsize=fs,
-                labelleft=True
-            )
-
-            axs[row + 1, j].set_yticks(
-                axs[row + 1, j].get_yticks()
-            )
-
-            axs[row + 1, j].grid(True, alpha=0.3)
-            axs[row + 1, j].legend(fontsize=10)
-
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.show()
-    
-    
-    import pickle
-    
-    save_file = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
-
-    saved_data = {
-        'all_results': all_results,
-        'obs': obs,
-        'stim': stim,
-        'mean_data': mean_data,
-        'ffdata': ffdata,
-        'fnum': fnum,
-        'dnum': dnum,
-        'CVq': CVq,
-        'fnames': fnames,
-        'test_names': test_names
-    }
-
-    with open(save_file, 'wb') as file:
-        pickle.dump(saved_data, file, protocol=pickle.HIGHEST_PROTOCOL)
-
-    print(f'\nAll data saved to: {save_file}')
-    
-
-
+plot_individual_test(tnum, result)
 #%% Compare eight quantal content models - optimized 1-4 pools - 4x4 plot
 
 import numpy as np
@@ -20530,769 +20386,9 @@ if __name__ == '__main__':
         pickle.dump(saved_data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
     print(f'\nAll data saved to: {save_file}')
+    
 
-
-#%% Plot all saved models for every test
-
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pickle
-
-# =============================================================================
-# Settings
-# =============================================================================
-
-os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
-
-fnames = [
-    '100Hz_1s_20_repeats_P11',
-    '100Hz_1s_20_repeats_P38'
-]
-
-fnum = 1
-dnum = 7
-fs = 15
-
-filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
-
-# =============================================================================
-# Load saved data
-# =============================================================================
-
-with open(filename, 'rb') as file:
-    saved_data = pickle.load(file)
-
-all_results = saved_data['all_results']
-stim = saved_data['stim']
-mean_data = saved_data['mean_data']
-ffdata = saved_data['ffdata']
-test_names = saved_data['test_names']
-
-print(f'Loaded: {filename}')
-
-# =============================================================================
-# Find model with smallest AIC across all tests and pool counts
-# =============================================================================
-
-best_tnum = None
-best_npools = None
-best_AIC = np.inf
-
-for tnum, test_result in all_results.items():
-
-    for npools, fit in test_result['results'].items():
-
-        if fit['AIC'] < best_AIC:
-            best_AIC = fit['AIC']
-            best_tnum = tnum
-            best_npools = npools
-
-print(
-    f'\nLowest AIC: Test {best_tnum}, '
-    f'{best_npools} pools, AIC={best_AIC:.2f}'
-)
-
-# =============================================================================
-# Plot settings
-# =============================================================================
-
-colors = ['tab:orange', 'tab:green', 'tab:red', 'tab:purple']
-markers = ['P', '^', 'x', '*']
-
-lw = 3
-ms = 8
-markevery = 5
-
-# =============================================================================
-# Plot all models
-# =============================================================================
-
-fig, axs = plt.subplots(
-    4, 4,
-    figsize=(24, 18),
-    sharex=True,
-    sharey='row'
-)
-
-fig.suptitle(
-    '{} cell number {}'.format(fnames[fnum], dnum + 1),
-    fontsize=fs + 2
-)
-
-for j in range(4):
-
-    for row, tnum in [(0, j), (2, j + 4)]:
-
-        # Plot data
-        axs[row, j].plot(
-            stim,
-            mean_data,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        axs[row + 1, j].plot(
-            stim,
-            ffdata,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        # Plot every saved pool model
-        for npools, fit in all_results[tnum]['results'].items():
-
-            is_best = (tnum == best_tnum and npools == best_npools)
-
-            label = f'{npools} pools, AIC={fit["AIC"]:.2f}'
-
-            if is_best:
-                label = r'$\mathbf{' + label.replace(' ', r'\ ') + '}$'
-
-            axs[row, j].plot(
-                stim,
-                fit['model']['mqc'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery,
-                label=label
-            )
-
-            axs[row + 1, j].plot(
-                stim,
-                fit['model']['FF'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery
-            )
-
-        # Bold subplot borders for the test with the lowest AIC
-        if tnum == best_tnum:
-            for ax in [axs[row, j], axs[row + 1, j]]:
-                for spine in ax.spines.values():
-                    spine.set_linewidth(3)
-
-        # Mean quantal content formatting
-        axs[row, j].set_title(
-            f'Test {tnum}: {test_names[tnum]}',
-            fontsize=fs
-        )
-        axs[row, j].set_ylabel('Mean QC', fontsize=fs)
-        axs[row, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row, j].set_yticks(axs[row, j].get_yticks())
-        axs[row, j].grid(True, alpha=0.3)
-        axs[row, j].legend(fontsize=fs+3)
-
-        # Fano factor formatting
-        axs[row + 1, j].set_xlabel('Stimulus number', fontsize=fs)
-        axs[row + 1, j].set_ylabel('Fano factor', fontsize=fs)
-        axs[row + 1, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row + 1, j].set_yticks(axs[row + 1, j].get_yticks())
-        axs[row + 1, j].grid(True, alpha=0.3)
-
-plt.tight_layout(rect=[0, 0, 1, 0.96])
-
-# =============================================================================
-# Save figure as PDF
-# =============================================================================
-
-pdf_filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pdf'
-plt.savefig(pdf_filename, format='pdf', bbox_inches='tight')
-
-plt.show()
-
-print(f'Saved figure: {pdf_filename}')
-
-#%% Plot all saved models for every test
-
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pickle
-
-# =============================================================================
-# Settings
-# =============================================================================
-
-os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
-
-fnames = [
-    '100Hz_1s_20_repeats_P11',
-    '100Hz_1s_20_repeats_P38'
-]
-
-fnum = 1
-dnum = 7
-fs = 15
-
-filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
-
-# =============================================================================
-# Load saved data
-# =============================================================================
-
-with open(filename, 'rb') as file:
-    saved_data = pickle.load(file)
-
-all_results = saved_data['all_results']
-stim = saved_data['stim']
-mean_data = saved_data['mean_data']
-ffdata = saved_data['ffdata']
-test_names = saved_data['test_names']
-
-print(f'Loaded: {filename}')
-
-# =============================================================================
-# Find model with smallest AIC across all tests and pool counts
-# =============================================================================
-
-best_tnum = None
-best_npools = None
-best_AIC = np.inf
-
-for tnum, test_result in all_results.items():
-
-    for npools, fit in test_result['results'].items():
-
-        if fit['AIC'] < best_AIC:
-            best_AIC = fit['AIC']
-            best_tnum = tnum
-            best_npools = npools
-
-best_label = f'{best_npools} pools, AIC={best_AIC:.2f}'
-
-print(
-    f'\nLowest AIC: Test {best_tnum}, '
-    f'{best_npools} pools, AIC={best_AIC:.2f}'
-)
-
-# =============================================================================
-# Plot settings
-# =============================================================================
-
-colors = ['tab:orange', 'tab:green', 'tab:red', 'tab:purple']
-markers = ['P', '^', 'x', '*']
-
-lw = 3
-ms = 8
-markevery = 5
-
-# =============================================================================
-# Plot all models
-# =============================================================================
-
-fig, axs = plt.subplots(
-    4, 4,
-    figsize=(24, 18),
-    sharex=True,
-    sharey='row'
-)
-
-fig.suptitle(
-    '{} cell number {}'.format(fnames[fnum], dnum + 1),
-    fontsize=fs + 2
-)
-
-for j in range(4):
-
-    for row, tnum in [(0, j), (2, j + 4)]:
-
-        # Plot data
-        axs[row, j].plot(
-            stim,
-            mean_data,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        axs[row + 1, j].plot(
-            stim,
-            ffdata,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        # Plot every saved pool model
-        for npools, fit in all_results[tnum]['results'].items():
-
-            label = f'{npools} pools, AIC={fit["AIC"]:.2f}'
-
-            axs[row, j].plot(
-                stim,
-                fit['model']['mqc'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery,
-                label=label
-            )
-
-            axs[row + 1, j].plot(
-                stim,
-                fit['model']['FF'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery
-            )
-
-        # Bold subplot borders for the test with the lowest AIC
-        if tnum == best_tnum:
-            for ax in [axs[row, j], axs[row + 1, j]]:
-                for spine in ax.spines.values():
-                    spine.set_linewidth(5)
-
-        # Mean quantal content formatting
-        axs[row, j].set_title(
-            f'Test {tnum}: {test_names[tnum]}',
-            fontsize=fs
-        )
-        axs[row, j].set_ylabel('Mean QC', fontsize=fs)
-        axs[row, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row, j].set_yticks(axs[row, j].get_yticks())
-        axs[row, j].grid(True, alpha=0.3)
-
-        legend = axs[row, j].legend(fontsize=fs + 3)
-
-        # Make the best-AIC legend entry larger and bolder
-        if tnum == best_tnum:
-            for legend_text in legend.get_texts():
-                if legend_text.get_text() == best_label:
-                    legend_text.set_fontweight('bold')
-                    legend_text.set_fontsize(fs + 6)
-
-        # Fano factor formatting
-        axs[row + 1, j].set_xlabel('Stimulus number', fontsize=fs)
-        axs[row + 1, j].set_ylabel('Fano factor', fontsize=fs)
-        axs[row + 1, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row + 1, j].set_yticks(axs[row + 1, j].get_yticks())
-        axs[row + 1, j].grid(True, alpha=0.3)
-
-plt.tight_layout(rect=[0, 0, 1, 0.96])
-
-# =============================================================================
-# Save figure as PDF
-# =============================================================================
-
-pdf_filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pdf'
-plt.savefig(pdf_filename, format='pdf', bbox_inches='tight')
-
-plt.show()
-
-print(f'Saved figure: {pdf_filename}')
-
-#%% Plot all saved models for every test
-
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pickle
-
-# =============================================================================
-# Settings
-# =============================================================================
-
-os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
-
-fnames = [
-    '100Hz_1s_20_repeats_P11',
-    '100Hz_1s_20_repeats_P38'
-]
-
-fnum = 1
-dnum = 7
-fs = 15
-
-filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
-
-# =============================================================================
-# Load saved data
-# =============================================================================
-
-with open(filename, 'rb') as file:
-    saved_data = pickle.load(file)
-
-all_results = saved_data['all_results']
-stim = saved_data['stim']
-mean_data = saved_data['mean_data']
-ffdata = saved_data['ffdata']
-test_names = saved_data['test_names']
-
-print(f'Loaded: {filename}')
-
-# =============================================================================
-# Find model with smallest AIC across all tests and pool counts
-# =============================================================================
-
-best_tnum = None
-best_npools = None
-best_AIC = np.inf
-
-for tnum, test_result in all_results.items():
-
-    for npools, fit in test_result['results'].items():
-
-        if fit['AIC'] < best_AIC:
-            best_AIC = fit['AIC']
-            best_tnum = tnum
-            best_npools = npools
-
-print(
-    f'\nLowest AIC: Test {best_tnum}, '
-    f'{best_npools} pools, AIC={best_AIC:.2f}'
-)
-
-# =============================================================================
-# Plot settings
-# =============================================================================
-
-colors = ['tab:orange', 'tab:green', 'tab:red', 'tab:purple']
-markers = ['P', '^', 'x', '*']
-
-lw = 3
-ms = 8
-markevery = 5
-
-# =============================================================================
-# Plot all models
-# =============================================================================
-
-fig, axs = plt.subplots(
-    4, 4,
-    figsize=(24, 18),
-    sharex=True,
-    sharey='row'
-)
-
-fig.suptitle(
-    '{} cell number {}'.format(fnames[fnum], dnum + 1),
-    fontsize=fs + 2
-)
-
-for j in range(4):
-
-    for row, tnum in [(0, j), (2, j + 4)]:
-
-        # Plot data
-        axs[row, j].plot(
-            stim,
-            mean_data,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        axs[row + 1, j].plot(
-            stim,
-            ffdata,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        # Plot every saved pool model
-        for npools, fit in all_results[tnum]['results'].items():
-
-            is_best = (tnum == best_tnum and npools == best_npools)
-
-            if is_best:
-                label = f'{npools} pools, AIC={fit["AIC"]:.2f}'
-            else:
-                delta_AIC = fit['AIC'] - best_AIC
-                label = f'{npools} pools, ΔAIC={delta_AIC:.2f}'
-
-            axs[row, j].plot(
-                stim,
-                fit['model']['mqc'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery,
-                label=label
-            )
-
-            axs[row + 1, j].plot(
-                stim,
-                fit['model']['FF'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery
-            )
-
-        # Bold subplot borders for the test with the lowest AIC
-        if tnum == best_tnum:
-            for ax in [axs[row, j], axs[row + 1, j]]:
-                for spine in ax.spines.values():
-                    spine.set_linewidth(5)
-
-        # Mean quantal content formatting
-        axs[row, j].set_title(
-            f'Test {tnum}: {test_names[tnum]}',
-            fontsize=fs
-        )
-        axs[row, j].set_ylabel('Mean QC', fontsize=fs)
-        axs[row, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row, j].set_yticks(axs[row, j].get_yticks())
-        axs[row, j].grid(True, alpha=0.3)
-
-        legend = axs[row, j].legend(fontsize=fs + 3)
-
-        # Make the best-AIC legend entry larger and bolder
-        if tnum == best_tnum:
-            for legend_text in legend.get_texts():
-                if legend_text.get_text() == f'{best_npools} pools, AIC={best_AIC:.2f}':
-                    legend_text.set_fontweight('bold')
-                    legend_text.set_fontsize(fs + 6)
-
-        # Fano factor formatting
-        axs[row + 1, j].set_xlabel('Stimulus number', fontsize=fs)
-        axs[row + 1, j].set_ylabel('Fano factor', fontsize=fs)
-        axs[row + 1, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row + 1, j].set_yticks(axs[row + 1, j].get_yticks())
-        axs[row + 1, j].grid(True, alpha=0.3)
-
-plt.tight_layout(rect=[0, 0, 1, 0.96])
-
-# =============================================================================
-# Save figure as PDF
-# =============================================================================
-
-pdf_filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pdf'
-plt.savefig(pdf_filename, format='pdf', bbox_inches='tight')
-
-plt.show()
-
-print(f'Saved figure: {pdf_filename}')
-
-
-#%% Plot all saved models for every test - good
-
-import numpy as np
-import matplotlib.pyplot as plt
-import os
-import pickle
-import re
-
-# =============================================================================
-# Settings
-# =============================================================================
-
-os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
-
-fnames = [
-    '100Hz_1s_20_repeats_P11',
-    '100Hz_1s_20_repeats_P38'
-]
-
-fnum = 1
-dnum = 7 # 023457
-fs = 15
-
-filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
-
-# =============================================================================
-# Load saved data
-# =============================================================================
-
-with open(filename, 'rb') as file:
-    saved_data = pickle.load(file)
-
-all_results = saved_data['all_results']
-stim = saved_data['stim']
-mean_data = saved_data['mean_data']
-ffdata = saved_data['ffdata']
-test_names = saved_data['test_names']
-
-print(f'Loaded: {filename}')
-
-# =============================================================================
-# Find model with smallest AIC across all tests and pool counts
-# =============================================================================
-
-best_tnum = None
-best_npools = None
-best_AIC = np.inf
-
-for tnum, test_result in all_results.items():
-
-    for npools, fit in test_result['results'].items():
-
-        if fit['AIC'] < best_AIC:
-            best_AIC = fit['AIC']
-            best_tnum = tnum
-            best_npools = npools
-
-print(
-    f'\nLowest AIC: Test {best_tnum}, '
-    f'{best_npools} pools, AIC={best_AIC:.2f}'
-)
-
-# =============================================================================
-# Plot settings
-# =============================================================================
-
-colors = ['tab:orange', 'tab:green', 'tab:red', 'tab:purple']
-markers = ['P', '^', 'x', '*']
-
-lw = 3
-ms = 8
-markevery = 5
-
-# =============================================================================
-# Plot all models
-# =============================================================================
-
-fig, axs = plt.subplots(
-    4, 4,
-    figsize=(24, 18),
-    sharex=True,
-    sharey='row'
-)
-
-fig.suptitle(
-    '{} cell number {}'.format(fnames[fnum], dnum + 1),
-    fontsize=fs + 2
-)
-
-for j in range(4):
-
-    for row, tnum in [(0, j), (2, j + 4)]:
-
-        # Plot data
-        axs[row, j].plot(
-            stim,
-            mean_data,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        axs[row + 1, j].plot(
-            stim,
-            ffdata,
-            color='tab:blue',
-            linewidth=lw,
-            label='Data',
-            marker='o',
-            markersize=ms
-        )
-
-        # Plot every saved pool model
-        for npools, fit in all_results[tnum]['results'].items():
-
-            is_best = (tnum == best_tnum and npools == best_npools)
-
-            if is_best:
-                label = f'{npools} pools, AIC={fit["AIC"]:.2f}'
-            else:
-                delta_AIC = fit['AIC'] - best_AIC
-                label = f'{npools} pools, ΔAIC={delta_AIC:.2f}'
-
-            axs[row, j].plot(
-                stim,
-                fit['model']['mqc'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery,
-                label=label
-            )
-
-            axs[row + 1, j].plot(
-                stim,
-                fit['model']['FF'],
-                color=colors[npools - 1],
-                linewidth=lw,
-                marker=markers[npools - 1],
-                markersize=ms,
-                markevery=markevery
-            )
-
-        # Bold red subplot borders for the test with the lowest AIC
-        if tnum == best_tnum:
-            for ax in [axs[row, j], axs[row + 1, j]]:
-                for spine in ax.spines.values():
-                    spine.set_linewidth(5)
-                    spine.set_edgecolor('red')
-
-        # Format parameter names in title
-        title = test_names[tnum]
-        title = re.sub(r'\bpr\b', r'$p_r$', title)
-        title = re.sub(r'\bpd[_]?(\d+)\b', r'$p_{d,\1}$', title)
-        title = re.sub(r'\bpd\b', r'$p_d$', title)
-
-        # Mean quantal content formatting
-        axs[row, j].set_title(
-            f'{title}',
-            fontsize=fs,
-            fontweight='bold' if tnum == best_tnum else 'normal',
-            color='red' if tnum == best_tnum else 'black'
-        )
-        axs[row, j].set_ylabel('Mean QC', fontsize=fs)
-        axs[row, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row, j].set_yticks(axs[row, j].get_yticks())
-        axs[row, j].grid(True, alpha=0.3)
-
-        legend = axs[row, j].legend(fontsize=fs + 3)
-
-        # Make the best-AIC legend entry larger, bold, and red
-        if tnum == best_tnum:
-            for legend_text in legend.get_texts():
-                if legend_text.get_text() == f'{best_npools} pools, AIC={best_AIC:.2f}':
-                    legend_text.set_fontweight('bold')
-                    legend_text.set_fontsize(fs + 6)
-                    legend_text.set_color('red')
-
-        # Fano factor formatting
-        axs[row + 1, j].set_xlabel('Stimulus number', fontsize=fs)
-        axs[row + 1, j].set_ylabel('Fano factor', fontsize=fs)
-        axs[row + 1, j].tick_params(axis='both', labelsize=fs, labelleft=True)
-        axs[row + 1, j].set_yticks(axs[row + 1, j].get_yticks())
-        axs[row + 1, j].grid(True, alpha=0.3)
-
-plt.tight_layout(rect=[0, 0, 1, 0.96])
-
-# =============================================================================
-# Save figure as PDF
-# =============================================================================
-
-pdf_filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pdf'
-plt.savefig(pdf_filename, format='pdf', bbox_inches='tight')
-
-plt.show()
-
-print(f'Saved figure: {pdf_filename}')
-
-
-#%% Fit one quantal content model test - optimized 1-4 pools
+#%% Compare eight quantal content models - optimized 1-4 pools - 4x4 plot
 
 import numpy as np
 import pandas as pd
@@ -21300,6 +20396,7 @@ import os
 import matplotlib.pyplot as plt
 from scipy.optimize import differential_evolution
 from scipy.stats import gamma
+import pickle
 
 # =============================================================================
 # Settings
@@ -21312,8 +20409,6 @@ file2 = '100Hz_1s_20_repeats_P38.xlsx'
 
 fnum = 1
 dnum = 7
-tnum = 0
-
 CVq = 0.2
 fs = 15
 
@@ -21364,12 +20459,12 @@ markevery = 5
 test_names = [
     'Fixed pr per pool, decreasing pd',
     'Fixed pr per pool, decreasing pd; pd2 fixed',
-    'Increasing pr, fixed pd per pool',
-    'Increasing pr; pr2 fixed, fixed pd per pool',
+    'Increasing pr per pool, fixed pd per pool',
+    'Increasing pr per pool; pr2 fixed, fixed pd per pool',
     'Shared fixed pr, decreasing pd',
     'Shared fixed pr, decreasing pd; pd2 fixed',
-    'Increasing pr, shared fixed pd',
-    'Increasing pr; pr2 fixed, shared fixed pd'
+    'Increasing pr per pool, shared fixed pd',
+    'Increasing pr per pool; pr2 fixed, shared fixed pd'
 ]
 
 test_configs = [
@@ -21381,6 +20476,17 @@ test_configs = [
     {'family': 'fixed_pr_decreasing_pd', 'shared': True, 'special': True},
     {'family': 'increasing_pr_fixed_pd', 'shared': True, 'special': False},
     {'family': 'increasing_pr_fixed_pd', 'shared': True, 'special': True}
+]
+
+test_types = [
+    'fixed_pr_decreasing_pd',
+    'fixed_pr_decreasing_pd2_fixed',
+    'increasing_pr_fixed_pd',
+    'increasing_pr2_fixed_pd',
+    'shared_pr_decreasing_pd',
+    'shared_pr_decreasing_pd2_fixed',
+    'increasing_pr_shared_pd',
+    'increasing_pr2_shared_pd'
 ]
 
 bounds_pool = {
@@ -21463,13 +20569,12 @@ def create_param_names(npools, tnum):
 
     else:
 
-        names.append('pr_min')
-
         for i in range(npools):
-            if not special or i != 1:
-                names.append(f'pr_max{i+1}')
-            elif i == 1:
+            if special and i == 1:
                 names.append('pr2')
+            else:
+                names.append(f'pr_min{i+1}')
+                names.append(f'pr_max{i+1}')
 
         for i in range(npools):
             if not special or i != 1:
@@ -21523,13 +20628,12 @@ def create_bounds(npools, tnum):
 
     else:
 
-        bounds.append(bounds_pool['pr_min'])
-
         for i in range(npools):
-            if not special or i != 1:
-                bounds.append(bounds_pool['pr_max'])
-            elif i == 1:
+            if special and i == 1:
                 bounds.append(bounds_pool['pr2'])
+            else:
+                bounds.append(bounds_pool['pr_min'])
+                bounds.append(bounds_pool['pr_max'])
 
         for i in range(npools):
             if not special or i != 1:
@@ -21621,18 +20725,19 @@ def unpack_params(x, npools, tnum):
 
     else:
 
-        params['pr_min'] = x[index]
-        index += 1
-
+        params['pr_min'] = [None] * npools
         params['pr_max'] = [None] * npools
         params['pr2'] = None
 
         for i in range(npools):
             if special and i == 1:
                 params['pr2'] = x[index]
+                index += 1
             else:
+                params['pr_min'][i] = x[index]
+                index += 1
                 params['pr_max'][i] = x[index]
-            index += 1
+                index += 1
 
         params['hill'] = [None] * npools
 
@@ -21655,16 +20760,19 @@ def unpack_params(x, npools, tnum):
             params['pd_fixed'] = list(x[index:index + npools])
             index += npools
 
+        initial_pr = [
+            params['pr2'] if special and j == 1
+            else params['pr_min'][j]
+            for j in range(npools)
+        ]
+
         other_M = np.sum([
-            M[j] * (
-                params['pr2'] if special and j == 1
-                else params['pr_min']
-            )
+            M[j] * initial_pr[j]
             for j in range(1, npools)
         ])
 
         M[0] = int(round(
-            (mean_data[0] - other_M) / params['pr_min']
+            (mean_data[0] - other_M) / initial_pr[0]
         ))
 
     params['M'] = M
@@ -21697,7 +20805,7 @@ def model(params, tnum):
             else:
                 pr = pr_dynamic(
                     np.arange(nstim),
-                    params['pr_min'],
+                    params['pr_min'][j],
                     params['pr_max'][j],
                     params['thr'][j],
                     params['hill'][j]
@@ -21781,7 +20889,7 @@ def mle(x, npools, tnum):
 
         for j in range(npools):
             if not special or j != 1:
-                if params['pr_max'][j] < params['pr_min']:
+                if params['pr_min'][j] >= params['pr_max'][j]:
                     return penalty
 
     else:
@@ -21817,7 +20925,7 @@ def mle(x, npools, tnum):
     return -np.sum(loglik)
 
 # =============================================================================
-# Optimize one pool configuration
+# Optimize 1-4 pool models for one test
 # =============================================================================
 
 def opt(npools, tnum):
@@ -21857,12 +20965,12 @@ def opt(npools, tnum):
     }
 
 # =============================================================================
-# Run selected test across 1-4 pools
+# Run one test across 1-4 pools
 # =============================================================================
 
 def run_test(tnum):
 
-    if not isinstance(tnum, (int, np.integer)) or tnum not in range(8):
+    if tnum not in range(8):
         raise ValueError('tnum must be an integer from 0 to 7.')
 
     print('\n' + '=' * 75)
@@ -21894,7 +21002,7 @@ def run_test(tnum):
     }
 
 # =============================================================================
-# Format parameter values
+# Print parameters
 # =============================================================================
 
 def fmt(x):
@@ -21906,54 +21014,48 @@ def fmt(x):
 
     return f'{x:.3f}'
 
-# =============================================================================
-# Print best-fit parameters
-# =============================================================================
+def print_best_parameters(all_results):
 
-def print_best_parameters(result, tnum):
-
-    best_model = result['best_model']
-    best_result = result['best_result']
-    params = best_result['params']
-
-    print('\n' + '=' * 75)
-    print(f'BEST-FIT PARAMETERS: TEST {tnum}')
+    print('\n\n' + '=' * 75)
+    print('BEST-FIT PARAMETERS')
     print('=' * 75)
 
-    print(f'Test: {test_names[tnum]}')
-    print(f'Best model: {best_model} pools')
-    print(f'AIC={fmt(best_result["AIC"])}')
+    for tnum, result in all_results.items():
 
-    for name, value in params.items():
+        best_model = result['best_model']
+        best_result = result['best_result']
+        params = best_result['params']
 
-        if value is None:
-            continue
+        print(f'\nTest {tnum}: {test_names[tnum]}')
+        print(f'Best model: {best_model} pools')
+        print(f'AIC={fmt(best_result["AIC"])}')
 
-        if np.isscalar(value):
-            print(f'{name}={fmt(value)}')
+        for name, value in params.items():
 
-        elif name == 'M':
-            s = ', '.join(str(int(round(v))) for v in value)
-            print(f'{name}=[{s}]')
+            if value is None:
+                continue
 
-        else:
-            s = ', '.join(
-                fmt(v) if v is not None else 'None'
-                for v in value
-            )
-            print(f'{name}=[{s}]')
+            if np.isscalar(value):
+                print(f'{name}={fmt(value)}')
 
-    print(f'CVq={fmt(CVq)}')
+            elif name == 'M':
+                s = ', '.join(str(int(round(v))) for v in value)
+                print(f'{name}=[{s}]')
+
+            else:
+                s = ', '.join(
+                    fmt(v) if v is not None else 'None'
+                    for v in value
+                )
+                print(f'{name}=[{s}]')
+
+        print(f'CVq={fmt(CVq)}')
 
 # =============================================================================
-# Plot selected test
+# Plot individual test: all fitted pool models
 # =============================================================================
 
 def plot_individual_test(tnum, result):
-
-    best_model = result['best_model']
-    best_result = result['best_result']
-    fitted_model = best_result['model']
 
     fig, axs = plt.subplots(
         2, 1,
@@ -21963,64 +21065,46 @@ def plot_individual_test(tnum, result):
 
     fig.suptitle(
         f'{fnames[fnum]} cell {dnum + 1}\n'
-        f'Test {tnum}: {test_names[tnum]}; '
-        f'{best_model} pools, AIC={fmt(best_result["AIC"])}',
+        f'Test {tnum}: {test_names[tnum]}',
         fontsize=fs + 2
     )
 
-    model_color = colors[best_model - 1]
-    model_marker = markers[best_model - 1]
-
-    # -------------------------------------------------------------------------
-    # Mean quantal content
-    # -------------------------------------------------------------------------
-
     axs[0].plot(
         stim, mean_data,
-        color='tab:blue',
-        linewidth=lw,
-        marker='o',
-        markersize=ms,
-        label='Data'
+        color='tab:blue', linewidth=lw,
+        marker='o', markersize=ms, label='Data'
     )
 
-    axs[0].plot(
-        stim, fitted_model['mqc'],
-        color=model_color,
-        linewidth=lw,
-        marker=model_marker,
-        markersize=ms,
-        markevery=markevery,
-        label=f'{best_model} pool model'
+    axs[1].plot(
+        stim, ffdata,
+        color='tab:blue', linewidth=lw,
+        marker='o', markersize=ms, label='Data'
     )
+
+    for npools, fit in result['results'].items():
+
+        model_color = colors[npools - 1]
+        model_marker = markers[npools - 1]
+        label = f'{npools} pools, AIC={fmt(fit["AIC"])}'
+
+        axs[0].plot(
+            stim, fit['model']['mqc'],
+            color=model_color, linewidth=lw,
+            marker=model_marker, markersize=ms,
+            markevery=markevery, label=label
+        )
+
+        axs[1].plot(
+            stim, fit['model']['FF'],
+            color=model_color, linewidth=lw,
+            marker=model_marker, markersize=ms,
+            markevery=markevery, label=label
+        )
 
     axs[0].set_ylabel('Mean quantal content', fontsize=fs)
     axs[0].tick_params(axis='both', labelsize=fs)
     axs[0].grid(True, alpha=0.3)
     axs[0].legend(fontsize=11)
-
-    # -------------------------------------------------------------------------
-    # Fano factor
-    # -------------------------------------------------------------------------
-
-    axs[1].plot(
-        stim, ffdata,
-        color='tab:blue',
-        linewidth=lw,
-        marker='o',
-        markersize=ms,
-        label='Data'
-    )
-
-    axs[1].plot(
-        stim, fitted_model['FF'],
-        color=model_color,
-        linewidth=lw,
-        marker=model_marker,
-        markersize=ms,
-        markevery=markevery,
-        label=f'{best_model} pool model'
-    )
 
     axs[1].set_xlabel('Stimulus number', fontsize=fs)
     axs[1].set_ylabel('Fano factor', fontsize=fs)
@@ -22032,11 +21116,716 @@ def plot_individual_test(tnum, result):
     plt.show()
 
 # =============================================================================
-# Run selected test
+# Run all eight tests and plot 4x4 comparison
 # =============================================================================
 
-result = run_test(tnum)
+if __name__ == '__main__':
 
-print_best_parameters(result, tnum)
+    all_results = {}
 
-plot_individual_test(tnum, result)
+    for tnum in range(8):
+        all_results[tnum] = run_test(tnum)
+
+    print_best_parameters(all_results)
+
+    # -------------------------------------------------------------------------
+    # 4x4 plot: all fitted models for every test
+    # -------------------------------------------------------------------------
+
+    fig, axs = plt.subplots(
+        4, 4,
+        figsize=(24, 18),
+        sharex=True,
+        sharey='row'
+    )
+
+    fig.suptitle(
+        '{} cell number {}'.format(fnames[fnum], dnum + 1),
+        fontsize=fs + 2
+    )
+
+    for j in range(4):
+
+        for row, tnum in [(0, j), (2, j + 4)]:
+
+            # -------------------------------------------------------------
+            # Experimental data
+            # -------------------------------------------------------------
+
+            axs[row, j].plot(
+                stim, mean_data,
+                color='tab:blue',
+                linewidth=lw,
+                label='Data',
+                marker='o',
+                markersize=ms
+            )
+
+            axs[row + 1, j].plot(
+                stim, ffdata,
+                color='tab:blue',
+                linewidth=lw,
+                label='Data',
+                marker='o',
+                markersize=ms
+            )
+
+            # -------------------------------------------------------------
+            # Plot every fitted pool model
+            # -------------------------------------------------------------
+
+            for npools, fit in all_results[tnum]['results'].items():
+
+                model_color = colors[npools - 1]
+                model_marker = markers[npools - 1]
+                label = f'{npools} pools, AIC={fmt(fit["AIC"])}'
+
+                axs[row, j].plot(
+                    stim,
+                    fit['model']['mqc'],
+                    color=model_color,
+                    linewidth=lw,
+                    marker=model_marker,
+                    markersize=ms,
+                    markevery=markevery,
+                    label=label
+                )
+
+                axs[row + 1, j].plot(
+                    stim,
+                    fit['model']['FF'],
+                    color=model_color,
+                    linewidth=lw,
+                    marker=model_marker,
+                    markersize=ms,
+                    markevery=markevery,
+                    label=label
+                )
+
+            # -------------------------------------------------------------
+            # Mean quantal content formatting
+            # -------------------------------------------------------------
+
+            axs[row, j].set_title(
+                f'Test {tnum}: {test_names[tnum]}',
+                fontsize=fs
+            )
+
+            axs[row, j].set_ylabel(
+                'Mean quantal content',
+                fontsize=fs
+            )
+
+            axs[row, j].tick_params(
+                axis='both',
+                labelsize=fs,
+                labelleft=True
+            )
+
+            axs[row, j].set_yticks(axs[row, j].get_yticks())
+            axs[row, j].grid(True, alpha=0.3)
+            axs[row, j].legend(fontsize=9)
+
+            # -------------------------------------------------------------
+            # Fano factor formatting
+            # -------------------------------------------------------------
+
+            axs[row + 1, j].set_xlabel(
+                'Stimulus number',
+                fontsize=fs
+            )
+
+            axs[row + 1, j].set_ylabel(
+                'Fano factor',
+                fontsize=fs
+            )
+
+            axs[row + 1, j].tick_params(
+                axis='both',
+                labelsize=fs,
+                labelleft=True
+            )
+
+            axs[row + 1, j].set_yticks(
+                axs[row + 1, j].get_yticks()
+            )
+
+            axs[row + 1, j].grid(True, alpha=0.3)
+            axs[row + 1, j].legend(fontsize=9)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
+
+    # -------------------------------------------------------------------------
+    # Save all fitted results and experimental data
+    # -------------------------------------------------------------------------
+
+    save_file = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
+
+    saved_data = {
+        'all_results': all_results,
+        'obs': obs,
+        'stim': stim,
+        'mean_data': mean_data,
+        'ffdata': ffdata,
+        'fnum': fnum,
+        'dnum': dnum,
+        'CVq': CVq,
+        'fnames': fnames,
+        'test_names': test_names
+    }
+
+    with open(save_file, 'wb') as file:
+        pickle.dump(saved_data, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+    print(f'\nAll data saved to: {save_file}')
+
+    
+
+
+
+#%% Plot all saved models for every test - good
+
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import pickle
+import re
+
+# =============================================================================
+# Settings
+# =============================================================================
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+fnames = [
+    '100Hz_1s_20_repeats_P11',
+    '100Hz_1s_20_repeats_P38'
+]
+
+fnum = 1
+dnum = 7 # 023457
+
+fslegend = 20
+fslabel = 20
+fstitle = 17
+fsticks = 20
+
+filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
+
+# =============================================================================
+# Load saved data
+# =============================================================================
+
+with open(filename, 'rb') as file:
+    saved_data = pickle.load(file)
+
+all_results = saved_data['all_results']
+stim = saved_data['stim']
+mean_data = saved_data['mean_data']
+ffdata = saved_data['ffdata']
+test_names = saved_data['test_names']
+
+print(f'Loaded: {filename}')
+
+# =============================================================================
+# Find model with smallest AIC across all tests and pool counts
+# =============================================================================
+
+best_tnum = None
+best_npools = None
+best_AIC = np.inf
+
+for tnum, test_result in all_results.items():
+
+    for npools, fit in test_result['results'].items():
+
+        if fit['AIC'] < best_AIC:
+            best_AIC = fit['AIC']
+            best_tnum = tnum
+            best_npools = npools
+
+print(
+    f'\nLowest AIC: Test {best_tnum}, '
+    f'{best_npools} pools, AIC={best_AIC:.2f}'
+)
+
+# =============================================================================
+# Plot settings
+# =============================================================================
+
+colors = ['tab:orange', 'tab:green', 'tab:red', 'tab:purple']
+markers = ['P', '^', 'x', '*']
+
+lw = 3
+ms = 8
+markevery = 5
+
+# =============================================================================
+# Plot all models
+# =============================================================================
+
+fig, axs = plt.subplots(
+    4, 4,
+    figsize=(24, 18),
+    sharex=True,
+    sharey='row'
+)
+
+fig.suptitle(
+    '{} cell number {}'.format(fnames[fnum], dnum + 1),
+    fontsize=fstitle + 2
+)
+
+for j in range(4):
+
+    for row, tnum in [(0, j), (2, j + 4)]:
+
+        # Plot data
+        axs[row, j].plot(
+            stim,
+            mean_data,
+            color='tab:blue',
+            linewidth=lw,
+            label='Data',
+            marker='o',
+            markersize=ms
+        )
+
+        axs[row + 1, j].plot(
+            stim,
+            ffdata,
+            color='tab:blue',
+            linewidth=lw,
+            label='Data',
+            marker='o',
+            markersize=ms
+        )
+
+        # Plot every saved pool model
+        for npools, fit in all_results[tnum]['results'].items():
+
+            is_best = (tnum == best_tnum and npools == best_npools)
+
+            if is_best:
+                label = f'{npools} pools, AIC={fit["AIC"]:.2f}'
+            else:
+                delta_AIC = fit['AIC'] - best_AIC
+                label = f'{npools} pools, ΔAIC={delta_AIC:.2f}'
+
+            axs[row, j].plot(
+                stim,
+                fit['model']['mqc'],
+                color=colors[npools - 1],
+                linewidth=lw,
+                marker=markers[npools - 1],
+                markersize=ms,
+                markevery=markevery,
+                label=label
+            )
+
+            axs[row + 1, j].plot(
+                stim,
+                fit['model']['FF'],
+                color=colors[npools - 1],
+                linewidth=lw,
+                marker=markers[npools - 1],
+                markersize=ms,
+                markevery=markevery
+            )
+
+        # Bold red subplot borders for the test with the lowest AIC
+        if tnum == best_tnum:
+            for ax in [axs[row, j], axs[row + 1, j]]:
+                for spine in ax.spines.values():
+                    spine.set_linewidth(5)
+                    spine.set_edgecolor('red')
+
+        # Format parameter names in title
+        title = test_names[tnum]
+        title = re.sub(r'\bpr\b', r'$p_r$', title)
+        title = re.sub(r'\bpd[_]?(\d+)\b', r'$p_{d,\1}$', title)
+        title = re.sub(r'\bpd\b', r'$p_d$', title)
+
+        # Mean quantal content formatting
+        axs[row, j].set_title(
+            f'{title}',
+            fontsize=fstitle,
+            fontweight='bold' if tnum == best_tnum else 'normal',
+            color='red' if tnum == best_tnum else 'black'
+        )
+        axs[row, j].set_ylabel('Mean QC', fontsize=fslabel)
+        axs[row, j].tick_params(axis='both', labelsize=fsticks, labelleft=True)
+        axs[row, j].set_yticks(axs[row, j].get_yticks())
+        axs[row, j].grid(True, alpha=0.3)
+
+        legend = axs[row, j].legend(fontsize=fslegend)
+
+        # Keep the best-AIC legend entry red without bolding or resizing
+        if tnum == best_tnum:
+            for legend_text in legend.get_texts():
+                if legend_text.get_text() == f'{best_npools} pools, AIC={best_AIC:.2f}':
+                    legend_text.set_color('red')
+
+        # Fano factor formatting
+        axs[row + 1, j].set_xlabel('Stimulus number', fontsize=fslabel)
+        axs[row + 1, j].set_ylabel('Fano factor', fontsize=fslabel)
+        axs[row + 1, j].tick_params(axis='both', labelsize=fsticks, labelleft=True)
+        axs[row + 1, j].set_yticks(axs[row + 1, j].get_yticks())
+        axs[row + 1, j].grid(True, alpha=0.3)
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+# =============================================================================
+# Save figure as PDF
+# =============================================================================
+
+pdf_filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pdf'
+plt.savefig(pdf_filename, format='pdf', bbox_inches='tight')
+
+plt.show()
+
+print(f'Saved figure: {pdf_filename}')
+
+#%% Plot all saved models for every test - good
+
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import pickle
+import re
+
+# =============================================================================
+# Settings
+# =============================================================================
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+fnames = [
+    '100Hz_1s_20_repeats_P11',
+    '100Hz_1s_20_repeats_P38'
+]
+
+fnum = 1
+dnum = 0 # 023457
+
+fslegend = 20
+fslabel = 20
+fstitle = 17
+fsticks = 20
+
+filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
+
+# =============================================================================
+# Load saved data
+# =============================================================================
+
+with open(filename, 'rb') as file:
+    saved_data = pickle.load(file)
+
+all_results = saved_data['all_results']
+stim = saved_data['stim']
+mean_data = saved_data['mean_data']
+ffdata = saved_data['ffdata']
+test_names = saved_data['test_names']
+
+print(f'Loaded: {filename}')
+
+# =============================================================================
+# Find model with smallest AIC across all tests and pool counts
+# =============================================================================
+
+best_tnum = None
+best_npools = None
+best_AIC = np.inf
+
+for tnum, test_result in all_results.items():
+
+    for npools, fit in test_result['results'].items():
+
+        if fit['AIC'] < best_AIC:
+            best_AIC = fit['AIC']
+            best_tnum = tnum
+            best_npools = npools
+
+print(
+    f'\nLowest AIC: Test {best_tnum}, '
+    f'{best_npools} pools, AIC={best_AIC:.2f}'
+)
+
+# =============================================================================
+# Plot settings
+# =============================================================================
+
+colors = ['tab:orange', 'tab:green', 'tab:red', 'tab:purple']
+markers = ['P', '^', 'x', '*']
+
+lw = 3
+ms = 8
+markevery = 5
+
+# =============================================================================
+# Plot all models
+# =============================================================================
+
+fig, axs = plt.subplots(
+    4, 4,
+    figsize=(24, 18),
+    sharex=True,
+    sharey='row'
+)
+
+fig.suptitle(
+    '{} cell number {}'.format(fnames[fnum], dnum + 1),
+    fontsize=fstitle + 2
+)
+
+for j in range(4):
+
+    for row, tnum in [(0, j), (2, j + 4)]:
+
+        # Plot data
+        axs[row, j].plot(
+            stim,
+            mean_data,
+            color='tab:blue',
+            linewidth=lw,
+            label='Data',
+            marker='o',
+            markersize=ms
+        )
+
+        axs[row + 1, j].plot(
+            stim,
+            ffdata,
+            color='tab:blue',
+            linewidth=lw,
+            label='Data',
+            marker='o',
+            markersize=ms
+        )
+
+        # Plot every saved pool model
+        for npools, fit in all_results[tnum]['results'].items():
+
+            delta_AIC = fit['AIC'] - best_AIC
+            label = f'{npools} pools, ΔAIC={delta_AIC:.2f}'
+
+            axs[row, j].plot(
+                stim,
+                fit['model']['mqc'],
+                color=colors[npools - 1],
+                linewidth=lw,
+                marker=markers[npools - 1],
+                markersize=ms,
+                markevery=markevery,
+                label=label
+            )
+
+            axs[row + 1, j].plot(
+                stim,
+                fit['model']['FF'],
+                color=colors[npools - 1],
+                linewidth=lw,
+                marker=markers[npools - 1],
+                markersize=ms,
+                markevery=markevery
+            )
+
+        # Bold red subplot borders for the test with the lowest AIC
+        if tnum == best_tnum:
+            for ax in [axs[row, j], axs[row + 1, j]]:
+                for spine in ax.spines.values():
+                    spine.set_linewidth(5)
+                    spine.set_edgecolor('red')
+
+        # Format parameter names in title
+        title = test_names[tnum]
+        title = re.sub(r'\bpr\b', r'$p_r$', title)
+        title = re.sub(r'\bpd[_]?(\d+)\b', r'$p_{d,\1}$', title)
+        title = re.sub(r'\bpd\b', r'$p_d$', title)
+
+        # Mean quantal content formatting
+        axs[row, j].set_title(
+            f'{title}',
+            fontsize=fstitle,
+            fontweight='bold' if tnum == best_tnum else 'normal',
+            color='red' if tnum == best_tnum else 'black'
+        )
+        axs[row, j].set_ylabel('Mean QC', fontsize=fslabel)
+        axs[row, j].tick_params(axis='both', labelsize=fsticks, labelleft=True)
+        axs[row, j].set_yticks(axs[row, j].get_yticks())
+        axs[row, j].grid(True, alpha=0.3)
+
+        legend = axs[row, j].legend(fontsize=fslegend)
+
+        # Highlight the globally lowest-AIC model in red
+        if tnum == best_tnum:
+            for legend_text in legend.get_texts():
+                if (
+                    legend_text.get_text()
+                    == f'{best_npools} pools, ΔAIC=0.00'
+                ):
+                    legend_text.set_color('red')
+
+        # Fano factor formatting
+        axs[row + 1, j].set_xlabel('Stimulus number', fontsize=fslabel)
+        axs[row + 1, j].set_ylabel('Fano factor', fontsize=fslabel)
+        axs[row + 1, j].tick_params(axis='both', labelsize=fsticks, labelleft=True)
+        axs[row + 1, j].set_yticks(axs[row + 1, j].get_yticks())
+        axs[row + 1, j].grid(True, alpha=0.3)
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+# =============================================================================
+# Save figure as PDF
+# =============================================================================
+
+pdf_filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pdf'
+plt.savefig(pdf_filename, format='pdf', bbox_inches='tight')
+
+plt.show()
+
+print(f'Saved figure: {pdf_filename}')
+
+#%% Calculate delta AIC tables for selected cells
+
+import numpy as np
+import pandas as pd
+import os
+import pickle
+
+# =============================================================================
+# Settings
+# =============================================================================
+
+os.chdir(r'C:\Users\Oliver\Desktop\Research\quantal content')
+
+fnames = [
+    '100Hz_1s_20_repeats_P11',
+    '100Hz_1s_20_repeats_P38'
+]
+
+fnum = 1
+dnums = [0, 2, 3, 4, 5, 7]
+
+# =============================================================================
+# Original test configurations
+# =============================================================================
+
+test_configs = [
+    {'family': 'fixed_pr_decreasing_pd', 'shared': False, 'special': False},
+    {'family': 'fixed_pr_decreasing_pd', 'shared': False, 'special': True},
+    {'family': 'increasing_pr_fixed_pd', 'shared': False, 'special': False},
+    {'family': 'increasing_pr_fixed_pd', 'shared': False, 'special': True},
+    {'family': 'fixed_pr_decreasing_pd', 'shared': True, 'special': False},
+    {'family': 'fixed_pr_decreasing_pd', 'shared': True, 'special': True},
+    {'family': 'increasing_pr_fixed_pd', 'shared': True, 'special': False},
+    {'family': 'increasing_pr_fixed_pd', 'shared': True, 'special': True}
+]
+
+# =============================================================================
+# Count independently optimized parameters
+# =============================================================================
+
+def count_free_parameters(npools, tnum):
+
+    config = test_configs[tnum]
+    family = config['family']
+    shared = config['shared']
+    special = config['special']
+
+    # Pool sizes: M2 through MN
+    nparams = npools - 1
+
+    if family == 'fixed_pr_decreasing_pd':
+
+        # Fixed release probabilities
+        nparams += 1 if shared else npools
+
+        # Fixed pd2 in special models
+        if special and npools >= 2:
+            nparams += 1
+
+        # Dynamic pd parameters
+        ndynamic = npools - (1 if special and npools >= 2 else 0)
+        nparams += 4 * ndynamic
+
+    else:
+
+        # Shared minimum release probability
+        nparams += 1
+
+        # Maximum release probabilities or fixed pr2
+        nparams += npools
+
+        # Dynamic release parameters: Hill coefficient and threshold
+        ndynamic = npools - (1 if special and npools >= 2 else 0)
+        nparams += 2 * ndynamic
+
+        # Fixed depletion/replenishment probabilities
+        nparams += 1 if shared else npools
+
+    return nparams
+
+# =============================================================================
+# Calculate AIC tables
+# =============================================================================
+
+for dnum in dnums:
+
+    filename = f'{fnames[fnum]}_cell{dnum + 1}_all_eight_tests.pkl'
+
+    with open(filename, 'rb') as file:
+        saved_data = pickle.load(file)
+
+    all_results = saved_data['all_results']
+    test_names = saved_data['test_names']
+
+    table_data = []
+
+    for tnum, test_result in all_results.items():
+
+        # Find the model with the minimum AIC for this test
+        best_npools, best_fit = min(
+            test_result['results'].items(),
+            key=lambda item: item[1]['AIC']
+        )
+
+        # Count parameters using the original model definitions
+        nparams = count_free_parameters(best_npools, tnum)
+
+        # Verify against the saved optimization vector
+        nparams_saved = len(best_fit['result'].x)
+
+        if nparams != nparams_saved:
+            raise ValueError(
+                f'Parameter count mismatch in Cell {dnum + 1}, '
+                f'Test {tnum}, {best_npools} pools: '
+                f'calculated {nparams}, saved vector has {nparams_saved}'
+            )
+
+        table_data.append({
+            'Test type': test_names[tnum],
+            '# of free parameters': nparams,
+            'Number of pools': best_npools,
+            'AIC': best_fit['AIC']
+        })
+
+    df = pd.DataFrame(table_data)
+
+    # Calculate delta AIC relative to the minimum across all test types
+    df['Delta AIC'] = df['AIC'] - df['AIC'].min()
+    df = df.drop(columns=['AIC'])
+
+    print(f'\nCell #{dnum + 1}')
+    print(df.to_string(
+        index=False,
+        float_format=lambda x: f'{x:.2f}'
+    ))
+
+    # Save individual table
+    df.to_csv(
+        f'{fnames[fnum]}_cell{dnum + 1}_delta_AIC_table.csv',
+        index=False
+    )
